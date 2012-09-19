@@ -1,0 +1,560 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		4C4CCD19153C749C00226376 /* base64-decode.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C3C890E14E36FA1001BAA1A /* base64-decode.c */; };
+		4C4CCD1A153C749C00226376 /* client-handshake.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C3C890F14E36FA1001BAA1A /* client-handshake.c */; };
+		4C4CCD1B153C749C00226376 /* extension-deflate-stream.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C3C891014E36FA1001BAA1A /* extension-deflate-stream.c */; };
+		4C4CCD1C153C749C00226376 /* extension-deflate-stream.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C3C891114E36FA1001BAA1A /* extension-deflate-stream.h */; };
+		4C4CCD1D153C749C00226376 /* extension-x-google-mux.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C3C891214E36FA1001BAA1A /* extension-x-google-mux.c */; };
+		4C4CCD1E153C749C00226376 /* extension-x-google-mux.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C3C891314E36FA1001BAA1A /* extension-x-google-mux.h */; };
+		4C4CCD1F153C749C00226376 /* extension.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C3C891414E36FA1001BAA1A /* extension.c */; };
+		4C4CCD20153C749C00226376 /* handshake.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C3C891514E36FA1001BAA1A /* handshake.c */; };
+		4C4CCD21153C749C00226376 /* libwebsockets.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C3C891614E36FA1001BAA1A /* libwebsockets.c */; };
+		4C4CCD22153C749C00226376 /* libwebsockets.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C3C891714E36FA1001BAA1A /* libwebsockets.h */; };
+		4C4CCD23153C74A200226376 /* md5.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C3C891A14E36FA1001BAA1A /* md5.c */; };
+		4C4CCD24153C74A200226376 /* parsers.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C3C891B14E36FA1001BAA1A /* parsers.c */; };
+		4C4CCD25153C74A200226376 /* private-libwebsockets.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C3C891C14E36FA1001BAA1A /* private-libwebsockets.h */; };
+		4C4CCD26153C74A200226376 /* sha-1.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C3C891D14E36FA1001BAA1A /* sha-1.c */; };
+		4C4CCD27153C74FF00226376 /* liblibwebsockets.m in Sources */ = {isa = PBXBuildFile; fileRef = 4C5B692315351D5D00805D71 /* liblibwebsockets.m */; };
+		4C5B691E15351D5D00805D71 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4C5B691D15351D5D00805D71 /* Foundation.framework */; };
+		4C5B692C15351D5E00805D71 /* SenTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4C5B692B15351D5E00805D71 /* SenTestingKit.framework */; };
+		4C5B692E15351D5E00805D71 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4C5B692D15351D5E00805D71 /* UIKit.framework */; };
+		4C5B692F15351D5E00805D71 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4C5B691D15351D5D00805D71 /* Foundation.framework */; };
+		4C5B693215351D5E00805D71 /* libliblibwebsockets.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 4C5B691A15351D5D00805D71 /* libliblibwebsockets.a */; };
+		4C5B693815351D5E00805D71 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 4C5B693615351D5E00805D71 /* InfoPlist.strings */; };
+		4C5B693B15351D5E00805D71 /* liblibwebsocketsTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 4C5B693A15351D5E00805D71 /* liblibwebsocketsTests.m */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		4C5B693015351D5E00805D71 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4C3C890814E36FA1001BAA1A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4C5B691915351D5D00805D71;
+			remoteInfo = liblibwebsockets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		4C3C890E14E36FA1001BAA1A /* base64-decode.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "base64-decode.c"; sourceTree = "<group>"; };
+		4C3C890F14E36FA1001BAA1A /* client-handshake.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "client-handshake.c"; sourceTree = "<group>"; };
+		4C3C891014E36FA1001BAA1A /* extension-deflate-stream.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "extension-deflate-stream.c"; sourceTree = "<group>"; };
+		4C3C891114E36FA1001BAA1A /* extension-deflate-stream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "extension-deflate-stream.h"; sourceTree = "<group>"; };
+		4C3C891214E36FA1001BAA1A /* extension-x-google-mux.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "extension-x-google-mux.c"; sourceTree = "<group>"; };
+		4C3C891314E36FA1001BAA1A /* extension-x-google-mux.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "extension-x-google-mux.h"; sourceTree = "<group>"; };
+		4C3C891414E36FA1001BAA1A /* extension.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = extension.c; sourceTree = "<group>"; };
+		4C3C891514E36FA1001BAA1A /* handshake.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = handshake.c; sourceTree = "<group>"; };
+		4C3C891614E36FA1001BAA1A /* libwebsockets.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = libwebsockets.c; sourceTree = "<group>"; };
+		4C3C891714E36FA1001BAA1A /* libwebsockets.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = libwebsockets.h; sourceTree = "<group>"; };
+		4C3C891814E36FA1001BAA1A /* Makefile.am */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
+		4C3C891914E36FA1001BAA1A /* Makefile.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
+		4C3C891A14E36FA1001BAA1A /* md5.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = md5.c; sourceTree = "<group>"; };
+		4C3C891B14E36FA1001BAA1A /* parsers.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = parsers.c; sourceTree = "<group>"; };
+		4C3C891C14E36FA1001BAA1A /* private-libwebsockets.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "private-libwebsockets.h"; sourceTree = "<group>"; };
+		4C3C891D14E36FA1001BAA1A /* sha-1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "sha-1.c"; sourceTree = "<group>"; };
+		4C5B691A15351D5D00805D71 /* libliblibwebsockets.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libliblibwebsockets.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		4C5B691D15351D5D00805D71 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
+		4C5B692115351D5D00805D71 /* liblibwebsockets-Prefix.pch */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "liblibwebsockets-Prefix.pch"; sourceTree = "<group>"; };
+		4C5B692215351D5D00805D71 /* liblibwebsockets.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = liblibwebsockets.h; sourceTree = "<group>"; };
+		4C5B692315351D5D00805D71 /* liblibwebsockets.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = liblibwebsockets.m; sourceTree = "<group>"; };
+		4C5B692A15351D5E00805D71 /* liblibwebsocketsTests.octest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = liblibwebsocketsTests.octest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4C5B692B15351D5E00805D71 /* SenTestingKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SenTestingKit.framework; path = Library/Frameworks/SenTestingKit.framework; sourceTree = DEVELOPER_DIR; };
+		4C5B692D15351D5E00805D71 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = Library/Frameworks/UIKit.framework; sourceTree = DEVELOPER_DIR; };
+		4C5B693515351D5E00805D71 /* liblibwebsocketsTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "liblibwebsocketsTests-Info.plist"; sourceTree = "<group>"; };
+		4C5B693715351D5E00805D71 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		4C5B693915351D5E00805D71 /* liblibwebsocketsTests.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = liblibwebsocketsTests.h; sourceTree = "<group>"; };
+		4C5B693A15351D5E00805D71 /* liblibwebsocketsTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = liblibwebsocketsTests.m; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4C5B691715351D5D00805D71 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4C5B691E15351D5D00805D71 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4C5B692615351D5E00805D71 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4C5B692C15351D5E00805D71 /* SenTestingKit.framework in Frameworks */,
+				4C5B692E15351D5E00805D71 /* UIKit.framework in Frameworks */,
+				4C5B692F15351D5E00805D71 /* Foundation.framework in Frameworks */,
+				4C5B693215351D5E00805D71 /* libliblibwebsockets.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		4C3C890614E36FA1001BAA1A = {
+			isa = PBXGroup;
+			children = (
+				4C3C890E14E36FA1001BAA1A /* base64-decode.c */,
+				4C3C890F14E36FA1001BAA1A /* client-handshake.c */,
+				4C3C891014E36FA1001BAA1A /* extension-deflate-stream.c */,
+				4C3C891114E36FA1001BAA1A /* extension-deflate-stream.h */,
+				4C3C891214E36FA1001BAA1A /* extension-x-google-mux.c */,
+				4C3C891314E36FA1001BAA1A /* extension-x-google-mux.h */,
+				4C3C891414E36FA1001BAA1A /* extension.c */,
+				4C3C891514E36FA1001BAA1A /* handshake.c */,
+				4C3C891614E36FA1001BAA1A /* libwebsockets.c */,
+				4C3C891714E36FA1001BAA1A /* libwebsockets.h */,
+				4C3C891814E36FA1001BAA1A /* Makefile.am */,
+				4C3C891914E36FA1001BAA1A /* Makefile.in */,
+				4C3C891A14E36FA1001BAA1A /* md5.c */,
+				4C3C891B14E36FA1001BAA1A /* parsers.c */,
+				4C3C891C14E36FA1001BAA1A /* private-libwebsockets.h */,
+				4C3C891D14E36FA1001BAA1A /* sha-1.c */,
+				4C5B691F15351D5D00805D71 /* liblibwebsockets */,
+				4C5B693315351D5E00805D71 /* liblibwebsocketsTests */,
+				4C5B691C15351D5D00805D71 /* Frameworks */,
+				4C5B691B15351D5D00805D71 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		4C5B691B15351D5D00805D71 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4C5B691A15351D5D00805D71 /* libliblibwebsockets.a */,
+				4C5B692A15351D5E00805D71 /* liblibwebsocketsTests.octest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		4C5B691C15351D5D00805D71 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				4C5B691D15351D5D00805D71 /* Foundation.framework */,
+				4C5B692B15351D5E00805D71 /* SenTestingKit.framework */,
+				4C5B692D15351D5E00805D71 /* UIKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		4C5B691F15351D5D00805D71 /* liblibwebsockets */ = {
+			isa = PBXGroup;
+			children = (
+				4C5B692215351D5D00805D71 /* liblibwebsockets.h */,
+				4C5B692315351D5D00805D71 /* liblibwebsockets.m */,
+				4C5B692015351D5D00805D71 /* Supporting Files */,
+			);
+			path = liblibwebsockets;
+			sourceTree = "<group>";
+		};
+		4C5B692015351D5D00805D71 /* Supporting Files */ = {
+			isa = PBXGroup;
+			children = (
+				4C5B692115351D5D00805D71 /* liblibwebsockets-Prefix.pch */,
+			);
+			name = "Supporting Files";
+			sourceTree = "<group>";
+		};
+		4C5B693315351D5E00805D71 /* liblibwebsocketsTests */ = {
+			isa = PBXGroup;
+			children = (
+				4C5B693915351D5E00805D71 /* liblibwebsocketsTests.h */,
+				4C5B693A15351D5E00805D71 /* liblibwebsocketsTests.m */,
+				4C5B693415351D5E00805D71 /* Supporting Files */,
+			);
+			path = liblibwebsocketsTests;
+			sourceTree = "<group>";
+		};
+		4C5B693415351D5E00805D71 /* Supporting Files */ = {
+			isa = PBXGroup;
+			children = (
+				4C5B693515351D5E00805D71 /* liblibwebsocketsTests-Info.plist */,
+				4C5B693615351D5E00805D71 /* InfoPlist.strings */,
+			);
+			name = "Supporting Files";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		4C5B691815351D5D00805D71 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4C4CCD1C153C749C00226376 /* extension-deflate-stream.h in Headers */,
+				4C4CCD1E153C749C00226376 /* extension-x-google-mux.h in Headers */,
+				4C4CCD22153C749C00226376 /* libwebsockets.h in Headers */,
+				4C4CCD25153C74A200226376 /* private-libwebsockets.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXLegacyTarget section */
+		4C3C890D14E36FA1001BAA1A /* libwebsockets */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "$(ACTION)";
+			buildConfigurationList = 4C3C891E14E36FA1001BAA1A /* Build configuration list for PBXLegacyTarget "libwebsockets" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			buildWorkingDirectory = /Users/jorgschwieder/Daten/Business/Dev/iPhone/Source/ickStream/ickStreamProto/ickStreamProto/ickStreamProto/C/Library/libwebsockets/lib;
+			dependencies = (
+			);
+			name = libwebsockets;
+			passBuildSettingsInEnvironment = 1;
+			productName = lib;
+		};
+/* End PBXLegacyTarget section */
+
+/* Begin PBXNativeTarget section */
+		4C5B691915351D5D00805D71 /* liblibwebsockets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4C5B694015351D5E00805D71 /* Build configuration list for PBXNativeTarget "liblibwebsockets" */;
+			buildPhases = (
+				4C5B691615351D5D00805D71 /* Sources */,
+				4C5B691715351D5D00805D71 /* Frameworks */,
+				4C5B691815351D5D00805D71 /* Headers */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = liblibwebsockets;
+			productName = liblibwebsockets;
+			productReference = 4C5B691A15351D5D00805D71 /* libliblibwebsockets.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+		4C5B692915351D5E00805D71 /* liblibwebsocketsTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4C5B694115351D5E00805D71 /* Build configuration list for PBXNativeTarget "liblibwebsocketsTests" */;
+			buildPhases = (
+				4C5B692515351D5E00805D71 /* Sources */,
+				4C5B692615351D5E00805D71 /* Frameworks */,
+				4C5B692715351D5E00805D71 /* Resources */,
+				4C5B692815351D5E00805D71 /* ShellScript */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4C5B693115351D5E00805D71 /* PBXTargetDependency */,
+			);
+			name = liblibwebsocketsTests;
+			productName = liblibwebsocketsTests;
+			productReference = 4C5B692A15351D5E00805D71 /* liblibwebsocketsTests.octest */;
+			productType = "com.apple.product-type.bundle";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		4C3C890814E36FA1001BAA1A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0450;
+			};
+			buildConfigurationList = 4C3C890B14E36FA1001BAA1A /* Build configuration list for PBXProject "libwebsockets" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = 4C3C890614E36FA1001BAA1A;
+			productRefGroup = 4C5B691B15351D5D00805D71 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4C3C890D14E36FA1001BAA1A /* libwebsockets */,
+				4C5B691915351D5D00805D71 /* liblibwebsockets */,
+				4C5B692915351D5E00805D71 /* liblibwebsocketsTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		4C5B692715351D5E00805D71 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4C5B693815351D5E00805D71 /* InfoPlist.strings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		4C5B692815351D5E00805D71 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Run the unit tests in this test bundle.\n\"${SYSTEM_DEVELOPER_DIR}/Tools/RunUnitTests\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4C5B691615351D5D00805D71 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4C4CCD19153C749C00226376 /* base64-decode.c in Sources */,
+				4C4CCD1A153C749C00226376 /* client-handshake.c in Sources */,
+				4C4CCD1B153C749C00226376 /* extension-deflate-stream.c in Sources */,
+				4C4CCD1D153C749C00226376 /* extension-x-google-mux.c in Sources */,
+				4C4CCD1F153C749C00226376 /* extension.c in Sources */,
+				4C4CCD20153C749C00226376 /* handshake.c in Sources */,
+				4C4CCD21153C749C00226376 /* libwebsockets.c in Sources */,
+				4C4CCD23153C74A200226376 /* md5.c in Sources */,
+				4C4CCD24153C74A200226376 /* parsers.c in Sources */,
+				4C4CCD26153C74A200226376 /* sha-1.c in Sources */,
+				4C4CCD27153C74FF00226376 /* liblibwebsockets.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4C5B692515351D5E00805D71 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4C5B693B15351D5E00805D71 /* liblibwebsocketsTests.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		4C5B693115351D5E00805D71 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4C5B691915351D5D00805D71 /* liblibwebsockets */;
+			targetProxy = 4C5B693015351D5E00805D71 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		4C5B693615351D5E00805D71 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				4C5B693715351D5E00805D71 /* en */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		4C3C890914E36FA1001BAA1A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_32_BIT)";
+				COPY_PHASE_STRIP = NO;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		4C3C890A14E36FA1001BAA1A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_32_BIT)";
+				COPY_PHASE_STRIP = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		4C3C891F14E36FA1001BAA1A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUGGING_SYMBOLS = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = libwebsockets;
+			};
+			name = Debug;
+		};
+		4C3C892014E36FA1001BAA1A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				COPY_PHASE_STRIP = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = libwebsockets;
+			};
+			name = Release;
+		};
+		4C5B693C15351D5E00805D71 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CODE_SIGN_IDENTITY = "";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				DSTROOT = /tmp/liblibwebsockets.dst;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "liblibwebsockets/liblibwebsockets-Prefix.pch";
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"LWS_NO_FORK=1",
+				);
+				"GCC_PREPROCESSOR_DEFINITIONS[sdk=iphonesimulator*]" = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 5.0;
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_LDFLAGS = "-ObjC";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		4C5B693D15351D5E00805D71 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CODE_SIGN_IDENTITY = "";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution: Joerg Schwieder";
+				DSTROOT = /tmp/liblibwebsockets.dst;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "liblibwebsockets/liblibwebsockets-Prefix.pch";
+				GCC_PREPROCESSOR_DEFINITIONS = "LWS_NO_FORK=1";
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 5.0;
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_LDFLAGS = "-ObjC";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "65E7E685-B1C2-4918-954E-66D9747D7250";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		4C5B693E15351D5E00805D71 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(SDKROOT)/Developer/Library/Frameworks",
+					"$(DEVELOPER_LIBRARY_DIR)/Frameworks",
+				);
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "liblibwebsockets/liblibwebsockets-Prefix.pch";
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				INFOPLIST_FILE = "liblibwebsocketsTests/liblibwebsocketsTests-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 4.2;
+				MACH_O_TYPE = staticlib;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE = "";
+				SDKROOT = iphoneos;
+				WRAPPER_EXTENSION = octest;
+			};
+			name = Debug;
+		};
+		4C5B693F15351D5E00805D71 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CODE_SIGN_IDENTITY = "iPhone Distribution";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(SDKROOT)/Developer/Library/Frameworks",
+					"$(DEVELOPER_LIBRARY_DIR)/Frameworks",
+				);
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "liblibwebsockets/liblibwebsockets-Prefix.pch";
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				INFOPLIST_FILE = "liblibwebsocketsTests/liblibwebsocketsTests-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 4.2;
+				MACH_O_TYPE = staticlib;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE = "";
+				SDKROOT = iphoneos;
+				VALIDATE_PRODUCT = YES;
+				WRAPPER_EXTENSION = octest;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4C3C890B14E36FA1001BAA1A /* Build configuration list for PBXProject "libwebsockets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4C3C890914E36FA1001BAA1A /* Debug */,
+				4C3C890A14E36FA1001BAA1A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4C3C891E14E36FA1001BAA1A /* Build configuration list for PBXLegacyTarget "libwebsockets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4C3C891F14E36FA1001BAA1A /* Debug */,
+				4C3C892014E36FA1001BAA1A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4C5B694015351D5E00805D71 /* Build configuration list for PBXNativeTarget "liblibwebsockets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4C5B693C15351D5E00805D71 /* Debug */,
+				4C5B693D15351D5E00805D71 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4C5B694115351D5E00805D71 /* Build configuration list for PBXNativeTarget "liblibwebsocketsTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4C5B693E15351D5E00805D71 /* Debug */,
+				4C5B693F15351D5E00805D71 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 4C3C890814E36FA1001BAA1A /* Project object */;
+}

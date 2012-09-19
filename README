@@ -1,0 +1,4 @@
+This is the ickStream P2P core
+It's a library to autoconnect devices on a network and give them a P2P communication stack
+
+Please read LICENSE for licensing details
