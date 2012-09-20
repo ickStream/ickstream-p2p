@@ -138,6 +138,29 @@ struct _ick_device_struct * _ickDeviceCreateNew(char * UUID, char * URL, void * 
     return device;
 }
 
+
+#define _ICK_DEVICE_FREE_ELEMENT(device,element) do { \
+    if ((device)->element) { \
+        free((device)->element); \
+        (device)->element = NULL; \
+    } \
+} while (0)
+
+void _ickDeviceDestroy(struct _ick_device_struct * device) {
+    pthread_mutex_lock(&_device_mutex);
+    _ICK_DEVICE_FREE_ELEMENT(device, UUID);
+    _ICK_DEVICE_FREE_ELEMENT(device, xmlData);
+    _ICK_DEVICE_FREE_ELEMENT(device, name);
+    _ICK_DEVICE_FREE_ELEMENT(device, URL);
+    device->element = NULL; // belongs to lower layer, needs to be freed there.
+    device->wsi = NULL;     // should have been cleared by callback
+    device->messageOut = NULL; //dito
+    pthread_mutex_destroy(device->messageMutex);
+    device->messageMutex = NULL;
+    free(device);
+    pthread_mutex_unlock(&_device_mutex);
+}
+
 #define _ICK_DEVICE_SET_VALUE_LOCKED(device,element,value) do { \
     pthread_mutex_lock(&_device_mutex); \
     if (!(device)->element) \
@@ -230,6 +253,7 @@ static void * _ick_loadxmldata_thread(void * param) {
     
     int size;
     void * data = miniwget(urlString, &size);
+    free(urlString);
     
     if (size < 1)
         return NULL;
@@ -391,6 +415,8 @@ void _ick_receive_notify(const struct _upnp_device * device, enum ickDiscovery_c
         }
             break;
         case ICKDISCOVERY_REMOVE_DEVICE:
+            _ick_execute_DeviceCallback(iDev, ICKDISCOVERY_REMOVE_DEVICE);
+            
             pthread_mutex_lock(&_device_mutex);
             if (iDevParent)
                 iDevParent->next = iDev->next;
@@ -398,15 +424,29 @@ void _ick_receive_notify(const struct _upnp_device * device, enum ickDiscovery_c
                 _ickStreamDevices = iDev->next;
             pthread_mutex_unlock(&_device_mutex);
             
-            _ick_execute_DeviceCallback(iDev, ICKDISCOVERY_REMOVE_DEVICE);
-            // This is DANGEROUS.... the connection is still active, should we really remove a device that may even have an open socket????
-            free(iDev);
+            // bye bye
+            _ickDeviceDestroy(iDev);
             
             break;
     }    
 }
 
 
+// command queue handling
+
+
+static pthread_mutex_t _ick_sender_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+struct _ick_sender_cmd {
+    enum _ick_send_cmd      command;    // what do we have to do
+    struct timeval          time;       // when? in micorseconds
+    void *                  data;       // some commands bring their content - in lack of a better idea.
+    LIST_ENTRY(_ick_sender_cmd) entries;
+};
+
+static LIST_HEAD(__ick_sender_cmd, _ick_sender_cmd) _ick_send_cmdlisthead;
+
+static int _ick_notification_queue(struct _ick_sender_cmd * cmd);
 
 
 #pragma mark - from minisspd
@@ -442,6 +482,7 @@ updateDevice(const struct _ick_discovery_struct * discovery, const struct _heade
 	struct _upnp_device ** pp = &devlist;
 	struct _upnp_device * p = *pp;	/* = devlist; */
     struct _ick_callback_list * cblist;
+    pthread_mutex_lock(&_ick_sender_mutex); // need to make sure we don't remove the device while it's being updated
 	while(p)
 	{
 		if(  p->headers[HEADER_NT].l == headers[HEADER_NT].l
@@ -449,22 +490,25 @@ updateDevice(const struct _ick_discovery_struct * discovery, const struct _heade
            && p->headers[HEADER_USN].l == headers[HEADER_USN].l
            && (0==memcmp(p->headers[HEADER_USN].p, headers[HEADER_USN].p, headers[HEADER_USN].l)) )
 		{
+			p->t = t; // even if the device is up to date we need to update the lifetime...
             if (p->headers[HEADER_LOCATION].l == headers[HEADER_LOCATION].l &&
                 (0 == memcmp(p->headers[HEADER_LOCATION].p, headers[HEADER_LOCATION].p, headers[HEADER_LOCATION].l))) {
                 debug("device already up to date: %.*s\n", headers[HEADER_USN].l, headers[HEADER_USN].p);
+                pthread_mutex_unlock(&_ick_sender_mutex);
                 return 0;
-                }
+            }
 			//printf("found! %d\n", (int)(t - p->t));
 			debug("device updated : %.*s\n", headers[HEADER_USN].l, headers[HEADER_USN].p);
 			debug("device address : %.*s\n", headers[HEADER_LOCATION].l, headers[HEADER_LOCATION].p);
-			p->t = t;
 			/* update Location ! */
 			if(headers[HEADER_LOCATION].l > p->headers[HEADER_LOCATION].l)
 			{
 				p = realloc(p, sizeof(struct _upnp_device)
                             + headers[0].l+headers[1].l+headers[2].l );
-				if(!p)	/* allocation error */
+				if(!p)	/* allocation error */ {
+                    pthread_mutex_unlock(&_ick_sender_mutex);
 					return 0;
+                }
 				*pp = p;
 			}
 			memcpy(p->data + p->headers[0].l + p->headers[1].l,
@@ -476,11 +520,13 @@ updateDevice(const struct _ick_discovery_struct * discovery, const struct _heade
                 cblist = cblist->next;
             }
             
-			return 0;
+            pthread_mutex_unlock(&_ick_sender_mutex);
+            return 0;
 		}
 		pp = &p->next;
 		p = *pp;	/* p = p->next; */
 	}
+    pthread_mutex_unlock(&_ick_sender_mutex);
 	debug("new device discovered : %.*s\n",
           headers[HEADER_USN].l, headers[HEADER_USN].p);
     debug("device address : %.*s\n", headers[HEADER_LOCATION].l, headers[HEADER_LOCATION].p);
@@ -494,6 +540,7 @@ updateDevice(const struct _ick_discovery_struct * discovery, const struct _heade
 			debug("updateDevice(): cannot allocate memory");
 			return -1;
 		}
+        pthread_mutex_lock(&_ick_sender_mutex); // need to make sure we don't add the device while the command queue is being used
 		p->next = devlist;
 		p->t = t;
 		pc = p->data;
@@ -505,6 +552,18 @@ updateDevice(const struct _ick_discovery_struct * discovery, const struct _heade
 			pc += headers[i].l;
 		}
 		devlist = p;
+
+        // add expiration handler
+        struct _ick_sender_cmd * cmd = malloc(sizeof(struct _ick_sender_cmd));
+        if (cmd) {
+            cmd->command = ICK_SEND_CMD_EXPIRE_DEVICE;
+            cmd->data = p;
+            cmd->time.tv_sec = t;
+            cmd->time.tv_usec = 0;
+            _ick_notification_queue(cmd);
+        }
+        pthread_mutex_unlock(&_ick_sender_mutex);
+
         
         cblist = discovery->receive_callbacks;
         while (cblist) {
@@ -525,6 +584,7 @@ removeDevice(const struct _ick_discovery_struct * discovery, const struct _heade
 {
 	struct _upnp_device ** pp = &devlist;
 	struct _upnp_device * p = *pp;	/* = devlist */
+    pthread_mutex_lock(&_ick_sender_mutex); // need to make sure we don't remove the device while it's being updated
 	while(p)
 	{
 		if(  p->headers[HEADER_NT].l == headers[HEADER_NT].l
@@ -542,12 +602,26 @@ removeDevice(const struct _ick_discovery_struct * discovery, const struct _heade
                 cblist = cblist->next;
             }
             
+            // now remove expiration handler for this device....
+            // checking all right now, just to be sure.
+            struct _ick_sender_cmd * cmd = LIST_FIRST(&_ick_send_cmdlisthead);
+            while (cmd) {
+                struct _ick_sender_cmd * next = LIST_NEXT(cmd, entries);
+                if ((cmd->command == ICK_SEND_CMD_EXPIRE_DEVICE) && (cmd->data == p)) {
+                    LIST_REMOVE(cmd, entries);
+                    free(cmd);
+                }
+                cmd = next;
+            }
+            
 			free(p);
+            pthread_mutex_unlock(&_ick_sender_mutex);
 			return -1;
 		}
 		pp = &p->next;
 		p = *pp;	/* p = p->next; */
 	}
+    pthread_mutex_unlock(&_ick_sender_mutex);
 	debug("device not found for removing : %.*s\n", headers[HEADER_USN].l, headers[HEADER_USN].p);
 	return 0;
 }
@@ -858,18 +932,6 @@ ParseSSDPPacket(const struct _ick_discovery_struct * discovery, const char * p, 
 	}
 	return r;
 }
-
-
-static pthread_mutex_t _ick_sender_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-struct _ick_sender_cmd {
-    enum _ick_send_cmd      command;    // what do we have to do
-    struct timeval          time;       // when? in micorseconds
-    void *                  data;       // some commands bring their content - in lack of a better idea.
-    LIST_ENTRY(_ick_sender_cmd) entries;
-};
-
-static LIST_HEAD(__ick_sender_cmd, _ick_sender_cmd) _ick_send_cmdlisthead;
 
 
 // Add a service.
@@ -1320,6 +1382,12 @@ static void * _ick_notification_request_thread (void * dummy) {
                     while (cmd) {
                         if (cmd->command == ICK_SEND_CMD_NOTIFY_REMOVE)
                             free(cmd->data); // Free data for removes
+                        if (cmd->command == ICK_SEND_CMD_EXPIRE_DEVICE) { // expire all devices
+                            struct _upnp_device * device = cmd->data;
+                            pthread_mutex_unlock(&_ick_sender_mutex); // remove will lock the command queue again
+                            removeDevice(_discovery, device->headers);
+                            pthread_mutex_lock(&_ick_sender_mutex); // and lock again, we need the command list again
+                        }
                         free(cmd);
                         cmd = LIST_FIRST(&_ick_send_cmdlisthead);
                         if (cmd)
@@ -1401,6 +1469,22 @@ static void * _ick_notification_request_thread (void * dummy) {
                     TIME_ADD(cmd->time, ms +  (random() % ms));
                     _ick_notification_queue(cmd);
                     cmd = NULL; // don't free this, we are reusing it!
+                    break;
+                    
+                case ICK_SEND_CMD_EXPIRE_DEVICE: {
+                    struct _upnp_device * device = cmd->data;
+                    if (time.tv_sec >= device->t) {
+                        pthread_mutex_unlock(&_ick_sender_mutex); // remove will lock the command queue again
+                        removeDevice(_discovery, device->headers);
+                        pthread_mutex_lock(&_ick_sender_mutex); // and lock again, we need the command list again                        
+                    } else { // not expired? Got renewed. Update expiration command.
+                        cmd->time.tv_sec = device->t;
+                        _ick_notification_queue(cmd);
+                        cmd = NULL; // don't free this, we are reusing it!                        
+                    }
+                    // that's it. nothing to free, data is just a reference.
+                }
+                    
                     break;
                     
                 default:

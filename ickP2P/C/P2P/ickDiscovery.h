@@ -23,11 +23,11 @@ extern "C" {
     // UPnP's recommended value is 1,800s but that may be too much for moble players that disconnect/reconnect/lose connection easily because it means we'll expect devices to be valid for this time
     // If the device has been active all the time it's also a low-cost reannouncement, the full cycle is a maximum of 14 UDP packets for a controller and player
     //
-#define ICKDISCOVERY_ANNOUNCE_INTERVAL  20
+#define ICKDISCOVERY_ANNOUNCE_INTERVAL  120
         
     // Search interval. The interval between search requests to the whole network.
     // The search interval works in a similar way as the announce interval but potentially causes more traffic since all devices are supposed to answer.
-#define ICKDISCOVERY_SEARCH_INTERVAL    600
+#define ICKDISCOVERY_SEARCH_INTERVAL    300
 
     // Define expected maximum response delay UPnP says this needs to be between 1 and 5, let's chose 2 for now.
 #define ICKDISCOVERY_SEARCH_DELAY       2

@@ -267,7 +267,8 @@ static int callback_http(struct libwebsocket_context * context,
 }
 
 struct __p2p_server_session_data {
-    struct _ick_device_struct * device;
+    //    struct _ick_device_struct * device; doesn't work this way because we still get callbacks after closing the connection. So we need to go for the UUID instead.
+    char * UUID;
     char * bufIn;
     size_t bufLen;
 };
@@ -289,7 +290,12 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
 {
     int n;
     struct __p2p_server_session_data * pss = user;
-    struct _ick_device_struct * device = pss->device;
+    char * UUID = pss->UUID;
+    struct _ick_device_struct * device = _ickDeviceGet(UUID);
+    if (UUID && !device) {   // device doesn't exist anymore?
+        free (pss->UUID);
+        pss->UUID = NULL;
+    }
     
 	switch (reason) {
             
@@ -304,9 +310,14 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                 fprintf(stderr, "ick_callback_p2p_server: LWS_CALLBACK_CLIENT_ESTABLISHED\n");
             pss->bufIn = NULL;
             pss->bufLen = 0;
-            pss->device = _ickDevice4wsi(wsi);
-            if (!pss->device)
+            //            pss->device = _ickDevice4wsi(wsi);
+            device = _ickDevice4wsi(wsi);
+            if (device && device->UUID)
+                pss->UUID = strdup(device->UUID);
+            else {
+                pss->UUID = NULL;
                 fprintf(stderr, "LWS_CALLBACK_X_ESTABLISHED, no device found on %s, %s\n", namebuf, ipbuf);
+            }
         }
             break;
             
@@ -580,6 +591,18 @@ static void *_ickReOpenWebsocket(void * UUID) {
     return NULL;
 }
 
+// Close a websocket connection and clear the associated message list
+
+static void __ickCloseWebsocket(struct _ick_device_struct * device) {
+    if (!device || !device->wsi)
+        return;
+    libwebsocket_close_and_free_session(__context, device->wsi, LWS_CLOSE_STATUS_NORMAL);
+    device->wsi = NULL;
+    struct _ick_message_struct * message = NULL;
+    while ((message = __ickGetFirstMessage(device)))
+        __ickDeleteMessage(device, message);
+}
+
 static int _wantToConnect(enum ickDevice_servicetype myType, enum ickDevice_servicetype otherType) {
     // I'm a controller, so I want to connect to servers and players, not other controllers
     if (myType & ICKDEVICE_CONTROLLER) {
@@ -627,6 +650,13 @@ static void _ickOpenDeviceWebsocket(const char * UUID, enum ickDiscovery_command
             __ickOpenWebsocket(device);
         }
             break;
+            
+        case ICKDISCOVERY_REMOVE_DEVICE: {
+            struct _ick_device_struct * device = _ickDeviceGet(UUID);
+            if (!device || device->wsi)
+                break;
+            __ickCloseWebsocket(device);
+        }
             
         default:
             break;
