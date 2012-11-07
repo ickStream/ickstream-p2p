@@ -27,7 +27,7 @@
 #include <sys/queue.h>
 #include <ctype.h>
 
-#include "libwebsockets.h"
+#include "libwebsockets/libwebsockets.h"
 
 #ifdef DEBUG
 static inline

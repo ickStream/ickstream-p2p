@@ -15,7 +15,7 @@
 #include "ickDiscovery.h"
 #include "ickDiscoveryInternal.h"
 
-#include "libwebsockets.h"
+#include "libwebsockets/libwebsockets.h"
 #include "miniwget.h"
 #include "minixml.h"
 
@@ -229,7 +229,8 @@ static void * _ick_loadxmldata_thread(void * param) {
         return NULL;
     
     int size;
-    void * data = miniwget(urlString, &size);
+    //IPv6 scope is local site - should this be 0xe or 0x5??
+    void * data = miniwget(urlString, &size, 5);
     
     if (size < 1)
         return NULL;
