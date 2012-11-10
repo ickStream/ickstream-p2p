@@ -241,6 +241,34 @@ extern "C" {
     int ickDeviceRegisterMessageCallback(ickDevice_message_callback_t callback);
 
     
+    // debug commands
+    
+    // get debug info for a device
+    // output is JSON string
+    // output format is a dictionary containing the device information
+    char * ickDeviceGetLocalDebugInfoForDevice(char * UUID);
+
+    // get debug info for all devices
+    // output is JSON string
+    // output format is an array containing all device information
+    char * ickDeviceGetLocalDebugInfo();
+
+    // get debug info for a remote device
+    // output is JSON string
+    // output format is a an array of dictionaries containing the device information
+    // Note: this is a blocking call synchronously retrieving data from a remote device!
+    // Call it from a separate thread to avoid blocking. Use is thread safe.
+    char * ickDeviceGetRemoteDebugInfoForDevice(char * UUID);
+    
+    // get debug info for a remote device
+    // output is JSON string
+    // output format is a dictionary with debug information about the state of debugUUID as seen on UUID
+    // Note: this is a blocking call synchronously retrieving data from a remote device!
+    // Call it from a separate thread to avoid blocking. Use is thread safe.
+    char * ickDeviceGetRemoteDebugInfoForDeviceQueryDevice(char * UUID, char * debugUUID);
+    
+    
+    
 #ifdef __cplusplus
 }
 #endif

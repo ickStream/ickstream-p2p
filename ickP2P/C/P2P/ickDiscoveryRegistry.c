@@ -19,6 +19,8 @@
 #include "miniwget.h"
 #include "minixml.h"
 
+#include "jansson.h"
+
 static struct _ick_device_struct * _ickStreamDevices = NULL;
 static pthread_mutex_t _device_mutex = PTHREAD_MUTEX_INITIALIZER;
 static ickDiscovery_t * _discovery = NULL;
@@ -72,6 +74,125 @@ struct _ick_device_struct * _ickDeviceGet(const char * UUID) {
     }
     return NULL;
 }
+
+json_t * _j_ickDeviceGetDebugInfo(struct _ick_device_struct * device) {
+    json_t * j_xmlString = NULL;
+    if (device->xmlSize && device->xmlData) {
+        char * xmlString = strndup(device->xmlData, device->xmlSize);
+        j_xmlString = json_string(xmlString);
+        free(xmlString);
+    } else
+        j_xmlString = json_null();
+    
+    json_t * j_element = NULL;
+    struct _upnp_device * element = device->element;
+    if (element) {
+        char * header1, * header2, * header3;
+        j_element = json_object();
+        json_object_set_new(j_element, "validity", json_integer(element->t));
+        if (element->headers[0].l)
+            header1 = strndup(element->headers[0].p, element->headers[0].l);
+        if (element->headers[1].l)
+            header2 = strndup(element->headers[1].p, element->headers[1].l);
+        if (element->headers[2].l)
+            header3 = strndup(element->headers[2].p, element->headers[2].l);
+        json_object_set_new(j_element, "header1", (header1) ? json_string(header1) : json_null());
+        json_object_set_new(j_element, "header2", (header2) ? json_string(header2) : json_null());
+        json_object_set_new(j_element, "header3", (header3) ? json_string(header3) : json_null());
+        free(header1);
+        free(header2);
+        free(header3);
+    } else
+        j_element = json_null();
+    
+    char * c_wsi;
+    asprintf(&c_wsi, "%p", device->wsi);
+    json_t * j_wsi = json_string(c_wsi);
+    free(c_wsi);
+    
+    int cnt = 0;
+    struct _ick_message_struct * mO = device->messageOut;
+    while (mO) {
+        cnt++;
+        mO = mO->next;
+    }
+    
+    json_t * j_device = json_pack("{sisssssisssosisososisisisisisb}",
+                                  "type", device->type,
+                                  "UUID", device->UUID,
+                                  "URL", device->URL,
+                                  "port", device->port,
+                                  "name", device->name,
+                                  "wsi", j_wsi,
+                                  "messagesWaiting", cnt,
+                                  "_upnp_device", j_element,
+                                  "xmlData", j_xmlString,
+                                  "lastIn", device->lastin,
+                                  "lastOut", device->lastout,
+                                  "t_connected", device->t_connected,
+                                  "t_disconnected", device->t_disconnected,
+                                  "bufLen", device->bufLen,
+                                  "isServer", device->isServer,
+                                  NULL);
+    return j_device;
+}
+
+char * _ickDeviceGetDebugInfo(struct _ick_device_struct * device) {
+    if (!device)
+        return NULL;
+    json_t * j_device = _j_ickDeviceGetDebugInfo(device);
+    char * string = json_dumps(j_device, JSON_INDENT(4) | JSON_PRESERVE_ORDER);
+    json_decref(j_device);
+    return string;
+}
+
+char * ickDeviceGetLocalDebugInfoForDevice(char * UUID){
+    return _ickDeviceGetDebugInfo(_ickDeviceGet(UUID));
+}
+
+char * ickDeviceGetLocalDebugInfo() {
+    json_t * j_array = json_array();
+    struct _ick_device_struct * device = _ickStreamDevices;
+    while (device) {
+        json_array_append_new(j_array, _j_ickDeviceGetDebugInfo(device));
+        device = device->next;
+    }
+    char * string = json_dumps(j_array, JSON_INDENT(4) | JSON_PRESERVE_ORDER);
+    json_decref(j_array);
+    return string;    
+}
+
+char * ickDeviceGetRemoteDebugInfoForDeviceQueryDevice(char * UUID, char * debugUUID) {
+    struct _ick_device_struct * iDev = _ickDeviceGet(UUID);
+    if (!iDev)
+        return NULL;
+    
+    char * urlString;
+    int result = 0;
+    if (debugUUID)
+        result = asprintf(&urlString, "http://%s:%d/debug/%s", iDev->URL, iDev->port, debugUUID);
+    else
+        result = asprintf(&urlString, "http://%s:%d/debug", iDev->URL, iDev->port);
+    if (result < 1)
+        return NULL;
+    
+    int size;
+    void * data = miniwget(urlString, &size);
+    free(urlString);
+    
+    if (size < 1)
+        return NULL;
+    
+    data = realloc(data, size + 1);
+    ((char *)data)[size] = 0;
+    return data;
+}
+
+char * ickDeviceGetRemoteDebugInfoForDevice(char * UUID) {
+    return ickDeviceGetRemoteDebugInfoForDeviceQueryDevice(UUID, NULL);
+}
+
+
 
 struct _ick_device_struct * _ickDevice4wsi(struct libwebsocket * wsi) {
     if (!wsi)
@@ -283,6 +404,8 @@ static void * _ick_loadxmldata_thread(void * param) {
         if (device_parser.name)
             free(device_parser.name);
     }
+    iDev->xmlData = data;
+    iDev->xmlSize = size;
     
     return NULL;
 }
