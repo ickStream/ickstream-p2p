@@ -1,6 +1,0 @@
-[submodule "libwebsockets"]
-	path = libwebsockets
-	url = git@bitbucket.org:jfearon/libwebsockets.git
-[submodule "miniupnp"]
-	path = miniupnp
-	url = git@github.com:jfearon/miniupnp.git
