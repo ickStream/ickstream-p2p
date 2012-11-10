@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "libwebsockets/libwebsockets.h"
+#include "libwebsockets.h"
 
 #include "ickDiscovery.h"
 #include "ickDiscoveryInternal.h"

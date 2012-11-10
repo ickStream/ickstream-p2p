@@ -15,7 +15,7 @@
 #include "ickDiscovery.h"
 #include "ickDiscoveryInternal.h"
 
-#include "libwebsockets/libwebsockets.h"
+#include "libwebsockets.h"
 #include "miniwget.h"
 #include "minixml.h"
 
