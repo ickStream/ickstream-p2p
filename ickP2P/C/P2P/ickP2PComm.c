@@ -115,6 +115,8 @@ int ickDeviceRegisterMessageCallback(ickDevice_message_callback_t callback) {
     while (cbTemp)
         if (cbTemp->callback == callback)
             return -1;
+        else
+            cbTemp = cbTemp->next;
     
     cbTemp = malloc(sizeof(struct _ickMessageCallbacks));
     cbTemp->next = _ick_MessageCallbacks;
@@ -131,6 +133,41 @@ static int _ick_execute_MessageCallback (struct _ick_device_struct * device, voi
         cbTemp = cbTemp->next;
     }
     return 0;
+}
+
+// debug handling
+
+void _ick_debug_handleSpecialCommands(const char * UUID, const void * message, size_t message_size, enum ickMessage_communicationstate state) {
+    if (state != ICKMESSAGE_INCOMING_DATA)
+        return;
+
+    if (message_size <= 22)
+        return;
+    if (!strncmp("{\"method\":\"debugMirror", message, 22)) {
+        void * newString = malloc(message_size - 1); // "debugReply" is one byte shorter
+        memcpy(newString, message, 11);
+        memcpy(newString + 11, "debugReply", 10);
+        memcpy(newString + 21, message + 22, message_size - 22);
+        ickDeviceSendMsg(UUID, newString, message_size - 1);
+        free(newString);
+        return;
+    }
+    
+    if (message_size <= 28)
+        return;
+    if (!strncmp("{\"method\":\"debugNotification", message, 28)) {
+        void * newString = malloc(message_size - 7); // "debugReply" is 7 bytes shorter
+        memcpy(newString, message, 11);
+        memcpy(newString + 11, "debugReply", 10);
+        memcpy(newString + 21, message + 28, message_size - 22);
+        ickDeviceSendMsg(NULL, newString, message_size - 7);
+        free(newString);
+        return;
+    }
+}
+
+void enableDebugCallback() {
+    ickDeviceRegisterMessageCallback(_ick_debug_handleSpecialCommands);
 }
 
 
