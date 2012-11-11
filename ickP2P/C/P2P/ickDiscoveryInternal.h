@@ -87,7 +87,13 @@ struct _ick_callback_list {
 
 // message lsit struct for websocket communication, from ickP2PComm.c
 
-struct _ick_message_struct;
+struct _ick_message_struct {
+    struct _ick_message_struct * next;
+    unsigned char * paddedData;
+    size_t size;
+    
+};
+
 
 //
 // Consolidated linked list for ickDevices
@@ -116,6 +122,16 @@ struct _ick_device_struct {
         
     void *  element;
     void *  xmlData;
+    int xmlSize;
+    
+    // debug
+    time_t lastin;
+    time_t lastout;
+    time_t t_connected;
+    time_t t_disconnected;
+    size_t bufLen;
+    int isServer;
+    
 };
 
 // get an element
@@ -260,7 +276,8 @@ enum _ick_send_cmd {
     ICK_SEND_CMD_NOTIFY_REMOVE,
     ICK_SEND_CMD_NOTIFY_PERIODICADD,
     ICK_SEND_CMD_NOTIFY_PERIODICSEARCH,
-    ICK_SEND_CMD_NOTIFY_ADD
+    ICK_SEND_CMD_NOTIFY_ADD,
+    ICK_SEND_CMD_EXPIRE_DEVICE
 };
 
 

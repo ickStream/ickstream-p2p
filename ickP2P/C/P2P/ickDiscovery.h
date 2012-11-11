@@ -23,11 +23,11 @@ extern "C" {
     // UPnP's recommended value is 1,800s but that may be too much for moble players that disconnect/reconnect/lose connection easily because it means we'll expect devices to be valid for this time
     // If the device has been active all the time it's also a low-cost reannouncement, the full cycle is a maximum of 14 UDP packets for a controller and player
     //
-#define ICKDISCOVERY_ANNOUNCE_INTERVAL  20
+#define ICKDISCOVERY_ANNOUNCE_INTERVAL  120
         
     // Search interval. The interval between search requests to the whole network.
     // The search interval works in a similar way as the announce interval but potentially causes more traffic since all devices are supposed to answer.
-#define ICKDISCOVERY_SEARCH_INTERVAL    600
+#define ICKDISCOVERY_SEARCH_INTERVAL    300
 
     // Define expected maximum response delay UPnP says this needs to be between 1 and 5, let's chose 2 for now.
 #define ICKDISCOVERY_SEARCH_DELAY       2
@@ -222,7 +222,7 @@ extern "C" {
     // Actual message sending is asynchronous and buffered, in case of disconnects the messages stay queued unless either a reconnect can be established or the target device is formally de-registered (either through a timeout of the device validity or a disconnect notification).
     // TBD: Do we need a timeout to determine when we want ickP2P to stop to try sending messages?
     //
-    // Broadcast: cou can send a broadcast message to all known devices using "nil" as a UUID parameter.
+    // Broadcast: cou can send a broadcast message to all known devices using "NULL" as a UUID parameter.
     //
     enum ickMessage_communicationstate ickDeviceSendMsg(const char * UUID, const void * message, const size_t message_size);
         
@@ -240,6 +240,36 @@ extern "C" {
     //
     int ickDeviceRegisterMessageCallback(ickDevice_message_callback_t callback);
 
+    
+    // debug commands
+    
+    // get debug info for a device
+    // output is JSON string
+    // output format is a dictionary containing the device information
+    char * ickDeviceGetLocalDebugInfoForDevice(char * UUID);
+
+    // get debug info for all devices
+    // output is JSON string
+    // output format is an array containing all device information
+    char * ickDeviceGetLocalDebugInfo();
+
+    // get debug info for a remote device
+    // output is JSON string
+    // output format is a an array of dictionaries containing the device information
+    // Note: this is a blocking call synchronously retrieving data from a remote device!
+    // Call it from a separate thread to avoid blocking. Use is thread safe.
+    char * ickDeviceGetRemoteDebugInfoForDevice(char * UUID);
+    
+    // get debug info for a remote device
+    // output is JSON string
+    // output format is a dictionary with debug information about the state of debugUUID as seen on UUID
+    // Note: this is a blocking call synchronously retrieving data from a remote device!
+    // Call it from a separate thread to avoid blocking. Use is thread safe.
+    char * ickDeviceGetRemoteDebugInfoForDeviceQueryDevice(char * UUID, char * debugUUID);
+    
+    // enable debug mirroring and broadcasting
+    void enableDebugCallback();
+    
     
 #ifdef __cplusplus
 }

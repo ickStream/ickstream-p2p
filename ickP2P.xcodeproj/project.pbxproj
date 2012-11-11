@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1A1A8A8716504DE400584F17 /* jansson_config.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A1A8A8616504DE400584F17 /* jansson_config.h */; };
 		1A27C804164AEDA300F4ED71 /* libliblibwebsockets.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A27C7FF164AED6C00F4ED71 /* libliblibwebsockets.a */; };
 		1A27C827164AF7C300F4ED71 /* config.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A27C818164AF7C300F4ED71 /* config.h */; };
 		1A27C82E164AF7C300F4ED71 /* openssdpsocket.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A27C820164AF7C300F4ED71 /* openssdpsocket.c */; };
@@ -23,6 +24,21 @@
 		1A27C84D164AF9E100F4ED71 /* receivedata.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A27C844164AF9E100F4ED71 /* receivedata.c */; };
 		1A27C84E164AF9E100F4ED71 /* receivedata.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A27C845164AF9E100F4ED71 /* receivedata.h */; };
 		1A27C855164B120100F4ED71 /* miniupnpcstrings.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A27C854164B120100F4ED71 /* miniupnpcstrings.h */; };
+		1A5335A51650491B001FD018 /* dump.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A5335951650491A001FD018 /* dump.c */; };
+		1A5335A61650491B001FD018 /* error.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A5335961650491A001FD018 /* error.c */; };
+		1A5335A71650491B001FD018 /* hashtable.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A5335971650491A001FD018 /* hashtable.c */; };
+		1A5335A81650491B001FD018 /* hashtable.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5335981650491A001FD018 /* hashtable.h */; };
+		1A5335A91650491B001FD018 /* jansson_private.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5335991650491A001FD018 /* jansson_private.h */; };
+		1A5335AA1650491B001FD018 /* jansson.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A53359B1650491A001FD018 /* jansson.h */; };
+		1A5335AB1650491B001FD018 /* load.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A53359C1650491A001FD018 /* load.c */; };
+		1A5335AC1650491B001FD018 /* memory.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A53359D1650491A001FD018 /* memory.c */; };
+		1A5335AD1650491B001FD018 /* pack_unpack.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A53359E1650491A001FD018 /* pack_unpack.c */; };
+		1A5335AE1650491B001FD018 /* strbuffer.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A53359F1650491A001FD018 /* strbuffer.c */; };
+		1A5335AF1650491B001FD018 /* strbuffer.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5335A01650491A001FD018 /* strbuffer.h */; };
+		1A5335B01650491B001FD018 /* strconv.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A5335A11650491A001FD018 /* strconv.c */; };
+		1A5335B11650491B001FD018 /* utf.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A5335A21650491A001FD018 /* utf.c */; };
+		1A5335B21650491B001FD018 /* utf.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5335A31650491A001FD018 /* utf.h */; };
+		1A5335B31650491B001FD018 /* value.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A5335A41650491A001FD018 /* value.c */; };
 		4C2D921716092ED4001C69EA /* ickDiscovery.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D91FF16092ED4001C69EA /* ickDiscovery.c */; };
 		4C2D921816092ED4001C69EA /* ickDiscovery.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D920016092ED4001C69EA /* ickDiscovery.h */; };
 		4C2D921916092ED4001C69EA /* ickDiscoveryInternal.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D920116092ED4001C69EA /* ickDiscoveryInternal.h */; };
@@ -56,6 +72,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		1A1A8A8616504DE400584F17 /* jansson_config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = jansson_config.h; path = jansson/src/jansson_config.h; sourceTree = SOURCE_ROOT; };
 		1A27C7F5164AED6C00F4ED71 /* libwebsockets.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = libwebsockets.xcodeproj; path = libwebsockets/lib/libwebsockets.xcodeproj; sourceTree = "<group>"; };
 		1A27C818164AF7C300F4ED71 /* config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = config.h; path = miniupnp/minissdpd/config.h; sourceTree = "<group>"; };
 		1A27C820164AF7C300F4ED71 /* openssdpsocket.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = openssdpsocket.c; path = miniupnp/minissdpd/openssdpsocket.c; sourceTree = "<group>"; };
@@ -72,6 +89,21 @@
 		1A27C844164AF9E100F4ED71 /* receivedata.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = receivedata.c; path = miniupnp/miniupnpc/receivedata.c; sourceTree = "<group>"; };
 		1A27C845164AF9E100F4ED71 /* receivedata.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = receivedata.h; path = miniupnp/miniupnpc/receivedata.h; sourceTree = "<group>"; };
 		1A27C854164B120100F4ED71 /* miniupnpcstrings.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = miniupnpcstrings.h; path = miniupnp/miniupnpc/miniupnpcstrings.h; sourceTree = "<group>"; };
+		1A5335951650491A001FD018 /* dump.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = dump.c; path = jansson/src/dump.c; sourceTree = SOURCE_ROOT; };
+		1A5335961650491A001FD018 /* error.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = error.c; path = jansson/src/error.c; sourceTree = SOURCE_ROOT; };
+		1A5335971650491A001FD018 /* hashtable.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = hashtable.c; path = jansson/src/hashtable.c; sourceTree = SOURCE_ROOT; };
+		1A5335981650491A001FD018 /* hashtable.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = hashtable.h; path = jansson/src/hashtable.h; sourceTree = SOURCE_ROOT; };
+		1A5335991650491A001FD018 /* jansson_private.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = jansson_private.h; path = jansson/src/jansson_private.h; sourceTree = SOURCE_ROOT; };
+		1A53359B1650491A001FD018 /* jansson.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = jansson.h; path = jansson/src/jansson.h; sourceTree = SOURCE_ROOT; };
+		1A53359C1650491A001FD018 /* load.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = load.c; path = jansson/src/load.c; sourceTree = SOURCE_ROOT; };
+		1A53359D1650491A001FD018 /* memory.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = memory.c; path = jansson/src/memory.c; sourceTree = SOURCE_ROOT; };
+		1A53359E1650491A001FD018 /* pack_unpack.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = pack_unpack.c; path = jansson/src/pack_unpack.c; sourceTree = SOURCE_ROOT; };
+		1A53359F1650491A001FD018 /* strbuffer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = strbuffer.c; path = jansson/src/strbuffer.c; sourceTree = SOURCE_ROOT; };
+		1A5335A01650491A001FD018 /* strbuffer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = strbuffer.h; path = jansson/src/strbuffer.h; sourceTree = SOURCE_ROOT; };
+		1A5335A11650491A001FD018 /* strconv.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = strconv.c; path = jansson/src/strconv.c; sourceTree = SOURCE_ROOT; };
+		1A5335A21650491A001FD018 /* utf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = utf.c; path = jansson/src/utf.c; sourceTree = SOURCE_ROOT; };
+		1A5335A31650491A001FD018 /* utf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = utf.h; path = jansson/src/utf.h; sourceTree = SOURCE_ROOT; };
+		1A5335A41650491A001FD018 /* value.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = value.c; path = jansson/src/value.c; sourceTree = SOURCE_ROOT; };
 		4C2D91F216092A69001C69EA /* libickP2P.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libickP2P.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		4C2D91FF16092ED4001C69EA /* ickDiscovery.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ickDiscovery.c; sourceTree = "<group>"; };
 		4C2D920016092ED4001C69EA /* ickDiscovery.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ickDiscovery.h; sourceTree = "<group>"; };
@@ -136,6 +168,29 @@
 			path = ..;
 			sourceTree = "<group>";
 		};
+		1A533594165048E9001FD018 /* jannson */ = {
+			isa = PBXGroup;
+			children = (
+				1A5335951650491A001FD018 /* dump.c */,
+				1A5335961650491A001FD018 /* error.c */,
+				1A5335971650491A001FD018 /* hashtable.c */,
+				1A5335981650491A001FD018 /* hashtable.h */,
+				1A1A8A8616504DE400584F17 /* jansson_config.h */,
+				1A5335991650491A001FD018 /* jansson_private.h */,
+				1A53359B1650491A001FD018 /* jansson.h */,
+				1A53359C1650491A001FD018 /* load.c */,
+				1A53359D1650491A001FD018 /* memory.c */,
+				1A53359E1650491A001FD018 /* pack_unpack.c */,
+				1A53359F1650491A001FD018 /* strbuffer.c */,
+				1A5335A01650491A001FD018 /* strbuffer.h */,
+				1A5335A11650491A001FD018 /* strconv.c */,
+				1A5335A21650491A001FD018 /* utf.c */,
+				1A5335A31650491A001FD018 /* utf.h */,
+				1A5335A41650491A001FD018 /* value.c */,
+			);
+			name = jannson;
+			sourceTree = "<group>";
+		};
 		4C2D91E716092A68001C69EA = {
 			isa = PBXGroup;
 			children = (
@@ -159,6 +214,7 @@
 		4C2D91F916092D66001C69EA /* ickP2P */ = {
 			isa = PBXGroup;
 			children = (
+				1A533594165048E9001FD018 /* jannson */,
 				1A27C83C164AF95E00F4ED71 /* miniupnpc */,
 				1A27C816164AF79C00F4ED71 /* minissdpd */,
 				4C2D91FA16092DB8001C69EA /* C */,
@@ -204,6 +260,12 @@
 				1A27C84C164AF9E100F4ED71 /* minixml.h in Headers */,
 				1A27C84E164AF9E100F4ED71 /* receivedata.h in Headers */,
 				1A27C855164B120100F4ED71 /* miniupnpcstrings.h in Headers */,
+				1A5335A81650491B001FD018 /* hashtable.h in Headers */,
+				1A5335A91650491B001FD018 /* jansson_private.h in Headers */,
+				1A5335AA1650491B001FD018 /* jansson.h in Headers */,
+				1A5335AF1650491B001FD018 /* strbuffer.h in Headers */,
+				1A5335B21650491B001FD018 /* utf.h in Headers */,
+				1A1A8A8716504DE400584F17 /* jansson_config.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -214,6 +276,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 4C2D91F616092A69001C69EA /* Build configuration list for PBXNativeTarget "ickP2P" */;
 			buildPhases = (
+				1A5335B416504963001FD018 /* ShellScript */,
 				1A27C853164B0C5300F4ED71 /* ShellScript */,
 				4C2D91EE16092A68001C69EA /* Sources */,
 				4C2D91EF16092A68001C69EA /* Frameworks */,
@@ -292,6 +355,19 @@
 			shellPath = /bin/bash;
 			shellScript = "cd ${PROJECT_DIR}/miniupnp/miniupnpc/\n./updateminiupnpcstrings.sh";
 		};
+		1A5335B416504963001FD018 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "cd ${PROJECT_DIR}/jansson/src\ncp jansson_config.h.xcode jansson_config.h";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -308,6 +384,16 @@
 				1A27C849164AF9E100F4ED71 /* miniwget.c in Sources */,
 				1A27C84B164AF9E100F4ED71 /* minixml.c in Sources */,
 				1A27C84D164AF9E100F4ED71 /* receivedata.c in Sources */,
+				1A5335A51650491B001FD018 /* dump.c in Sources */,
+				1A5335A61650491B001FD018 /* error.c in Sources */,
+				1A5335A71650491B001FD018 /* hashtable.c in Sources */,
+				1A5335AB1650491B001FD018 /* load.c in Sources */,
+				1A5335AC1650491B001FD018 /* memory.c in Sources */,
+				1A5335AD1650491B001FD018 /* pack_unpack.c in Sources */,
+				1A5335AE1650491B001FD018 /* strbuffer.c in Sources */,
+				1A5335B01650491B001FD018 /* strconv.c in Sources */,
+				1A5335B11650491B001FD018 /* utf.c in Sources */,
+				1A5335B31650491B001FD018 /* value.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
