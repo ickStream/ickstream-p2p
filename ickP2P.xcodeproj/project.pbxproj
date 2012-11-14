@@ -7,48 +7,64 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1A1A8A8716504DE400584F17 /* jansson_config.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A1A8A8616504DE400584F17 /* jansson_config.h */; };
+		1A27C804164AEDA300F4ED71 /* libliblibwebsockets.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A27C7FF164AED6C00F4ED71 /* libliblibwebsockets.a */; };
+		1A27C827164AF7C300F4ED71 /* config.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A27C818164AF7C300F4ED71 /* config.h */; };
+		1A27C82E164AF7C300F4ED71 /* openssdpsocket.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A27C820164AF7C300F4ED71 /* openssdpsocket.c */; };
+		1A27C82F164AF7C300F4ED71 /* openssdpsocket.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A27C821164AF7C300F4ED71 /* openssdpsocket.h */; };
+		1A27C832164AF7C300F4ED71 /* upnputils.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A27C824164AF7C300F4ED71 /* upnputils.c */; };
+		1A27C833164AF7C300F4ED71 /* upnputils.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A27C825164AF7C300F4ED71 /* upnputils.h */; };
+		1A27C846164AF9E100F4ED71 /* connecthostport.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A27C83D164AF9E100F4ED71 /* connecthostport.c */; };
+		1A27C847164AF9E100F4ED71 /* connecthostport.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A27C83E164AF9E100F4ED71 /* connecthostport.h */; };
+		1A27C848164AF9E100F4ED71 /* declspec.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A27C83F164AF9E100F4ED71 /* declspec.h */; };
+		1A27C849164AF9E100F4ED71 /* miniwget.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A27C840164AF9E100F4ED71 /* miniwget.c */; };
+		1A27C84A164AF9E100F4ED71 /* miniwget.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A27C841164AF9E100F4ED71 /* miniwget.h */; };
+		1A27C84B164AF9E100F4ED71 /* minixml.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A27C842164AF9E100F4ED71 /* minixml.c */; };
+		1A27C84C164AF9E100F4ED71 /* minixml.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A27C843164AF9E100F4ED71 /* minixml.h */; };
+		1A27C84D164AF9E100F4ED71 /* receivedata.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A27C844164AF9E100F4ED71 /* receivedata.c */; };
+		1A27C84E164AF9E100F4ED71 /* receivedata.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A27C845164AF9E100F4ED71 /* receivedata.h */; };
+		1A27C855164B120100F4ED71 /* miniupnpcstrings.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A27C854164B120100F4ED71 /* miniupnpcstrings.h */; };
+		1A5335A51650491B001FD018 /* dump.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A5335951650491A001FD018 /* dump.c */; };
+		1A5335A61650491B001FD018 /* error.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A5335961650491A001FD018 /* error.c */; };
+		1A5335A71650491B001FD018 /* hashtable.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A5335971650491A001FD018 /* hashtable.c */; };
+		1A5335A81650491B001FD018 /* hashtable.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5335981650491A001FD018 /* hashtable.h */; };
+		1A5335A91650491B001FD018 /* jansson_private.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5335991650491A001FD018 /* jansson_private.h */; };
+		1A5335AA1650491B001FD018 /* jansson.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A53359B1650491A001FD018 /* jansson.h */; };
+		1A5335AB1650491B001FD018 /* load.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A53359C1650491A001FD018 /* load.c */; };
+		1A5335AC1650491B001FD018 /* memory.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A53359D1650491A001FD018 /* memory.c */; };
+		1A5335AD1650491B001FD018 /* pack_unpack.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A53359E1650491A001FD018 /* pack_unpack.c */; };
+		1A5335AE1650491B001FD018 /* strbuffer.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A53359F1650491A001FD018 /* strbuffer.c */; };
+		1A5335AF1650491B001FD018 /* strbuffer.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5335A01650491A001FD018 /* strbuffer.h */; };
+		1A5335B01650491B001FD018 /* strconv.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A5335A11650491A001FD018 /* strconv.c */; };
+		1A5335B11650491B001FD018 /* utf.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A5335A21650491A001FD018 /* utf.c */; };
+		1A5335B21650491B001FD018 /* utf.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5335A31650491A001FD018 /* utf.h */; };
+		1A5335B31650491B001FD018 /* value.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A5335A41650491A001FD018 /* value.c */; };
 		4C2D921716092ED4001C69EA /* ickDiscovery.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D91FF16092ED4001C69EA /* ickDiscovery.c */; };
 		4C2D921816092ED4001C69EA /* ickDiscovery.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D920016092ED4001C69EA /* ickDiscovery.h */; };
 		4C2D921916092ED4001C69EA /* ickDiscoveryInternal.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D920116092ED4001C69EA /* ickDiscoveryInternal.h */; };
 		4C2D921A16092ED4001C69EA /* ickDiscoveryRegistry.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D920216092ED4001C69EA /* ickDiscoveryRegistry.c */; };
 		4C2D921B16092ED4001C69EA /* ickP2PComm.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D920316092ED4001C69EA /* ickP2PComm.c */; };
-		4C2D921C16092ED4001C69EA /* config.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D920516092ED4001C69EA /* config.h */; };
-		4C2D921D16092ED4001C69EA /* openssdpsocket.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D920716092ED4001C69EA /* openssdpsocket.c */; };
-		4C2D921E16092ED4001C69EA /* openssdpsocket.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D920816092ED4001C69EA /* openssdpsocket.h */; };
-		4C2D921F16092ED4001C69EA /* upnputils.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D920916092ED4001C69EA /* upnputils.c */; };
-		4C2D922016092ED4001C69EA /* upnputils.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D920A16092ED4001C69EA /* upnputils.h */; };
-		4C2D922116092ED4001C69EA /* connecthostport.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D920C16092ED4001C69EA /* connecthostport.c */; };
-		4C2D922216092ED4001C69EA /* connecthostport.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D920D16092ED4001C69EA /* connecthostport.h */; };
-		4C2D922316092ED4001C69EA /* declspec.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D920E16092ED4001C69EA /* declspec.h */; };
-		4C2D922416092ED4001C69EA /* miniupnpcstrings.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D921016092ED4001C69EA /* miniupnpcstrings.h */; };
-		4C2D922516092ED4001C69EA /* miniwget.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D921116092ED4001C69EA /* miniwget.c */; };
-		4C2D922616092ED4001C69EA /* miniwget.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D921216092ED4001C69EA /* miniwget.h */; };
-		4C2D922716092ED4001C69EA /* minixml.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D921316092ED4001C69EA /* minixml.c */; };
-		4C2D922816092ED4001C69EA /* minixml.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D921416092ED4001C69EA /* minixml.h */; };
-		4C2D922916092ED4001C69EA /* receivedata.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D921516092ED4001C69EA /* receivedata.c */; };
-		4C2D922A16092ED4001C69EA /* receivedata.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D921616092ED4001C69EA /* receivedata.h */; };
 		4C2D924116093C35001C69EA /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4C2D924016093C35001C69EA /* Foundation.framework */; };
-		4C2D926616093F5A001C69EA /* libliblibwebsockets.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 4C2D926116093F15001C69EA /* libliblibwebsockets.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		4C2D926016093F15001C69EA /* PBXContainerItemProxy */ = {
+		1A27C7FE164AED6C00F4ED71 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 4C2D925716093F15001C69EA /* libwebsockets.xcodeproj */;
+			containerPortal = 1A27C7F5164AED6C00F4ED71 /* libwebsockets.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = 4C5B691A15351D5D00805D71;
 			remoteInfo = liblibwebsockets;
 		};
-		4C2D926216093F15001C69EA /* PBXContainerItemProxy */ = {
+		1A27C800164AED6C00F4ED71 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 4C2D925716093F15001C69EA /* libwebsockets.xcodeproj */;
+			containerPortal = 1A27C7F5164AED6C00F4ED71 /* libwebsockets.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = 4C5B692A15351D5E00805D71;
 			remoteInfo = liblibwebsocketsTests;
 		};
-		4C2D926416093F50001C69EA /* PBXContainerItemProxy */ = {
+		1A27C802164AED8000F4ED71 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 4C2D925716093F15001C69EA /* libwebsockets.xcodeproj */;
+			containerPortal = 1A27C7F5164AED6C00F4ED71 /* libwebsockets.xcodeproj */;
 			proxyType = 1;
 			remoteGlobalIDString = 4C5B691915351D5D00805D71;
 			remoteInfo = liblibwebsockets;
@@ -56,34 +72,47 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		1A1A8A8616504DE400584F17 /* jansson_config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = jansson_config.h; path = jansson/src/jansson_config.h; sourceTree = SOURCE_ROOT; };
+		1A27C7F5164AED6C00F4ED71 /* libwebsockets.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = libwebsockets.xcodeproj; path = libwebsockets/lib/libwebsockets.xcodeproj; sourceTree = "<group>"; };
+		1A27C818164AF7C300F4ED71 /* config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = config.h; path = miniupnp/minissdpd/config.h; sourceTree = "<group>"; };
+		1A27C820164AF7C300F4ED71 /* openssdpsocket.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = openssdpsocket.c; path = miniupnp/minissdpd/openssdpsocket.c; sourceTree = "<group>"; };
+		1A27C821164AF7C300F4ED71 /* openssdpsocket.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = openssdpsocket.h; path = miniupnp/minissdpd/openssdpsocket.h; sourceTree = "<group>"; };
+		1A27C824164AF7C300F4ED71 /* upnputils.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = upnputils.c; path = miniupnp/minissdpd/upnputils.c; sourceTree = "<group>"; };
+		1A27C825164AF7C300F4ED71 /* upnputils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = upnputils.h; path = miniupnp/minissdpd/upnputils.h; sourceTree = "<group>"; };
+		1A27C83D164AF9E100F4ED71 /* connecthostport.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = connecthostport.c; path = miniupnp/miniupnpc/connecthostport.c; sourceTree = "<group>"; };
+		1A27C83E164AF9E100F4ED71 /* connecthostport.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = connecthostport.h; path = miniupnp/miniupnpc/connecthostport.h; sourceTree = "<group>"; };
+		1A27C83F164AF9E100F4ED71 /* declspec.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = declspec.h; path = miniupnp/miniupnpc/declspec.h; sourceTree = "<group>"; };
+		1A27C840164AF9E100F4ED71 /* miniwget.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = miniwget.c; path = miniupnp/miniupnpc/miniwget.c; sourceTree = "<group>"; };
+		1A27C841164AF9E100F4ED71 /* miniwget.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = miniwget.h; path = miniupnp/miniupnpc/miniwget.h; sourceTree = "<group>"; };
+		1A27C842164AF9E100F4ED71 /* minixml.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = minixml.c; path = miniupnp/miniupnpc/minixml.c; sourceTree = "<group>"; };
+		1A27C843164AF9E100F4ED71 /* minixml.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = minixml.h; path = miniupnp/miniupnpc/minixml.h; sourceTree = "<group>"; };
+		1A27C844164AF9E100F4ED71 /* receivedata.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = receivedata.c; path = miniupnp/miniupnpc/receivedata.c; sourceTree = "<group>"; };
+		1A27C845164AF9E100F4ED71 /* receivedata.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = receivedata.h; path = miniupnp/miniupnpc/receivedata.h; sourceTree = "<group>"; };
+		1A27C854164B120100F4ED71 /* miniupnpcstrings.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = miniupnpcstrings.h; path = miniupnp/miniupnpc/miniupnpcstrings.h; sourceTree = "<group>"; };
+		1A5335951650491A001FD018 /* dump.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = dump.c; path = jansson/src/dump.c; sourceTree = SOURCE_ROOT; };
+		1A5335961650491A001FD018 /* error.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = error.c; path = jansson/src/error.c; sourceTree = SOURCE_ROOT; };
+		1A5335971650491A001FD018 /* hashtable.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = hashtable.c; path = jansson/src/hashtable.c; sourceTree = SOURCE_ROOT; };
+		1A5335981650491A001FD018 /* hashtable.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = hashtable.h; path = jansson/src/hashtable.h; sourceTree = SOURCE_ROOT; };
+		1A5335991650491A001FD018 /* jansson_private.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = jansson_private.h; path = jansson/src/jansson_private.h; sourceTree = SOURCE_ROOT; };
+		1A53359B1650491A001FD018 /* jansson.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = jansson.h; path = jansson/src/jansson.h; sourceTree = SOURCE_ROOT; };
+		1A53359C1650491A001FD018 /* load.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = load.c; path = jansson/src/load.c; sourceTree = SOURCE_ROOT; };
+		1A53359D1650491A001FD018 /* memory.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = memory.c; path = jansson/src/memory.c; sourceTree = SOURCE_ROOT; };
+		1A53359E1650491A001FD018 /* pack_unpack.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = pack_unpack.c; path = jansson/src/pack_unpack.c; sourceTree = SOURCE_ROOT; };
+		1A53359F1650491A001FD018 /* strbuffer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = strbuffer.c; path = jansson/src/strbuffer.c; sourceTree = SOURCE_ROOT; };
+		1A5335A01650491A001FD018 /* strbuffer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = strbuffer.h; path = jansson/src/strbuffer.h; sourceTree = SOURCE_ROOT; };
+		1A5335A11650491A001FD018 /* strconv.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = strconv.c; path = jansson/src/strconv.c; sourceTree = SOURCE_ROOT; };
+		1A5335A21650491A001FD018 /* utf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = utf.c; path = jansson/src/utf.c; sourceTree = SOURCE_ROOT; };
+		1A5335A31650491A001FD018 /* utf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = utf.h; path = jansson/src/utf.h; sourceTree = SOURCE_ROOT; };
+		1A5335A41650491A001FD018 /* value.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = value.c; path = jansson/src/value.c; sourceTree = SOURCE_ROOT; };
 		4C2D91F216092A69001C69EA /* libickP2P.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libickP2P.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		4C2D91FF16092ED4001C69EA /* ickDiscovery.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ickDiscovery.c; sourceTree = "<group>"; };
 		4C2D920016092ED4001C69EA /* ickDiscovery.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ickDiscovery.h; sourceTree = "<group>"; };
 		4C2D920116092ED4001C69EA /* ickDiscoveryInternal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ickDiscoveryInternal.h; sourceTree = "<group>"; };
 		4C2D920216092ED4001C69EA /* ickDiscoveryRegistry.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ickDiscoveryRegistry.c; sourceTree = "<group>"; };
 		4C2D920316092ED4001C69EA /* ickP2PComm.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ickP2PComm.c; sourceTree = "<group>"; };
-		4C2D920516092ED4001C69EA /* config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = config.h; sourceTree = "<group>"; };
-		4C2D920616092ED4001C69EA /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
-		4C2D920716092ED4001C69EA /* openssdpsocket.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = openssdpsocket.c; sourceTree = "<group>"; };
-		4C2D920816092ED4001C69EA /* openssdpsocket.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = openssdpsocket.h; sourceTree = "<group>"; };
-		4C2D920916092ED4001C69EA /* upnputils.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = upnputils.c; sourceTree = "<group>"; };
-		4C2D920A16092ED4001C69EA /* upnputils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = upnputils.h; sourceTree = "<group>"; };
-		4C2D920C16092ED4001C69EA /* connecthostport.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = connecthostport.c; sourceTree = "<group>"; };
-		4C2D920D16092ED4001C69EA /* connecthostport.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = connecthostport.h; sourceTree = "<group>"; };
-		4C2D920E16092ED4001C69EA /* declspec.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = declspec.h; sourceTree = "<group>"; };
-		4C2D920F16092ED4001C69EA /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
-		4C2D921016092ED4001C69EA /* miniupnpcstrings.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = miniupnpcstrings.h; sourceTree = "<group>"; };
-		4C2D921116092ED4001C69EA /* miniwget.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = miniwget.c; sourceTree = "<group>"; };
-		4C2D921216092ED4001C69EA /* miniwget.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = miniwget.h; sourceTree = "<group>"; };
-		4C2D921316092ED4001C69EA /* minixml.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = minixml.c; sourceTree = "<group>"; };
-		4C2D921416092ED4001C69EA /* minixml.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = minixml.h; sourceTree = "<group>"; };
-		4C2D921516092ED4001C69EA /* receivedata.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = receivedata.c; sourceTree = "<group>"; };
-		4C2D921616092ED4001C69EA /* receivedata.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = receivedata.h; sourceTree = "<group>"; };
 		4C2D922B1609306F001C69EA /* README */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		4C2D922C1609311B001C69EA /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
-		4C2D923E16093C2B001C69EA /* libliblibwebsockets.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libliblibwebsockets.a; path = "../Library/libwebsockets/lib/build/Release-iphoneos/libliblibwebsockets.a"; sourceTree = "<group>"; };
 		4C2D924016093C35001C69EA /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
-		4C2D925716093F15001C69EA /* libwebsockets.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = libwebsockets.xcodeproj; path = libwebsockets/lib/libwebsockets.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -91,7 +120,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4C2D926616093F5A001C69EA /* libliblibwebsockets.a in Frameworks */,
+				1A27C804164AEDA300F4ED71 /* libliblibwebsockets.a in Frameworks */,
 				4C2D924116093C35001C69EA /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -99,11 +128,74 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1A27C7F6164AED6C00F4ED71 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1A27C7FF164AED6C00F4ED71 /* libliblibwebsockets.a */,
+				1A27C801164AED6C00F4ED71 /* liblibwebsocketsTests.octest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		1A27C816164AF79C00F4ED71 /* minissdpd */ = {
+			isa = PBXGroup;
+			children = (
+				1A27C818164AF7C300F4ED71 /* config.h */,
+				1A27C820164AF7C300F4ED71 /* openssdpsocket.c */,
+				1A27C821164AF7C300F4ED71 /* openssdpsocket.h */,
+				1A27C824164AF7C300F4ED71 /* upnputils.c */,
+				1A27C825164AF7C300F4ED71 /* upnputils.h */,
+			);
+			name = minissdpd;
+			path = ..;
+			sourceTree = "<group>";
+		};
+		1A27C83C164AF95E00F4ED71 /* miniupnpc */ = {
+			isa = PBXGroup;
+			children = (
+				1A27C83D164AF9E100F4ED71 /* connecthostport.c */,
+				1A27C83E164AF9E100F4ED71 /* connecthostport.h */,
+				1A27C854164B120100F4ED71 /* miniupnpcstrings.h */,
+				1A27C83F164AF9E100F4ED71 /* declspec.h */,
+				1A27C840164AF9E100F4ED71 /* miniwget.c */,
+				1A27C841164AF9E100F4ED71 /* miniwget.h */,
+				1A27C842164AF9E100F4ED71 /* minixml.c */,
+				1A27C843164AF9E100F4ED71 /* minixml.h */,
+				1A27C844164AF9E100F4ED71 /* receivedata.c */,
+				1A27C845164AF9E100F4ED71 /* receivedata.h */,
+			);
+			name = miniupnpc;
+			path = ..;
+			sourceTree = "<group>";
+		};
+		1A533594165048E9001FD018 /* jannson */ = {
+			isa = PBXGroup;
+			children = (
+				1A5335951650491A001FD018 /* dump.c */,
+				1A5335961650491A001FD018 /* error.c */,
+				1A5335971650491A001FD018 /* hashtable.c */,
+				1A5335981650491A001FD018 /* hashtable.h */,
+				1A1A8A8616504DE400584F17 /* jansson_config.h */,
+				1A5335991650491A001FD018 /* jansson_private.h */,
+				1A53359B1650491A001FD018 /* jansson.h */,
+				1A53359C1650491A001FD018 /* load.c */,
+				1A53359D1650491A001FD018 /* memory.c */,
+				1A53359E1650491A001FD018 /* pack_unpack.c */,
+				1A53359F1650491A001FD018 /* strbuffer.c */,
+				1A5335A01650491A001FD018 /* strbuffer.h */,
+				1A5335A11650491A001FD018 /* strconv.c */,
+				1A5335A21650491A001FD018 /* utf.c */,
+				1A5335A31650491A001FD018 /* utf.h */,
+				1A5335A41650491A001FD018 /* value.c */,
+			);
+			name = jannson;
+			sourceTree = "<group>";
+		};
 		4C2D91E716092A68001C69EA = {
 			isa = PBXGroup;
 			children = (
+				1A27C7F5164AED6C00F4ED71 /* libwebsockets.xcodeproj */,
 				4C2D924016093C35001C69EA /* Foundation.framework */,
-				4C2D923E16093C2B001C69EA /* libliblibwebsockets.a */,
 				4C2D922C1609311B001C69EA /* LICENSE */,
 				4C2D922B1609306F001C69EA /* README */,
 				4C2D91F916092D66001C69EA /* ickP2P */,
@@ -122,6 +214,9 @@
 		4C2D91F916092D66001C69EA /* ickP2P */ = {
 			isa = PBXGroup;
 			children = (
+				1A533594165048E9001FD018 /* jannson */,
+				1A27C83C164AF95E00F4ED71 /* miniupnpc */,
+				1A27C816164AF79C00F4ED71 /* minissdpd */,
 				4C2D91FA16092DB8001C69EA /* C */,
 			);
 			path = ickP2P;
@@ -130,18 +225,9 @@
 		4C2D91FA16092DB8001C69EA /* C */ = {
 			isa = PBXGroup;
 			children = (
-				4C2D91FB16092DD0001C69EA /* Library */,
 				4C2D91FE16092ED4001C69EA /* P2P */,
 			);
 			path = C;
-			sourceTree = "<group>";
-		};
-		4C2D91FB16092DD0001C69EA /* Library */ = {
-			isa = PBXGroup;
-			children = (
-				4C2D925716093F15001C69EA /* libwebsockets.xcodeproj */,
-			);
-			path = Library;
 			sourceTree = "<group>";
 		};
 		4C2D91FE16092ED4001C69EA /* P2P */ = {
@@ -152,50 +238,8 @@
 				4C2D920116092ED4001C69EA /* ickDiscoveryInternal.h */,
 				4C2D920216092ED4001C69EA /* ickDiscoveryRegistry.c */,
 				4C2D920316092ED4001C69EA /* ickP2PComm.c */,
-				4C2D920416092ED4001C69EA /* minissdp */,
-				4C2D920B16092ED4001C69EA /* miniupnp */,
 			);
 			path = P2P;
-			sourceTree = "<group>";
-		};
-		4C2D920416092ED4001C69EA /* minissdp */ = {
-			isa = PBXGroup;
-			children = (
-				4C2D920516092ED4001C69EA /* config.h */,
-				4C2D920616092ED4001C69EA /* LICENSE */,
-				4C2D920716092ED4001C69EA /* openssdpsocket.c */,
-				4C2D920816092ED4001C69EA /* openssdpsocket.h */,
-				4C2D920916092ED4001C69EA /* upnputils.c */,
-				4C2D920A16092ED4001C69EA /* upnputils.h */,
-			);
-			path = minissdp;
-			sourceTree = "<group>";
-		};
-		4C2D920B16092ED4001C69EA /* miniupnp */ = {
-			isa = PBXGroup;
-			children = (
-				4C2D920C16092ED4001C69EA /* connecthostport.c */,
-				4C2D920D16092ED4001C69EA /* connecthostport.h */,
-				4C2D920E16092ED4001C69EA /* declspec.h */,
-				4C2D920F16092ED4001C69EA /* LICENSE */,
-				4C2D921016092ED4001C69EA /* miniupnpcstrings.h */,
-				4C2D921116092ED4001C69EA /* miniwget.c */,
-				4C2D921216092ED4001C69EA /* miniwget.h */,
-				4C2D921316092ED4001C69EA /* minixml.c */,
-				4C2D921416092ED4001C69EA /* minixml.h */,
-				4C2D921516092ED4001C69EA /* receivedata.c */,
-				4C2D921616092ED4001C69EA /* receivedata.h */,
-			);
-			path = miniupnp;
-			sourceTree = "<group>";
-		};
-		4C2D925816093F15001C69EA /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				4C2D926116093F15001C69EA /* libliblibwebsockets.a */,
-				4C2D926316093F15001C69EA /* liblibwebsocketsTests.octest */,
-			);
-			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -207,15 +251,21 @@
 			files = (
 				4C2D921816092ED4001C69EA /* ickDiscovery.h in Headers */,
 				4C2D921916092ED4001C69EA /* ickDiscoveryInternal.h in Headers */,
-				4C2D921C16092ED4001C69EA /* config.h in Headers */,
-				4C2D921E16092ED4001C69EA /* openssdpsocket.h in Headers */,
-				4C2D922016092ED4001C69EA /* upnputils.h in Headers */,
-				4C2D922216092ED4001C69EA /* connecthostport.h in Headers */,
-				4C2D922316092ED4001C69EA /* declspec.h in Headers */,
-				4C2D922416092ED4001C69EA /* miniupnpcstrings.h in Headers */,
-				4C2D922616092ED4001C69EA /* miniwget.h in Headers */,
-				4C2D922816092ED4001C69EA /* minixml.h in Headers */,
-				4C2D922A16092ED4001C69EA /* receivedata.h in Headers */,
+				1A27C827164AF7C300F4ED71 /* config.h in Headers */,
+				1A27C82F164AF7C300F4ED71 /* openssdpsocket.h in Headers */,
+				1A27C833164AF7C300F4ED71 /* upnputils.h in Headers */,
+				1A27C847164AF9E100F4ED71 /* connecthostport.h in Headers */,
+				1A27C848164AF9E100F4ED71 /* declspec.h in Headers */,
+				1A27C84A164AF9E100F4ED71 /* miniwget.h in Headers */,
+				1A27C84C164AF9E100F4ED71 /* minixml.h in Headers */,
+				1A27C84E164AF9E100F4ED71 /* receivedata.h in Headers */,
+				1A27C855164B120100F4ED71 /* miniupnpcstrings.h in Headers */,
+				1A5335A81650491B001FD018 /* hashtable.h in Headers */,
+				1A5335A91650491B001FD018 /* jansson_private.h in Headers */,
+				1A5335AA1650491B001FD018 /* jansson.h in Headers */,
+				1A5335AF1650491B001FD018 /* strbuffer.h in Headers */,
+				1A5335B21650491B001FD018 /* utf.h in Headers */,
+				1A1A8A8716504DE400584F17 /* jansson_config.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -226,6 +276,8 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 4C2D91F616092A69001C69EA /* Build configuration list for PBXNativeTarget "ickP2P" */;
 			buildPhases = (
+				1A5335B416504963001FD018 /* ShellScript */,
+				1A27C853164B0C5300F4ED71 /* ShellScript */,
 				4C2D91EE16092A68001C69EA /* Sources */,
 				4C2D91EF16092A68001C69EA /* Frameworks */,
 				4C2D91F016092A68001C69EA /* Headers */,
@@ -233,7 +285,7 @@
 			buildRules = (
 			);
 			dependencies = (
-				4C2D926516093F50001C69EA /* PBXTargetDependency */,
+				1A27C803164AED8000F4ED71 /* PBXTargetDependency */,
 			);
 			name = ickP2P;
 			productName = ickP2P;
@@ -261,8 +313,8 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = 4C2D925816093F15001C69EA /* Products */;
-					ProjectRef = 4C2D925716093F15001C69EA /* libwebsockets.xcodeproj */;
+					ProductGroup = 1A27C7F6164AED6C00F4ED71 /* Products */;
+					ProjectRef = 1A27C7F5164AED6C00F4ED71 /* libwebsockets.xcodeproj */;
 				},
 			);
 			projectRoot = "";
@@ -273,21 +325,50 @@
 /* End PBXProject section */
 
 /* Begin PBXReferenceProxy section */
-		4C2D926116093F15001C69EA /* libliblibwebsockets.a */ = {
+		1A27C7FF164AED6C00F4ED71 /* libliblibwebsockets.a */ = {
 			isa = PBXReferenceProxy;
 			fileType = archive.ar;
 			path = libliblibwebsockets.a;
-			remoteRef = 4C2D926016093F15001C69EA /* PBXContainerItemProxy */;
+			remoteRef = 1A27C7FE164AED6C00F4ED71 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
-		4C2D926316093F15001C69EA /* liblibwebsocketsTests.octest */ = {
+		1A27C801164AED6C00F4ED71 /* liblibwebsocketsTests.octest */ = {
 			isa = PBXReferenceProxy;
 			fileType = wrapper.cfbundle;
 			path = liblibwebsocketsTests.octest;
-			remoteRef = 4C2D926216093F15001C69EA /* PBXContainerItemProxy */;
+			remoteRef = 1A27C800164AED6C00F4ED71 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 /* End PBXReferenceProxy section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		1A27C853164B0C5300F4ED71 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "cd ${PROJECT_DIR}/miniupnp/miniupnpc/\n./updateminiupnpcstrings.sh";
+		};
+		1A5335B416504963001FD018 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "cd ${PROJECT_DIR}/jansson/src\ncp jansson_config.h.xcode jansson_config.h";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		4C2D91EE16092A68001C69EA /* Sources */ = {
@@ -297,22 +378,32 @@
 				4C2D921716092ED4001C69EA /* ickDiscovery.c in Sources */,
 				4C2D921A16092ED4001C69EA /* ickDiscoveryRegistry.c in Sources */,
 				4C2D921B16092ED4001C69EA /* ickP2PComm.c in Sources */,
-				4C2D921D16092ED4001C69EA /* openssdpsocket.c in Sources */,
-				4C2D921F16092ED4001C69EA /* upnputils.c in Sources */,
-				4C2D922116092ED4001C69EA /* connecthostport.c in Sources */,
-				4C2D922516092ED4001C69EA /* miniwget.c in Sources */,
-				4C2D922716092ED4001C69EA /* minixml.c in Sources */,
-				4C2D922916092ED4001C69EA /* receivedata.c in Sources */,
+				1A27C82E164AF7C300F4ED71 /* openssdpsocket.c in Sources */,
+				1A27C832164AF7C300F4ED71 /* upnputils.c in Sources */,
+				1A27C846164AF9E100F4ED71 /* connecthostport.c in Sources */,
+				1A27C849164AF9E100F4ED71 /* miniwget.c in Sources */,
+				1A27C84B164AF9E100F4ED71 /* minixml.c in Sources */,
+				1A27C84D164AF9E100F4ED71 /* receivedata.c in Sources */,
+				1A5335A51650491B001FD018 /* dump.c in Sources */,
+				1A5335A61650491B001FD018 /* error.c in Sources */,
+				1A5335A71650491B001FD018 /* hashtable.c in Sources */,
+				1A5335AB1650491B001FD018 /* load.c in Sources */,
+				1A5335AC1650491B001FD018 /* memory.c in Sources */,
+				1A5335AD1650491B001FD018 /* pack_unpack.c in Sources */,
+				1A5335AE1650491B001FD018 /* strbuffer.c in Sources */,
+				1A5335B01650491B001FD018 /* strconv.c in Sources */,
+				1A5335B11650491B001FD018 /* utf.c in Sources */,
+				1A5335B31650491B001FD018 /* value.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		4C2D926516093F50001C69EA /* PBXTargetDependency */ = {
+		1A27C803164AED8000F4ED71 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = liblibwebsockets;
-			targetProxy = 4C2D926416093F50001C69EA /* PBXContainerItemProxy */;
+			targetProxy = 1A27C802164AED8000F4ED71 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -383,10 +474,12 @@
 				EXECUTABLE_PREFIX = lib;
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_LDFLAGS = "-ObjC";
+				PRIVATE_HEADERS_FOLDER_PATH = ../..;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
+				PUBLIC_HEADERS_FOLDER_PATH = ../..;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = "ickP2P/**";
+				USER_HEADER_SEARCH_PATHS = "$(BUILT_PRODUCTS_DIR)/../..";
 			};
 			name = Debug;
 		};
@@ -398,10 +491,12 @@
 				EXECUTABLE_PREFIX = lib;
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_LDFLAGS = "-ObjC";
+				PRIVATE_HEADERS_FOLDER_PATH = ../..;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
+				PUBLIC_HEADERS_FOLDER_PATH = ../..;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = "ickP2P/**";
+				USER_HEADER_SEARCH_PATHS = "$(BUILT_PRODUCTS_DIR)/../..";
 			};
 			name = Release;
 		};
