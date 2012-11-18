@@ -410,11 +410,9 @@ int ickDiscoveryRemoveService(enum ickDevice_servicetype type) {
     // Remove player
     if (type & ICKDEVICE_PLAYER)
         _ick_remove_service(ICKDEVICE_TYPESTR_PLAYER, true);
-#ifdef SUPPORT_ICK_SERVERS
     // Remove server
     if (type & ICKDEVICE_SERVER_GENERIC)
         _ick_remove_service(ICKDEVICE_TYPESTR_SERVER, true);
-#endif
     // Remove controller
     if (type & ICKDEVICE_CONTROLLER)
         _ick_remove_service(ICKDEVICE_TYPESTR_CONTROLLER, true);

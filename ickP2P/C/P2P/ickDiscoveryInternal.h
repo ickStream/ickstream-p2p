@@ -71,7 +71,6 @@ typedef enum _ickTristate {
 #define UPNP_PORT       1900
 #define UPNP_MCAST_ADDR "239.255.255.250"
 #define LOCALHOST_ADDR  "127.0.0.1"
-#define SUPPORT_ICK_SERVERS 1
 
 struct _upnp_device;
 

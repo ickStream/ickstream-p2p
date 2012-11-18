@@ -183,7 +183,7 @@ void _ick_debug_handleSpecialCommands(const char * UUID, const void * message, s
         void * newString = malloc(message_size - 7); // "debugReply" is 7 bytes shorter
         memcpy(newString, message, 11);
         memcpy(newString + 11, "debugReply", 10);
-        memcpy(newString + 21, message + 28, message_size - 22);
+        memcpy(newString + 21, message + 28, message_size - 28);
         ickDeviceSendMsg(NULL, newString, message_size - 7);
         free(newString);
         return;
@@ -783,6 +783,9 @@ static void __ickCloseWebsocket(struct _ick_device_struct * device) {
 }
 
 static int _wantToConnect(enum ickDevice_servicetype myType, enum ickDevice_servicetype otherType) {
+    // debug always connects
+    if ((myType & ICKDEVICE_DEBUG) || (otherType & ICKDEVICE_DEBUG))
+        return 1;
     // I'm a controller, so I want to connect to servers and players, not other controllers
     if (myType & ICKDEVICE_CONTROLLER) {
         if (otherType & ICKDEVICE_SERVER_GENERIC)
@@ -813,14 +816,9 @@ static int _wantToConnect(enum ickDevice_servicetype myType, enum ickDevice_serv
 
 static void _ickOpenDeviceWebsocket(const char * UUID, enum ickDiscovery_command change, enum ickDevice_servicetype type) {
     // This is too simplicstic Controllers should connect to players but not other players
-#ifdef SUPPORT_ICK_SERVERS
     if (!_wantToConnect(_ick_p2pDiscovery->services, type))
         return;
-#else
-    if (!(type & ICKDEVICE_PLAYER) ||
-        !(_ick_p2pDiscovery->services & ICKDEVICE_CONTROLLER))
-        return;
-#endif
+
     switch (change) {
         case ICKDISCOVERY_ADD_DEVICE: {
             struct _ick_device_struct * device = _ickDeviceGet(UUID);
@@ -848,11 +846,8 @@ static void _ickOpenDeviceWebsocket(const char * UUID, enum ickDiscovery_command
 void _ickConnectUnconnectedPlayers(void) {
     struct _ick_device_struct * device = _ickDeviceGet(NULL);
     while (device) {
-#ifdef SUPPORT_ICK_SERVERS
         if (((device->type & ICKDEVICE_PLAYER) || (device->type & ICKDEVICE_SERVER_GENERIC)) && (device->wsi == NULL))
-#else
-            if ((device->type & ICKDEVICE_PLAYER) && (device->wsi == NULL))
-#endif
+            __ickOpenWebsocket(device);
         device = device->next;
     }
 }
