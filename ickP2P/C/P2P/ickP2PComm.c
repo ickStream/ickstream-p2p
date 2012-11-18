@@ -125,6 +125,30 @@ int ickDeviceRegisterMessageCallback(ickDevice_message_callback_t callback) {
     return 0;
 }
 
+int ickDeviceRemoveMessageCallback(ickDevice_message_callback_t callback) {
+    if (!callback)
+        return -1;
+    struct _ickMessageCallbacks * cbTemp = _ick_MessageCallbacks;
+    struct _ickMessageCallbacks * cbPrev = NULL;
+
+    while (cbTemp)
+        if (cbTemp->callback == callback) {
+            // hard to be really thread safe here so be careful about the entry order....
+            if (cbPrev)
+                cbPrev->next = cbTemp->next;    //atomic and after this we are strictly speaking fine.
+            else
+                _ick_MessageCallbacks = cbTemp->next;
+            usleep(200);    // try to be thread safe here in case the callback is in use
+            free(cbTemp);
+            return 0;
+        } else {
+            cbPrev = cbTemp;
+            cbTemp = cbTemp->next;
+        }
+    return -1; // not found
+}
+
+
 static int _ick_execute_MessageCallback (struct _ick_device_struct * device, void * data, size_t size, enum ickMessage_communicationstate state) {
     struct _ickMessageCallbacks * cbTemp = _ick_MessageCallbacks;
     
@@ -166,8 +190,11 @@ void _ick_debug_handleSpecialCommands(const char * UUID, const void * message, s
     }
 }
 
-void enableDebugCallback() {
-    ickDeviceRegisterMessageCallback(_ick_debug_handleSpecialCommands);
+void enableDebugCallback(int on) {
+    if (on)
+        ickDeviceRegisterMessageCallback(_ick_debug_handleSpecialCommands);
+    else
+        ickDeviceRemoveMessageCallback(_ick_debug_handleSpecialCommands);
 }
 
 
@@ -270,7 +297,9 @@ static int callback_http(struct libwebsocket_context * context,
 {
 	char client_name[128];
 	char client_ip[128];
-    
+    char buf[512];
+	char *p = buf;
+
 	switch (reason) {
         case LWS_CALLBACK_HTTP:
             // HTTP server would go here. Just put everything to be served up in a folder "LOCAL_RESOURCE_PATH" and probably do some sanity check for the request
@@ -288,7 +317,7 @@ static int callback_http(struct libwebsocket_context * context,
                 break;
             }
             
-            if (in && ((strncasecmp(in, "/debug", 6)) == 0)) {
+            if (in && (strncasecmp(in, "/debug", 6) == 0)) {
                 char * UUID = NULL;
                 char * string = in;
                 if ((strlen(in) > 7) && (string[6] == '/')) {
@@ -298,7 +327,43 @@ static int callback_http(struct libwebsocket_context * context,
                     string = ickDeviceGetLocalDebugInfoForDevice(UUID);
                 else
                     string = ickDeviceGetLocalDebugInfo();
-                _ick_serve_debug_file(wsi, string);
+                if (string)
+                    _ick_serve_debug_file(wsi, string);
+                else {
+                    p += sprintf(p, "HTTP/1.0 404 Not Found\x0d\x0a"
+                                 "Server: libwebsockets\x0d\x0a"
+                                 "Content-Type: %s\x0d\x0a"
+                                 "Content-Length: %u\x0d\x0a"
+                                 "\x0d\x0a\0", "text/html", 0);
+                    libwebsocket_write(wsi, (unsigned char *)buf, p - buf, LWS_WRITE_HTTP);
+                    return -1;
+                }
+                break;
+            }
+            
+            if (in && (strncasecmp(in, "/useDebugMirror/", 16) == 0)) {
+                if (strlen(in) <= 16)
+                    break;
+                if (((char *)in)[16] == '1')
+                    enableDebugCallback(1);
+                else if (((char *)in)[16] == '0')
+                    enableDebugCallback(0);
+                else {
+                    p += sprintf(p, "HTTP/1.0 400 Bad Request\x0d\x0a"
+                                 "Server: libwebsockets\x0d\x0a"
+                                 "Content-Type: %s\x0d\x0a"
+                                 "Content-Length: %u\x0d\x0a"
+                                 "\x0d\x0a\0", "text/html", 0);
+                    libwebsocket_write(wsi, (unsigned char *)buf, p - buf, LWS_WRITE_HTTP);
+                    return -1;
+                }
+                p += sprintf(p, "HTTP/1.0 200 OK\x0d\x0a"
+                             "Server: libwebsockets\x0d\x0a"
+                             "Content-Type: %s\x0d\x0a"
+                             "Content-Length: %u\x0d\x0a"
+                             "\x0d\x0a", "text/html", 0);
+                libwebsocket_write(wsi, (unsigned char *)buf, p - buf, LWS_WRITE_HTTP);
+
                 break;
             }
 
@@ -539,13 +604,16 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
             device = _ickDeviceGet(UUID);
             int is_self = !strcmp(UUID, _ick_p2pDiscovery->UUID);
             // we do already have a connecting client or a connected server for this UUID and it's not a loopback then don't connect.
-            if (device && device->wsi && !is_self)
+            if (device && device->wsi && !is_self) {
+                free(UUID);
                 return 1;
+            }
             // if this is a loopback, the server uses the discovery struct to store the wsi; need the device strcut for the client side of the connection
             if (is_self) {
-                if (_ick_p2pDiscovery->wsi)
+                if (_ick_p2pDiscovery->wsi) {
+                    free(UUID);
                     return 1;
-                else
+                } else
                     _ick_p2pDiscovery->wsi = wsi;
             } else if (device && !device->wsi) // we did find the device but it doesn't have a wsi yet, use it. Should be a bit uncommon, we should usually connect a client when we find a device so I'd expect this to be either occupied by a wsi or the device not yet found....
                 device->wsi = wsi;

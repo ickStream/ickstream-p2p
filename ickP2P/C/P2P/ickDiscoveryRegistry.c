@@ -96,9 +96,12 @@ json_t * _j_ickDeviceGetDebugInfo(struct _ick_device_struct * device) {
             header2 = strndup(element->headers[1].p, element->headers[1].l);
         if (element->headers[2].l)
             header3 = strndup(element->headers[2].p, element->headers[2].l);
-        json_object_set_new(j_element, "header1", (header1) ? json_string(header1) : json_null());
-        json_object_set_new(j_element, "header2", (header2) ? json_string(header2) : json_null());
-        json_object_set_new(j_element, "header3", (header3) ? json_string(header3) : json_null());
+        if (header1)
+            json_object_set_new(j_element, "header1", (header1) ? json_string(header1) : json_null());
+        if (header2)
+            json_object_set_new(j_element, "header2", (header2) ? json_string(header2) : json_null());
+        if (header3)
+            json_object_set_new(j_element, "header3", (header3) ? json_string(header3) : json_null());
         free(header1);
         free(header2);
         free(header3);

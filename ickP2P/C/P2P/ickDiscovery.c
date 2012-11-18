@@ -311,6 +311,8 @@ void * _ickDiscovery_poll_thread (void * _disc) {
     if (discovery->exitCallback)
         discovery->exitCallback();
     
+    free(buffer);
+    
     return NULL;
 }
 

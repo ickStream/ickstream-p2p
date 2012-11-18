@@ -240,6 +240,11 @@ extern "C" {
     //
     int ickDeviceRegisterMessageCallback(ickDevice_message_callback_t callback);
 
+    //
+    // remove message callback
+    //
+    int ickDeviceRemoveMessageCallback(ickDevice_message_callback_t callback);
+    
     
     // debug commands
     
@@ -268,7 +273,7 @@ extern "C" {
     char * ickDeviceGetRemoteDebugInfoForDeviceQueryDevice(char * UUID, char * debugUUID);
     
     // enable debug mirroring and broadcasting
-    void enableDebugCallback();
+    void enableDebugCallback(int on);
     
     
 #ifdef __cplusplus
