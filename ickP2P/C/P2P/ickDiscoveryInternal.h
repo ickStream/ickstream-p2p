@@ -255,10 +255,12 @@ break; \
 #define ICKDEVICE_TYPESTR_SERVER        "urn:schemas-ickstream-com:device:Server:1"
 //#define ICKDEVICE_TYPESTR_PLAYER        "urn:schemas-upnp-org:device:MediaRenderer:1"
 #define ICKDEVICE_TYPESTR_CONTROLLER    "urn:schemas-ickstream-com:device:Controller:1"
+#define ICKDEVICE_TYPESTR_DEBUG    "urn:schemas-ickstream-com:device:Debug:1"
 #define ICKDEVICE_STRING_PLAYER         "Player"
 #define ICKDEVICE_STRING_SERVER         "Server"
 #define ICKDEVICE_STRING_CONTROLLER     "Controller"
 #define ICKDEVICE_STRING_ROOT           "Root"
+#define ICKDEVICE_STRING_DEBUG          "Debug"
 
 #define ICKDEVICE_TYPESTR_USN           "uuid:%s::%s"       // 1st string: UUID, 2nd string: device URN
 #define ICKDEVICE_TYPESTR_LOCATION      "http://%s:%d/%s.xml"       // Port 9 is "discard". We need to replace this with something sensible once we enable description XML downloads

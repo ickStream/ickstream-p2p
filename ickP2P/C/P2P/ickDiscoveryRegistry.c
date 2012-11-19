@@ -313,6 +313,9 @@ static enum ickDevice_servicetype _ick_isIckDevice(const struct _upnp_device * d
     if (strstr(start, ICKDEVICE_TYPESTR_CONTROLLER))
         return ICKDEVICE_CONTROLLER;
     
+    if (strstr(start, ICKDEVICE_TYPESTR_DEBUG))
+        return ICKDEVICE_DEBUG;
+    
     // No service type for root device
     //    if (strstr(start, ICKDEVICE_TYPESTR_ROOT))
     //    return 1;

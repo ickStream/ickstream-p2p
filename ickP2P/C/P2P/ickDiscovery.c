@@ -416,6 +416,8 @@ int ickDiscoveryRemoveService(enum ickDevice_servicetype type) {
     // Remove controller
     if (type & ICKDEVICE_CONTROLLER)
         _ick_remove_service(ICKDEVICE_TYPESTR_CONTROLLER, true);
+    if (type & ICKDEVICE_DEBUG)
+        _ick_remove_service(ICKDEVICE_TYPESTR_DEBUG, true);
     _ick_discovery.services &= ~type;
     
     return 0;

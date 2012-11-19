@@ -66,8 +66,8 @@ extern "C" {
         ICKDEVICE_PLAYER            = 0x1,
         ICKDEVICE_CONTROLLER        = 0x2,
         ICKDEVICE_SERVER_GENERIC    = 0x4,
-        ICKDEVICE_DEBUG             = 0x5,
-        ICKDEVICE_MAX               = 0x5,
+        ICKDEVICE_DEBUG             = 0x8,
+        ICKDEVICE_MAX               = 0x8,
         ICKDEVICE_ANY               = (ICKDEVICE_MAX * 2) - 1
     };
     
