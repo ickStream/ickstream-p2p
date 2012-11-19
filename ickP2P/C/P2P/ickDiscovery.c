@@ -388,6 +388,13 @@ int ickDiscoveryAddService(enum ickDevice_servicetype type) {
         free(location);
         free(usn);
     }    
+    if (!(_ick_discovery.services & ICKDEVICE_DEBUG) && (type & ICKDEVICE_DEBUG)) {
+        asprintf(&location, ICKDEVICE_TYPESTR_LOCATION, _ick_discovery.location, _ick_discovery.websocket_port, ICKDEVICE_STRING_DEBUG);
+        asprintf(&usn, ICKDEVICE_TYPESTR_USN, _ick_discovery.UUID, ICKDEVICE_TYPESTR_DEBUG);
+        _ick_add_service(ICKDEVICE_TYPESTR_DEBUG, usn, server_name, location);
+        free(location);
+        free(usn);
+    }
     
     //  OK, let's not add controllers - no reason to do so.
     // But registering a controller should make us connect to known players...
