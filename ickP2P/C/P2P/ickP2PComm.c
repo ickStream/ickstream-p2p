@@ -898,7 +898,7 @@ int _ickInitP2PComm (struct _ick_discovery_struct * disc, int port) {
         
     __port = (port) ? port: __findFreePort();
     _ick_p2pDiscovery->websocket_port = __port;
-    __context = libwebsocket_create_context(__port, NULL, __protocols, libwebsocket_internal_extensions, NULL, NULL, -1, -1, 0);
+    __context = libwebsocket_create_context(__port, NULL, __protocols, libwebsocket_internal_extensions, NULL, NULL, -1, -1, 0, NULL);  //added user pointer
     if (__context == NULL)
         return -1;
     
