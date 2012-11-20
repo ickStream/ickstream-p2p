@@ -302,7 +302,7 @@ static enum ickDevice_servicetype _ick_isIckDevice(const struct _upnp_device * d
     strtmp[device->headers[HEADER_USN].l] = 0;
     start = strstr(strtmp, ICKDEVICE_TYPESTR_MISC);
     if (!start)
-        return ICKDEVICE_GENERIC;
+        return ICKDEVICE_NONE;
     
     if (strstr(start, ICKDEVICE_TYPESTR_PLAYER))
         return ICKDEVICE_PLAYER;
@@ -320,7 +320,7 @@ static enum ickDevice_servicetype _ick_isIckDevice(const struct _upnp_device * d
     //    if (strstr(start, ICKDEVICE_TYPESTR_ROOT))
     //    return 1;
 
-    return 0;
+    return ICKDEVICE_GENERIC;
 }
 
 #define XMLMAX  256
@@ -433,7 +433,8 @@ static void _ick_load_xml_data(struct _ick_device_struct * iDev) {
 void _ick_receive_notify(const struct _upnp_device * device, enum ickDiscovery_command cmd) {
     enum ickDevice_servicetype devType = _ick_isIckDevice(device);
     
-    if (devType == ICKDEVICE_GENERIC)
+    // OK, let's track generic devices, too. Just don't connect to them, but we need the port
+    if (devType == ICKDEVICE_NONE)
         return;
         
     struct _ick_device_struct * iDev = NULL;
@@ -519,8 +520,10 @@ void _ick_receive_notify(const struct _upnp_device * device, enum ickDiscovery_c
             p++;
             unsigned short port = atoi(p);
             iDev->port = port;
-                        
-            _ick_execute_DeviceCallback(iDev, ICKDISCOVERY_ADD_DEVICE);
+            
+            // don't report and connect generic devices
+            if (devType != ICKDEVICE_GENERIC)
+                _ick_execute_DeviceCallback(iDev, ICKDISCOVERY_ADD_DEVICE);
             
             // let's load the name data... This means we're probably going to send an update later...
             _ick_load_xml_data(iDev);
@@ -537,7 +540,9 @@ void _ick_receive_notify(const struct _upnp_device * device, enum ickDiscovery_c
             iDev->element = (void *)device;
             iDev->type |= devType;
             // OK, we only ADD capabilities, we never remove them. That's kind of in-line with UPnP which invalidates a whole root device at a time, but do we really waynt it this way for ickStream?
-            _ick_execute_DeviceCallback(iDev, cmd);            
+            // don't report and connect generic devices
+            if (devType != ICKDEVICE_GENERIC)
+                _ick_execute_DeviceCallback(iDev, cmd);
             
             // let's load the name data... This means we're probably going to send another update later...
             _ick_load_xml_data(iDev);

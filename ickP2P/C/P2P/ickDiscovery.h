@@ -68,7 +68,8 @@ extern "C" {
         ICKDEVICE_SERVER_GENERIC    = 0x4,
         ICKDEVICE_DEBUG             = 0x8,
         ICKDEVICE_MAX               = 0x8,
-        ICKDEVICE_ANY               = (ICKDEVICE_MAX * 2) - 1
+        ICKDEVICE_ANY               = (ICKDEVICE_MAX * 2) - 1,
+        ICKDEVICE_NONE              = -1
     };
     
     struct _ick_discovery_struct;
