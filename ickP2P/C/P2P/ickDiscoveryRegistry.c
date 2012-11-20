@@ -417,8 +417,8 @@ static void * _ick_loadxmldata_thread(void * param) {
 }
 
 
-static void _ick_load_xml_data(struct _ick_device_struct * iDev) {
-    if (!iDev || iDev->xmlData || !iDev->URL)
+void _ick_load_xml_data(struct _ick_device_struct * iDev) {
+    if (!iDev || iDev->xmlData || !iDev->URL || !iDev->port)
         return;
     pthread_t thread;
     pthread_create(&thread, NULL, _ick_loadxmldata_thread, iDev);

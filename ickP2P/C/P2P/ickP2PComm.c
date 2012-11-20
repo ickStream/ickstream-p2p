@@ -619,12 +619,23 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                 device->wsi = wsi;
             else {      // otherwise create a device for this connection
                 char * URL = NULL;
+                int port = 0;
                 if (tokens[WSI_TOKEN_HOST].token_len) {
                     URL = malloc(tokens[WSI_TOKEN_HOST].token_len + 1);
                     strncpy(URL, tokens[WSI_TOKEN_HOST].token, tokens[WSI_TOKEN_HOST].token_len);
                     URL[tokens[WSI_TOKEN_HOST].token_len] = 0;
+                    int urllen = tokens[WSI_TOKEN_HOST].token_len;
+                    char * sport = strrchr(URL, ':');
+                    // we have a port in here...
+                    if (sport && ((sport - URL) < urllen)) {
+                        *sport = 0;
+                        sport++;
+                        port = atoi(sport);
+                    }
                 }
-                device = _ickDeviceCreateNew(UUID, URL, NULL, 0, wsi);
+                device = _ickDeviceCreateNew(UUID, URL, NULL, port, wsi);
+                if (port)
+                    _ick_load_xml_data(device); // if we have a valid port, try to get more device data
             }
         }
             break;
@@ -736,16 +747,18 @@ static void __ickOpenWebsocket(struct _ick_device_struct * device) {
             port = WEBSOCKET_PORT;
     } else
         URL = strdup("127.0.0.1");
-    device->wsi = libwebsocket_client_connect(__context, 
+    char * adr;
+    asprintf(&adr, "%s:%d", _ick_p2pDiscovery->location, _ick_p2pDiscovery->websocket_port);
+    device->wsi = libwebsocket_client_connect(__context,
                                               URL,                                                      
                                               port,
                                               0,
                                               "/",
-                                              _ick_p2pDiscovery->location,
+                                              adr,          //_ick_p2pDiscovery->location,
                                               _ick_p2pDiscovery->UUID,
                                               __protocols[ICK_PROTOCOL_P2PJSON].name,
                                               -1);
-    
+    free(adr);
     free(URL);    
 }
 
