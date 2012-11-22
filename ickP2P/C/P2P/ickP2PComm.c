@@ -773,7 +773,8 @@ static void __ickOpenWebsocket(struct _ick_device_struct * device) {
     userData->bufIn = NULL;
     userData->bufLen = 0;
     device->wsi = NULL;
-    libwebsocket_client_connect_extended(__context,
+    if (__context)
+        libwebsocket_client_connect_extended(__context,
                                          URL,
                                          port,
                                          0,
@@ -953,6 +954,7 @@ int _ickCloseP2PComm(int wait) {
     if (wait)
         pthread_join(__service_thread, NULL);
     libwebsocket_context_destroy(__context);
+    __context = NULL;
     return 0;
 }
 
