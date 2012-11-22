@@ -21,3 +21,4 @@ profile
 *.moved-aside
 *~.nib
 .svn
+GitVersionP2P.h

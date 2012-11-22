@@ -6,6 +6,20 @@
 	objectVersion = 46;
 	objects = {
 
+/* Begin PBXAggregateTarget section */
+		4C4D526A165E643D00455BF0 /* GitVersion */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = 4C4D526D165E643D00455BF0 /* Build configuration list for PBXAggregateTarget "GitVersion" */;
+			buildPhases = (
+				4C4D5271165E644300455BF0 /* ShellScript */,
+			);
+			dependencies = (
+			);
+			name = GitVersion;
+			productName = GitVersion;
+		};
+/* End PBXAggregateTarget section */
+
 /* Begin PBXBuildFile section */
 		1A1A8A8716504DE400584F17 /* jansson_config.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A1A8A8616504DE400584F17 /* jansson_config.h */; };
 		1A27C804164AEDA300F4ED71 /* libliblibwebsockets.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A27C7FF164AED6C00F4ED71 /* libliblibwebsockets.a */; };
@@ -68,6 +82,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 4C5B691915351D5D00805D71;
 			remoteInfo = liblibwebsockets;
+		};
+		4C4D5272165E645B00455BF0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4C2D91E916092A68001C69EA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4C4D526A165E643D00455BF0;
+			remoteInfo = GitVersion;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -285,6 +306,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				4C4D5273165E645B00455BF0 /* PBXTargetDependency */,
 				1A27C803164AED8000F4ED71 /* PBXTargetDependency */,
 			);
 			name = ickP2P;
@@ -320,6 +342,7 @@
 			projectRoot = "";
 			targets = (
 				4C2D91F116092A68001C69EA /* ickP2P */,
+				4C4D526A165E643D00455BF0 /* GitVersion */,
 			);
 		};
 /* End PBXProject section */
@@ -368,6 +391,19 @@
 			shellPath = /bin/bash;
 			shellScript = "cd ${PROJECT_DIR}/jansson/src\ncp jansson_config.h.xcode jansson_config.h";
 		};
+		4C4D5271165E644300455BF0 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "git=/usr/local/git/bin/git\nversion=`$git rev-parse -q HEAD`\necho \"#define GIT_VERSION $version\" > GitVersionP2P.h\ntouch Info.plist";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -404,6 +440,11 @@
 			isa = PBXTargetDependency;
 			name = liblibwebsockets;
 			targetProxy = 1A27C802164AED8000F4ED71 /* PBXContainerItemProxy */;
+		};
+		4C4D5273165E645B00455BF0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4C4D526A165E643D00455BF0 /* GitVersion */;
+			targetProxy = 4C4D5272165E645B00455BF0 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -500,6 +541,20 @@
 			};
 			name = Release;
 		};
+		4C4D526E165E643D00455BF0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		4C4D526F165E643D00455BF0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -520,6 +575,14 @@
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
+		};
+		4C4D526D165E643D00455BF0 /* Build configuration list for PBXAggregateTarget "GitVersion" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4C4D526E165E643D00455BF0 /* Debug */,
+				4C4D526F165E643D00455BF0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
 		};
 /* End XCConfigurationList section */
 	};

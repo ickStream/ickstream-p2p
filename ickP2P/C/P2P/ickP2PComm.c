@@ -444,7 +444,14 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
             char ipbuf[21];
             char namebuf[255];
             libwebsockets_get_peer_addresses(libwebsocket_get_socket_fd(wsi), namebuf, 255, ipbuf, 21);
-            device = _ickDevice4wsi(wsi);
+            if (!device) {   // can't prefill for incomming connections, but then the filter should have prefilled the WSI
+                device = _ickDevice4wsi(wsi);
+                if (device && device->UUID)
+                    pss->UUID = strdup(device->UUID);
+                else
+                    // weird: WSI should be filled upon acceptance testing so we _should_ have found the device.
+                    fprintf(stderr, "LWS_CALLBACK_X_ESTABLISHED, no device found on %s, %s\n", namebuf, ipbuf);
+            }
             if (reason == LWS_CALLBACK_ESTABLISHED) {
                 fprintf(stderr, "ick_callback_p2p_server: LWS_CALLBACK_ESTABLISHED\n");
                 if (device)
@@ -457,10 +464,13 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
             pss->bufIn = NULL;
             pss->bufLen = 0;
             //            pss->device = _ickDevice4wsi(wsi);
-            if (device && device->UUID)
-                pss->UUID = strdup(device->UUID);
-            else {
-                pss->UUID = NULL;
+            if (device && device->UUID) {
+                //UUID is prefilled, what we need to set is the WSI
+                device->wsi = wsi;
+                //pss->UUID = strdup(device->UUID);
+            } else {
+                //                pss->UUID = NULL;
+                // something really weird happened: we got this call without a device UUID. This should not be because it's prefilled
                 fprintf(stderr, "LWS_CALLBACK_X_ESTABLISHED, no device found on %s, %s\n", namebuf, ipbuf);
             }
             if (device) {
@@ -657,21 +667,27 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                     device = _ickDeviceGet(_ick_p2pDiscovery->UUID);
                     _ick_p2pDiscovery->wsi = NULL;
                 }
-                if (!device) // still no device found? can't process
+                if (!device) { // still no device found? can't process. Probably already released
+                    free(pss->UUID);
+                    //                    free(pss);
                     break;
+                }
             }
             device->t_disconnected = time(NULL);
 
             // A bit risky... but this is how we cover loopback for now: delete the wsi whenever one of the two ends fails
             // should not be any issue in other cases
             //            if (wsi == device->wsi)
-                device->wsi = NULL;
+            device->wsi = NULL;
             // OK, try to re-establish as long as the device is still there
             // and wait 
             // forget about this socket
             // let's hope these pointer operations are really atomic....
             char * UUID = strdup(device->UUID);
             pthread_t mythread;
+            free(pss->UUID);
+            pss->UUID = NULL;
+            //            free(pss); done by libwebsockets!
             pthread_create(&mythread, NULL, _ickReOpenWebsocket, UUID);
         }
             break;
@@ -749,15 +765,25 @@ static void __ickOpenWebsocket(struct _ick_device_struct * device) {
         URL = strdup("127.0.0.1");
     char * adr;
     asprintf(&adr, "%s:%d", _ick_p2pDiscovery->location, _ick_p2pDiscovery->websocket_port);
-    device->wsi = libwebsocket_client_connect(__context,
-                                              URL,                                                      
-                                              port,
-                                              0,
-                                              "/",
-                                              adr,          //_ick_p2pDiscovery->location,
-                                              _ick_p2pDiscovery->UUID,
-                                              __protocols[ICK_PROTOCOL_P2PJSON].name,
-                                              -1);
+    // OK, here's a problem. We will not get notified about unsuccessful connections and then we keep an invalid WSI around
+    // so let's stick to NULL until we've got a successful connection.
+    // Need to hand over user data in this case to be able to identify device
+    struct __p2p_server_session_data * userData = malloc (sizeof(struct __p2p_server_session_data));
+    userData->UUID = strdup(device->UUID);
+    userData->bufIn = NULL;
+    userData->bufLen = 0;
+    device->wsi = NULL;
+    libwebsocket_client_connect_extended(__context,
+                                         URL,
+                                         port,
+                                         0,
+                                         "/",
+                                         adr,          //_ick_p2pDiscovery->location,
+                                         _ick_p2pDiscovery->UUID,
+                                         __protocols[ICK_PROTOCOL_P2PJSON].name,
+                                         -1,
+                                         userData);
+    device->isServer = 0; // if we open a connection to a remote server, we are not a server.
     free(adr);
     free(URL);    
 }
@@ -768,15 +794,24 @@ static void __ickOpenWebsocket(struct _ick_device_struct * device) {
 // runs in a separate thread
 
 static void *_ickReOpenWebsocket(void * UUID) {
-    // us but half the time...
-    long delay = ICK_RECONNECT_DELAY * 500;
-    delay += (random() % delay);
-    usleep(delay);
-    
-    // device still there and not connected? Reconnect
-    struct _ick_device_struct * device = _ickDeviceGet(UUID);
-    if (device && !device->wsi)
-        __ickOpenWebsocket(device);
+    int retries = 10;   // retry a few times
+    while (retries) {
+        // us but half the time...
+        long delay = ICK_RECONNECT_DELAY * 500;
+        delay += (random() % delay);
+        usleep(delay);
+        
+        // device still there and not connected? Reconnect
+        struct _ick_device_struct * device = _ickDeviceGet(UUID);
+        if (device && !device->wsi) {
+            __ickOpenWebsocket(device);
+            usleep(1000);   // give it one second to connect or refuse and remove the wsi
+            if (device->wsi) {
+                return NULL;    // WSI there? probably OK. Otherwise retry again.
+                free(UUID);
+            }
+        }
+    }
     free(UUID);
     return NULL;
 }
@@ -786,8 +821,10 @@ static void *_ickReOpenWebsocket(void * UUID) {
 static void __ickCloseWebsocket(struct _ick_device_struct * device) {
     if (!device || !device->wsi)
         return;
-    libwebsocket_close_and_free_session(__context, device->wsi, LWS_CLOSE_STATUS_NORMAL);
+    
+    struct libwebsocket * wsi = device->wsi;
     device->wsi = NULL;
+    libwebsocket_close_and_free_session(__context, wsi, LWS_CLOSE_STATUS_NORMAL);
     device->t_disconnected = time(NULL);
     device->isServer = 0;
     struct _ick_message_struct * message = NULL;
@@ -843,7 +880,7 @@ static void _ickOpenDeviceWebsocket(const char * UUID, enum ickDiscovery_command
             
         case ICKDISCOVERY_REMOVE_DEVICE: {
             struct _ick_device_struct * device = _ickDeviceGet(UUID);
-            if (!device || device->wsi)
+            if (!device || !device->wsi)
                 break;
             __ickCloseWebsocket(device);
         }

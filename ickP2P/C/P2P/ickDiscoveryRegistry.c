@@ -140,10 +140,20 @@ json_t * _j_ickDeviceGetDebugInfo(struct _ick_device_struct * device) {
     return j_device;
 }
 
+json_t * _j_ickWrapMiscInfo(json_t * data) {
+    json_t * wrappedData = json_object();
+    if (data)
+        json_object_set_new(wrappedData, "debug_data", data);
+#ifdef GIT_VERSION
+    json_object_set_new(wrappedData, "debug_data", json_string("GIT_VERSION"));
+#endif
+    return wrappedData;
+}
+
 char * _ickDeviceGetDebugInfo(struct _ick_device_struct * device) {
     if (!device)
         return NULL;
-    json_t * j_device = _j_ickDeviceGetDebugInfo(device);
+    json_t * j_device = _j_ickWrapMiscInfo(_j_ickDeviceGetDebugInfo(device));
     char * string = json_dumps(j_device, JSON_INDENT(4) | JSON_PRESERVE_ORDER);
     json_decref(j_device);
     return string;
@@ -160,6 +170,7 @@ char * ickDeviceGetLocalDebugInfo() {
         json_array_append_new(j_array, _j_ickDeviceGetDebugInfo(device));
         device = device->next;
     }
+    j_array = _j_ickWrapMiscInfo(j_array);
     char * string = json_dumps(j_array, JSON_INDENT(4) | JSON_PRESERVE_ORDER);
     json_decref(j_array);
     return string;    
@@ -257,6 +268,7 @@ struct _ick_device_struct * _ickDeviceCreateNew(char * UUID, char * URL, void * 
     device->type = type;
     device->messageOut = NULL;
     device->messageMutex = malloc(sizeof(pthread_mutex_t));
+    device->isServer = -1; //undefined
     pthread_mutex_init(device->messageMutex, NULL);
     
     pthread_mutex_unlock(&_device_mutex);
