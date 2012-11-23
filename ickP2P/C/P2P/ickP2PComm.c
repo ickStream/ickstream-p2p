@@ -606,11 +606,11 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
         case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION: {
             struct lws_tokens * tokens = (struct lws_tokens *)user;
             // No origin? Can't identify client -> deny
-            if (tokens[WSI_TOKEN_SWORIGIN].token == NULL)
+            if (tokens[WSI_TOKEN_ORIGIN].token == NULL)
                 return 1;
-            char * UUID = malloc(tokens[WSI_TOKEN_SWORIGIN].token_len + 1);
-            strncpy(UUID, tokens[WSI_TOKEN_SWORIGIN].token, tokens[WSI_TOKEN_SWORIGIN].token_len);
-            UUID[tokens[WSI_TOKEN_SWORIGIN].token_len] = 0;
+            char * UUID = malloc(tokens[WSI_TOKEN_ORIGIN].token_len + 1);
+            strncpy(UUID, tokens[WSI_TOKEN_ORIGIN].token, tokens[WSI_TOKEN_ORIGIN].token_len);
+            UUID[tokens[WSI_TOKEN_ORIGIN].token_len] = 0;
             device = _ickDeviceGet(UUID);
             int is_self = !strcmp(UUID, _ick_p2pDiscovery->UUID);
             // we do already have a connecting client or a connected server for this UUID and it's not a loopback then don't connect.
