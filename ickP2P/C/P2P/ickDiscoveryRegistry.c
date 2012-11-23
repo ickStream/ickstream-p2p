@@ -21,6 +21,10 @@
 
 #include "jansson.h"
 
+#ifndef GIT_VERSION
+#include "GitVersionP2P.h"
+#endif
+
 static struct _ick_device_struct * _ickStreamDevices = NULL;
 static pthread_mutex_t _device_mutex = PTHREAD_MUTEX_INITIALIZER;
 static ickDiscovery_t * _discovery = NULL;
@@ -145,7 +149,9 @@ json_t * _j_ickWrapMiscInfo(json_t * data) {
     if (data)
         json_object_set_new(wrappedData, "debug_data", data);
 #ifdef GIT_VERSION
-    json_object_set_new(wrappedData, "debug_data", json_string("GIT_VERSION"));
+#define STRINGIZE(X) #X
+#define GIT_STRING(X) STRINGIZE(X)
+    json_object_set_new(wrappedData, "git_version", json_string(GIT_STRING(GIT_VERSION)));
 #endif
     return wrappedData;
 }

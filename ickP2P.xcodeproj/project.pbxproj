@@ -6,20 +6,6 @@
 	objectVersion = 46;
 	objects = {
 
-/* Begin PBXAggregateTarget section */
-		4C4D526A165E643D00455BF0 /* GitVersion */ = {
-			isa = PBXAggregateTarget;
-			buildConfigurationList = 4C4D526D165E643D00455BF0 /* Build configuration list for PBXAggregateTarget "GitVersion" */;
-			buildPhases = (
-				4C4D5271165E644300455BF0 /* ShellScript */,
-			);
-			dependencies = (
-			);
-			name = GitVersion;
-			productName = GitVersion;
-		};
-/* End PBXAggregateTarget section */
-
 /* Begin PBXBuildFile section */
 		1A1A8A8716504DE400584F17 /* jansson_config.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A1A8A8616504DE400584F17 /* jansson_config.h */; };
 		1A27C804164AEDA300F4ED71 /* libliblibwebsockets.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A27C7FF164AED6C00F4ED71 /* libliblibwebsockets.a */; };
@@ -59,6 +45,7 @@
 		4C2D921A16092ED4001C69EA /* ickDiscoveryRegistry.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D920216092ED4001C69EA /* ickDiscoveryRegistry.c */; };
 		4C2D921B16092ED4001C69EA /* ickP2PComm.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D920316092ED4001C69EA /* ickP2PComm.c */; };
 		4C2D924116093C35001C69EA /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4C2D924016093C35001C69EA /* Foundation.framework */; };
+		4C4D5278165F6F4B00455BF0 /* GitVersionP2P.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C4D5277165F6F4A00455BF0 /* GitVersionP2P.h */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -82,13 +69,6 @@
 			proxyType = 1;
 			remoteGlobalIDString = 4C5B691915351D5D00805D71;
 			remoteInfo = liblibwebsockets;
-		};
-		4C4D5272165E645B00455BF0 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 4C2D91E916092A68001C69EA /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 4C4D526A165E643D00455BF0;
-			remoteInfo = GitVersion;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -134,6 +114,7 @@
 		4C2D922B1609306F001C69EA /* README */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		4C2D922C1609311B001C69EA /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		4C2D924016093C35001C69EA /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
+		4C4D5277165F6F4A00455BF0 /* GitVersionP2P.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GitVersionP2P.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -219,6 +200,7 @@
 				4C2D924016093C35001C69EA /* Foundation.framework */,
 				4C2D922C1609311B001C69EA /* LICENSE */,
 				4C2D922B1609306F001C69EA /* README */,
+				4C4D5279165F6F6000455BF0 /* other */,
 				4C2D91F916092D66001C69EA /* ickP2P */,
 				4C2D91F316092A69001C69EA /* Products */,
 			);
@@ -263,6 +245,14 @@
 			path = P2P;
 			sourceTree = "<group>";
 		};
+		4C4D5279165F6F6000455BF0 /* other */ = {
+			isa = PBXGroup;
+			children = (
+				4C4D5277165F6F4A00455BF0 /* GitVersionP2P.h */,
+			);
+			name = other;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXHeadersBuildPhase section */
@@ -287,6 +277,7 @@
 				1A5335AF1650491B001FD018 /* strbuffer.h in Headers */,
 				1A5335B21650491B001FD018 /* utf.h in Headers */,
 				1A1A8A8716504DE400584F17 /* jansson_config.h in Headers */,
+				4C4D5278165F6F4B00455BF0 /* GitVersionP2P.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -299,6 +290,7 @@
 			buildPhases = (
 				1A5335B416504963001FD018 /* ShellScript */,
 				1A27C853164B0C5300F4ED71 /* ShellScript */,
+				4C4D5274165F6D9400455BF0 /* ShellScript */,
 				4C2D91EE16092A68001C69EA /* Sources */,
 				4C2D91EF16092A68001C69EA /* Frameworks */,
 				4C2D91F016092A68001C69EA /* Headers */,
@@ -306,7 +298,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				4C4D5273165E645B00455BF0 /* PBXTargetDependency */,
 				1A27C803164AED8000F4ED71 /* PBXTargetDependency */,
 			);
 			name = ickP2P;
@@ -342,7 +333,6 @@
 			projectRoot = "";
 			targets = (
 				4C2D91F116092A68001C69EA /* ickP2P */,
-				4C4D526A165E643D00455BF0 /* GitVersion */,
 			);
 		};
 /* End PBXProject section */
@@ -391,7 +381,7 @@
 			shellPath = /bin/bash;
 			shellScript = "cd ${PROJECT_DIR}/jansson/src\ncp jansson_config.h.xcode jansson_config.h";
 		};
-		4C4D5271165E644300455BF0 /* ShellScript */ = {
+		4C4D5274165F6D9400455BF0 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -440,11 +430,6 @@
 			isa = PBXTargetDependency;
 			name = liblibwebsockets;
 			targetProxy = 1A27C802164AED8000F4ED71 /* PBXContainerItemProxy */;
-		};
-		4C4D5273165E645B00455BF0 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 4C4D526A165E643D00455BF0 /* GitVersion */;
-			targetProxy = 4C4D5272165E645B00455BF0 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -513,6 +498,8 @@
 				ARCHS = "$(ARCHS_STANDARD_32_BIT)";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				EXECUTABLE_PREFIX = lib;
+				GCC_PRECOMPILE_PREFIX_HEADER = NO;
+				GCC_PREFIX_HEADER = "";
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_LDFLAGS = "-ObjC";
 				PRIVATE_HEADERS_FOLDER_PATH = ../..;
@@ -530,6 +517,8 @@
 				ARCHS = "$(ARCHS_STANDARD_32_BIT)";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				EXECUTABLE_PREFIX = lib;
+				GCC_PRECOMPILE_PREFIX_HEADER = NO;
+				GCC_PREFIX_HEADER = "";
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_LDFLAGS = "-ObjC";
 				PRIVATE_HEADERS_FOLDER_PATH = ../..;
@@ -538,20 +527,6 @@
 				PUBLIC_HEADERS_FOLDER_PATH = ../..;
 				SKIP_INSTALL = YES;
 				USER_HEADER_SEARCH_PATHS = "$(BUILT_PRODUCTS_DIR)/../..";
-			};
-			name = Release;
-		};
-		4C4D526E165E643D00455BF0 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				PRODUCT_NAME = "$(TARGET_NAME)";
-			};
-			name = Debug;
-		};
-		4C4D526F165E643D00455BF0 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
 		};
@@ -575,14 +550,6 @@
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
-		};
-		4C4D526D165E643D00455BF0 /* Build configuration list for PBXAggregateTarget "GitVersion" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				4C4D526E165E643D00455BF0 /* Debug */,
-				4C4D526F165E643D00455BF0 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
 		};
 /* End XCConfigurationList section */
 	};
