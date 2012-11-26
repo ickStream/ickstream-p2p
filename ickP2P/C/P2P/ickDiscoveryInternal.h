@@ -290,8 +290,10 @@ int _ick_add_service (const char * st, const char * usn, const char * server, co
 int _ick_remove_service(const char * st, bool lock);
 int _ick_notifications_send (enum _ick_send_cmd command, struct _upnp_service * service);
 
-struct _ick_device_struct * _ickDeviceCreateNew(char * UUID, char * URL, void * element, enum ickDevice_servicetype type, struct libwebsocket * wsi);
+void _ickDeviceLockAccess(int lock);
+struct _ick_device_struct * _ickDeviceCreateNew(char * UUID, char * URL, void * element, enum ickDevice_servicetype type, unsigned short port, struct libwebsocket * wsi);
 void _ick_load_xml_data(struct _ick_device_struct * iDev);
+int _ickDeviceCheck(struct _ick_device_struct * cDev);
 
 int _ickInitP2PComm (struct _ick_discovery_struct * disc, int port);
 int _ickCloseP2PComm(int wait);

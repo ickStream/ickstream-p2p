@@ -27,7 +27,7 @@ extern "C" {
         
     // Search interval. The interval between search requests to the whole network.
     // The search interval works in a similar way as the announce interval but potentially causes more traffic since all devices are supposed to answer.
-#define ICKDISCOVERY_SEARCH_INTERVAL    300
+#define ICKDISCOVERY_SEARCH_INTERVAL    120
 
     // Define expected maximum response delay UPnP says this needs to be between 1 and 5, let's chose 2 for now.
 #define ICKDISCOVERY_SEARCH_DELAY       2

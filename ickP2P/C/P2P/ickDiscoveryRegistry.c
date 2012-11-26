@@ -26,8 +26,13 @@
 #endif
 
 static struct _ick_device_struct * _ickStreamDevices = NULL;
-static pthread_mutex_t _device_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutexattr_t _device_mutex_attr;
+static pthread_mutex_t _device_mutex;// = PTHREAD_MUTEX_INITIALIZER;
 static ickDiscovery_t * _discovery = NULL;
+
+// socket for sender thread. Needed up here to see when we are shuting down
+static int _sendsock;
+
 
 // callback registration for registration
 
@@ -65,18 +70,42 @@ static int _ick_execute_DeviceCallback (struct _ick_device_struct * device, enum
     return 0;
 }
 
+void _ickDeviceLockAccess(int lock) {
+    if (lock)
+        pthread_mutex_lock(&_device_mutex);
+    else
+        pthread_mutex_unlock(&_device_mutex);
+}
+
 struct _ick_device_struct * _ickDeviceGet(const char * UUID) {
     if (!UUID)
         return _ickStreamDevices;
+    pthread_mutex_lock(&_device_mutex);
     struct _ick_device_struct * iDev = _ickStreamDevices;
     
     while (iDev) {
         if (iDev->UUID)
             if (!strcasecmp(UUID, iDev->UUID))
-                return iDev;
+                break;
         iDev = iDev->next;
     }
-    return NULL;
+    pthread_mutex_unlock(&_device_mutex);
+    return iDev;
+}
+
+int _ickDeviceCheck(struct _ick_device_struct * cDev) {
+    if (!cDev)
+        return 0;
+    
+    pthread_mutex_lock(&_device_mutex);
+    struct _ick_device_struct * iDev = _ickStreamDevices;
+    while (iDev) {
+        if (iDev == cDev)
+            break;
+        iDev = iDev->next;
+    }
+    pthread_mutex_unlock(&_device_mutex);
+    return (iDev == cDev);
 }
 
 json_t * _j_ickDeviceGetDebugInfo(struct _ick_device_struct * device) {
@@ -123,13 +152,16 @@ json_t * _j_ickDeviceGetDebugInfo(struct _ick_device_struct * device) {
         cnt++;
         mO = mO->next;
     }
+    char * name = device->name;
+    if (!name)
+        name = "";
     
     json_t * j_device = json_pack("{sisssssisssosisososisisisisisb}",
                                   "type", device->type,
                                   "UUID", device->UUID,
                                   "URL", device->URL,
                                   "port", device->port,
-                                  "name", device->name,
+                                  "name", name,
                                   "wsi", j_wsi,
                                   "messagesWaiting", cnt,
                                   "_upnp_device", j_element,
@@ -166,16 +198,21 @@ char * _ickDeviceGetDebugInfo(struct _ick_device_struct * device) {
 }
 
 char * ickDeviceGetLocalDebugInfoForDevice(char * UUID){
-    return _ickDeviceGetDebugInfo(_ickDeviceGet(UUID));
+    pthread_mutex_lock(&_device_mutex);
+    char * string = _ickDeviceGetDebugInfo(_ickDeviceGet(UUID));
+    pthread_mutex_unlock(&_device_mutex);
+    return string;
 }
 
 char * ickDeviceGetLocalDebugInfo() {
     json_t * j_array = json_array();
+    pthread_mutex_lock(&_device_mutex);
     struct _ick_device_struct * device = _ickStreamDevices;
     while (device) {
         json_array_append_new(j_array, _j_ickDeviceGetDebugInfo(device));
         device = device->next;
     }
+    pthread_mutex_unlock(&_device_mutex);
     j_array = _j_ickWrapMiscInfo(j_array);
     char * string = json_dumps(j_array, JSON_INDENT(4) | JSON_PRESERVE_ORDER);
     json_decref(j_array);
@@ -183,9 +220,12 @@ char * ickDeviceGetLocalDebugInfo() {
 }
 
 char * ickDeviceGetRemoteDebugInfoForDeviceQueryDevice(char * UUID, char * debugUUID) {
+    pthread_mutex_lock(&_device_mutex);
     struct _ick_device_struct * iDev = _ickDeviceGet(UUID);
-    if (!iDev)
+    if (!iDev) {
+        pthread_mutex_unlock(&_device_mutex);
         return NULL;
+    }
     
     char * urlString;
     int result = 0;
@@ -193,6 +233,7 @@ char * ickDeviceGetRemoteDebugInfoForDeviceQueryDevice(char * UUID, char * debug
         result = asprintf(&urlString, "http://%s:%d/debug/%s", iDev->URL, iDev->port, debugUUID);
     else
         result = asprintf(&urlString, "http://%s:%d/debug", iDev->URL, iDev->port);
+    pthread_mutex_unlock(&_device_mutex);
     if (result < 1)
         return NULL;
     
@@ -218,48 +259,65 @@ char * ickDeviceGetRemoteDebugInfoForDevice(char * UUID) {
 struct _ick_device_struct * _ickDevice4wsi(struct libwebsocket * wsi) {
     if (!wsi)
         return NULL;
-    struct _ick_device_struct * iDev = _ickStreamDevices;
     
+    pthread_mutex_lock(&_device_mutex);
+    struct _ick_device_struct * iDev = _ickStreamDevices;
     while (iDev) {
         if (iDev->wsi == wsi)
-            return iDev;
+            break;
         iDev = iDev->next;
     }
-    return NULL;
+    pthread_mutex_unlock(&_device_mutex);
+    return iDev;
 }
 
 enum ickDevice_servicetype ickDeviceType(const char * UUID) {
+    pthread_mutex_lock(&_device_mutex);
     struct _ick_device_struct * iDev = _ickDeviceGet(UUID);
+    enum ickDevice_servicetype ret = 0;
     if (iDev)
-        return iDev->type;
-    return 0;
+        ret = iDev->type;
+    pthread_mutex_unlock(&_device_mutex);
+    return ret;
 }
 
 char * ickDeviceURL(const char * UUID) {
+    pthread_mutex_lock(&_device_mutex);
     struct _ick_device_struct * iDev = _ickDeviceGet(UUID);
+    char * ret = NULL;
     if (iDev)
-        return iDev->URL;
-    return NULL;
+        ret = iDev->URL;
+    pthread_mutex_unlock(&_device_mutex);
+    return ret;
 }
 
 unsigned short ickDevicePort(const char * UUID) {
+    pthread_mutex_lock(&_device_mutex);
     struct _ick_device_struct * iDev = _ickDeviceGet(UUID);
+    unsigned short ret = 0;
     if (iDev)
-        return iDev->port;
-    return 0;
+        ret = iDev->port;
+    pthread_mutex_unlock(&_device_mutex);
+    return ret;
 }
 
 char * ickDeviceName(const char * UUID) {
+    pthread_mutex_lock(&_device_mutex);
     struct _ick_device_struct * iDev = _ickDeviceGet(UUID);
+    char * ret = NULL;
     if (iDev)
-        return iDev->name;
-    return NULL;
+        ret =  iDev->name;
+    pthread_mutex_unlock(&_device_mutex);
+    return ret;
 }
 
 
 
 
-struct _ick_device_struct * _ickDeviceCreateNew(char * UUID, char * URL, void * element, enum ickDevice_servicetype type, struct libwebsocket * wsi) {
+struct _ick_device_struct * _ickDeviceCreateNew(char * UUID, char * URL, void * element, enum ickDevice_servicetype type, unsigned short port, struct libwebsocket * wsi) {
+    if (!_sendsock) // we are shutting down? Don't create.
+        return NULL;
+    
     struct _ick_device_struct * device = malloc(sizeof(struct _ick_device_struct));
     
     pthread_mutex_lock(&_device_mutex);
@@ -272,6 +330,7 @@ struct _ick_device_struct * _ickDeviceCreateNew(char * UUID, char * URL, void * 
     device->URL = URL;
     device->wsi = wsi;
     device->type = type;
+    device->port = port;
     device->messageOut = NULL;
     device->messageMutex = malloc(sizeof(pthread_mutex_t));
     device->isServer = -1; //undefined
@@ -391,7 +450,12 @@ static void * _ick_loadxmldata_thread(void * param) {
     struct _ick_device_struct * iDev = param;
     
     char * urlString;
-    int result = asprintf(&urlString, "http://%s:%d/Root.xml", iDev->URL, iDev->port);
+    pthread_mutex_lock(&_device_mutex);
+    int valid = _ickDeviceCheck(iDev);
+    int result = 0;
+    if (valid)
+        result = asprintf(&urlString, "http://%s:%d/Root.xml", iDev->URL, iDev->port);
+    pthread_mutex_unlock(&_device_mutex);
     if (result < 1)
         return NULL;
     
@@ -419,7 +483,9 @@ static void * _ick_loadxmldata_thread(void * param) {
 	parser.attfunc = 0;
 	parsexml(&parser);
     
-    if ((device_parser.writeme && device_parser.name) && (iDev->name == NULL)) {
+    pthread_mutex_lock(&_device_mutex);
+    valid = _ickDeviceCheck(iDev);  // need to re-check
+    if (valid && (device_parser.writeme && device_parser.name) && (iDev->name == NULL)) {
         _ICK_DEVICE_SET_VALUE_LOCKED(iDev, name, device_parser.name);
         _ick_execute_DeviceCallback(iDev, ICKDISCOVERY_ADD_DEVICE);
         if (_discovery->exitCallback)
@@ -428,13 +494,16 @@ static void * _ick_loadxmldata_thread(void * param) {
         if (device_parser.name)
             free(device_parser.name);
     }
-    iDev->xmlData = data;
-    iDev->xmlSize = size;
+    if (valid) {
+        iDev->xmlData = data;
+        iDev->xmlSize = size;
+    }
+    pthread_mutex_unlock(&_device_mutex);
     
     return NULL;
 }
 
-
+// unsafe if not called from a locked device access
 void _ick_load_xml_data(struct _ick_device_struct * iDev) {
     if (!iDev || iDev->xmlData || !iDev->URL || !iDev->port)
         return;
@@ -493,21 +562,24 @@ void _ick_receive_notify(const struct _upnp_device * device, enum ickDiscovery_c
         iDevParent = iDev;
         iDev = iDev->next;
     }
-    pthread_mutex_unlock(&_device_mutex);
     
     if (!iDev) {
         switch (cmd) {
                 // Device to be removed not found? Nothing to do
-            case ICKDISCOVERY_REMOVE_DEVICE:
+            case ICKDISCOVERY_REMOVE_DEVICE: {
+                pthread_mutex_unlock(&_device_mutex);
                 return;
+            }
                 break;
                 // Device to update not found? Maybe it wasn't detectable last time,... add it.
             case ICKDISCOVERY_UPDATE_DEVICE:
                 cmd = ICKDISCOVERY_ADD_DEVICE;
             default:
-                iDev = _ickDeviceCreateNew(UUID, NULL, NULL, 0, NULL);
-                if (!iDev)
+                iDev = _ickDeviceCreateNew(UUID, NULL, NULL, 0, 0, NULL);
+                if (!iDev) {
+                    pthread_mutex_unlock(&_device_mutex);
                     return;
+                }
                 break;
         }
     }
@@ -569,18 +641,17 @@ void _ick_receive_notify(const struct _upnp_device * device, enum ickDiscovery_c
         case ICKDISCOVERY_REMOVE_DEVICE:
             _ick_execute_DeviceCallback(iDev, ICKDISCOVERY_REMOVE_DEVICE);
             
-            pthread_mutex_lock(&_device_mutex);
             if (iDevParent)
                 iDevParent->next = iDev->next;
             else if (_ickStreamDevices == iDev)
                 _ickStreamDevices = iDev->next;
-            pthread_mutex_unlock(&_device_mutex);
             
             // bye bye
             _ickDeviceDestroy(iDev);
             
             break;
     }    
+    pthread_mutex_unlock(&_device_mutex);
 }
 
 
@@ -1166,8 +1237,6 @@ static struct {
     pthread_t         thread;
     unsigned short    port;
 } _ick_sender_struct;
-
-static int _sendsock;
 
 // create message for command and object, if more than one is needed, it's #num
 // #num:
@@ -1779,7 +1848,9 @@ void _ick_init_discovery_registry (ickDiscovery_t * disc) {
     LIST_INIT(&servicelisthead);
     LIST_INIT(&_ick_send_cmdlisthead);
     pthread_mutex_init(&_ick_sender_mutex, NULL);
-    pthread_mutex_init(&_device_mutex, NULL);
+    pthread_mutexattr_init(&_device_mutex_attr);
+    pthread_mutexattr_settype(&_device_mutex_attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&_device_mutex, &_device_mutex_attr);
     srandom(time(NULL));
     
     if( (_sendsock = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
