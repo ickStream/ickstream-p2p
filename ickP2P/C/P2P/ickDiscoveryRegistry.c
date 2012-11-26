@@ -26,8 +26,12 @@
 #endif
 
 static struct _ick_device_struct * _ickStreamDevices = NULL;
+#ifdef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
+static pthread_mutex_t _device_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;          // = PTHREAD_MUTEX_INITIALIZER;
+#else
 static pthread_mutexattr_t _device_mutex_attr;
 static pthread_mutex_t _device_mutex;// = PTHREAD_MUTEX_INITIALIZER;
+#endif
 static ickDiscovery_t * _discovery = NULL;
 
 // socket for sender thread. Needed up here to see when we are shuting down
@@ -1848,9 +1852,11 @@ void _ick_init_discovery_registry (ickDiscovery_t * disc) {
     LIST_INIT(&servicelisthead);
     LIST_INIT(&_ick_send_cmdlisthead);
     pthread_mutex_init(&_ick_sender_mutex, NULL);
+#ifndef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
     pthread_mutexattr_init(&_device_mutex_attr);
     pthread_mutexattr_settype(&_device_mutex_attr, PTHREAD_MUTEX_RECURSIVE);
     pthread_mutex_init(&_device_mutex, &_device_mutex_attr);
+#endif  // otherwise the mutex is already initialized
     srandom(time(NULL));
     
     if( (_sendsock = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -1892,7 +1898,9 @@ void _ick_close_discovery_registry (int wait) {
         pthread_join(_ick_sender_struct.thread, NULL);
     
     // I'm not sure this is going to work if we don't wait....
+#ifndef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
     pthread_mutex_destroy(&_device_mutex);
+#endif // must not destroy staically initialized mutex
     pthread_mutex_destroy(&_ick_sender_mutex);
 }
 
