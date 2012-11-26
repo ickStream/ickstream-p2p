@@ -481,6 +481,7 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                 device->t_connected = time(NULL);
                 device->t_disconnected = 0;
                 device->bufLen = 0;
+                device->reconnecting = 0;
             }
         }
             break;
@@ -626,6 +627,7 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
             // No origin? Can't identify client -> deny
             if (tokens[WSI_TOKEN_ORIGIN].token == NULL) {
                 _ickDeviceLockAccess(0);
+                fprintf(stderr, "Connection rejected, no UUID\n");
                 return 1;
             }
             // here, the user pointer points to the tokens instead of the user info
@@ -637,6 +639,7 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
             // we do already have a connecting client or a connected server for this UUID and it's not a loopback then don't connect.
             if (device && device->wsi && !is_self) {
                 _ickDeviceLockAccess(0);
+                fprintf(stderr, "Connection rejected, wsi present for %s:%d\n", device->URL, device->port);
                 free(UUID);
                 return 1;
             }
@@ -644,6 +647,7 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
             if (is_self) {
                 if (_ick_p2pDiscovery->wsi) {
                     _ickDeviceLockAccess(0);
+                    fprintf(stderr, "Connection rejected, Loopback present for %s:%d\n", device->URL, device->port);
                     free(UUID);
                     return 1;
                 } else
@@ -682,10 +686,13 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                 device->bufLen = 0;
             }
             
+            if (!device) // le's see whether we know the WSI
+                device = _ickDevice4wsi(wsi);
+            
             if (device)
-                fprintf(stderr, "LWS_CALLBACK_CLOSED device: %s on %s\n", device->UUID, device->URL);
+                fprintf(stderr, "LWS_CALLBACK_CLOSED device: %s on %s user:%p\n", device->UUID, device->URL, pss);
             else
-                fprintf(stderr, "LWS_CALLBACK_CLOSED no device\n");
+                fprintf(stderr, "LWS_CALLBACK_CLOSED no device user: %p\n", pss);
             if (_ick_p2pDiscovery && (wsi == _ick_p2pDiscovery->wsi)) {
                 fprintf(stderr, "LWS_CALLBACK_CLOSED loopback\n");
                 device = _ickDeviceGet(_ick_p2pDiscovery->UUID);
@@ -711,7 +718,10 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
             free(pss->UUID);
             pss->UUID = NULL;
             //            free(pss); done by libwebsockets!
-            pthread_create(&mythread, NULL, _ickReOpenWebsocket, UUID);
+            if (!device->reconnecting) {
+                device->reconnecting = 1;
+                pthread_create(&mythread, NULL, _ickReOpenWebsocket, UUID);
+            }
         }
             break;
             
@@ -832,6 +842,8 @@ static void *_ickReOpenWebsocket(void * UUID) {
             usleep(1000);   // give it one second to connect or refuse and remove the wsi
             _ickDeviceLockAccess(1);
             int ret = (_ickDeviceCheck(device) && device->wsi);
+            if (ret)
+                device->reconnecting = 0;
             _ickDeviceLockAccess(0);
             if (ret)
                 break;  // WSI there? probably OK. Otherwise retry again.
@@ -839,6 +851,12 @@ static void *_ickReOpenWebsocket(void * UUID) {
             _ickDeviceLockAccess(0);
             break;
         }
+    }
+    if (!retries) { // we stopped retrying because we run out of retries? Unlock. We did wait long enough so that an immediate failure would not re-open the thread
+        _ickDeviceLockAccess(1);
+        struct _ick_device_struct * device = _ickDeviceGet(UUID);
+        device->reconnecting = 0;
+        _ickDeviceLockAccess(0);
     }
     free(UUID);
     return NULL;

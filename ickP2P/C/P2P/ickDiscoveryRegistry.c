@@ -160,7 +160,7 @@ json_t * _j_ickDeviceGetDebugInfo(struct _ick_device_struct * device) {
     if (!name)
         name = "";
     
-    json_t * j_device = json_pack("{sisssssisssosisososisisisisisb}",
+    json_t * j_device = json_pack("{sisssssisssosisososisisisisisi}",
                                   "type", device->type,
                                   "UUID", device->UUID,
                                   "URL", device->URL,
@@ -338,6 +338,7 @@ struct _ick_device_struct * _ickDeviceCreateNew(char * UUID, char * URL, void * 
     device->messageOut = NULL;
     device->messageMutex = malloc(sizeof(pthread_mutex_t));
     device->isServer = -1; //undefined
+    device->reconnecting = 0;
     pthread_mutex_init(device->messageMutex, NULL);
     
     pthread_mutex_unlock(&_device_mutex);

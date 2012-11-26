@@ -116,6 +116,7 @@ struct _ick_device_struct {
     char * name;
     
     struct libwebsocket * wsi;
+    int reconnecting;
     struct _ick_message_struct * messageOut;
     pthread_mutex_t * messageMutex;
         
