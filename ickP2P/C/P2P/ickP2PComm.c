@@ -686,7 +686,7 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                 device->bufLen = 0;
             }
             
-            if (!device) // le's see whether we know the WSI
+            if (!device || (device->wsi && device->wsi != wsi)) // le's see whether we know the WSI
                 device = _ickDevice4wsi(wsi);
             
             if (device)
