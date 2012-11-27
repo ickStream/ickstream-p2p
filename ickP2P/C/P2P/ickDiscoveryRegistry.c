@@ -26,12 +26,12 @@
 #endif
 
 static struct _ick_device_struct * _ickStreamDevices = NULL;
-#ifdef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
-static pthread_mutex_t _device_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;          // = PTHREAD_MUTEX_INITIALIZER;
-#else
+//#ifdef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
+//static pthread_mutex_t _device_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;          // = PTHREAD_MUTEX_INITIALIZER;
+//#else
 static pthread_mutexattr_t _device_mutex_attr;
 static pthread_mutex_t _device_mutex;// = PTHREAD_MUTEX_INITIALIZER;
-#endif
+                                     //#endif
 static ickDiscovery_t * _discovery = NULL;
 
 // socket for sender thread. Needed up here to see when we are shuting down
@@ -66,11 +66,17 @@ int ickDeviceRegisterDeviceCallback(ickDiscovery_device_callback_t callback) {
 
 static int _ick_execute_DeviceCallback (struct _ick_device_struct * device, enum ickDiscovery_command change) {
     struct _ickDeviceCallbacks * cbTemp = _ick_DeviceCallbacks;
-
+    char * UUID = strdup(device->UUID);
+    enum ickDevice_servicetype type = device->type;
+    
+    // open lock bracket
+    pthread_mutex_unlock(&_device_mutex);
     while (cbTemp) {
-        cbTemp->callback(device->UUID, change, device->type);
+        cbTemp->callback(UUID, change, type);
         cbTemp = cbTemp->next;
     }
+    pthread_mutex_lock(&_device_mutex);
+    free(UUID);
     return 0;
 }
 
@@ -83,7 +89,7 @@ void _ickDeviceLockAccess(int lock) {
 
 struct _ick_device_struct * _ickDeviceGet(const char * UUID) {
     if (!UUID)
-        return _ickStreamDevices;
+        return NULL;
     pthread_mutex_lock(&_device_mutex);
     struct _ick_device_struct * iDev = _ickStreamDevices;
     
@@ -95,6 +101,10 @@ struct _ick_device_struct * _ickDeviceGet(const char * UUID) {
     }
     pthread_mutex_unlock(&_device_mutex);
     return iDev;
+}
+
+struct _ick_device_struct * _ickDeviceGetRoot() {
+    return _ickStreamDevices;
 }
 
 int _ickDeviceCheck(struct _ick_device_struct * cDev) {
@@ -457,20 +467,25 @@ static void * _ick_loadxmldata_thread(void * param) {
     char * urlString;
     pthread_mutex_lock(&_device_mutex);
     int valid = _ickDeviceCheck(iDev);
+    char * UUID = strdup(iDev->UUID);
     int result = 0;
-    if (valid)
+    if (valid && UUID)
         result = asprintf(&urlString, "http://%s:%d/Root.xml", iDev->URL, iDev->port);
     pthread_mutex_unlock(&_device_mutex);
-    if (result < 1)
+    if (result < 1) {
+        free (UUID);
         return NULL;
+    }
     
     int size;
     //IPv6 scope is local site - should this be 0xe or 0x5??
     void * data = miniwget(urlString, &size, 5);
     free(urlString);
     
-    if (size < 1)
+    if (size < 1) {
+        free (UUID);
         return NULL;
+    }
     
     struct _ick_xmlparser_s device_parser;
     device_parser.name = NULL;
@@ -489,19 +504,19 @@ static void * _ick_loadxmldata_thread(void * param) {
 	parsexml(&parser);
     
     pthread_mutex_lock(&_device_mutex);
-    valid = _ickDeviceCheck(iDev);  // need to re-check
-    if (valid && (device_parser.writeme && device_parser.name) && (iDev->name == NULL)) {
-        _ICK_DEVICE_SET_VALUE_LOCKED(iDev, name, device_parser.name);
-        _ick_execute_DeviceCallback(iDev, ICKDISCOVERY_ADD_DEVICE);
-        if (_discovery->exitCallback)
-            _discovery->exitCallback();
-    } else {
-        if (device_parser.name)
-            free(device_parser.name);
-    }
-    if (valid) {
+    iDev = _ickDeviceGet(UUID);  // need to re-check
+    if (iDev) {
         iDev->xmlData = data;
         iDev->xmlSize = size;
+        if ((device_parser.writeme && device_parser.name) && (iDev->name == NULL)) {
+            iDev->name = device_parser.name;
+            _ick_execute_DeviceCallback(iDev, ICKDISCOVERY_ADD_DEVICE);
+            if (_discovery->exitCallback)
+                _discovery->exitCallback();
+        } else {
+            if (device_parser.name)
+                free(device_parser.name);
+        }
     }
     pthread_mutex_unlock(&_device_mutex);
     
@@ -640,19 +655,30 @@ void _ick_receive_notify(const struct _upnp_device * device, enum ickDiscovery_c
                 _ick_execute_DeviceCallback(iDev, cmd);
             
             // let's load the name data... This means we're probably going to send another update later...
-            _ick_load_xml_data(iDev);
+            if (_ickDeviceCheck(iDev))
+                _ick_load_xml_data(iDev);
         }
             break;
         case ICKDISCOVERY_REMOVE_DEVICE:
             _ick_execute_DeviceCallback(iDev, ICKDISCOVERY_REMOVE_DEVICE);
             
-            if (iDevParent)
-                iDevParent->next = iDev->next;
-            else if (_ickStreamDevices == iDev)
+            int valid = 0;
+            if (_ickStreamDevices == iDev) {
                 _ickStreamDevices = iDev->next;
+                valid = 1;
+            } else {
+                iDevParent = _ickStreamDevices;
+                while (iDevParent && iDevParent->next && iDevParent->next != iDev)
+                    iDevParent = iDevParent->next;
+                if (iDevParent && iDevParent->next) {
+                    iDevParent->next = iDev->next;
+                    valid = 1;
+                }
+            }
             
             // bye bye
-            _ickDeviceDestroy(iDev);
+            if (valid)
+                _ickDeviceDestroy(iDev);
             
             break;
     }    
@@ -1853,11 +1879,11 @@ void _ick_init_discovery_registry (ickDiscovery_t * disc) {
     LIST_INIT(&servicelisthead);
     LIST_INIT(&_ick_send_cmdlisthead);
     pthread_mutex_init(&_ick_sender_mutex, NULL);
-#ifndef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
+    //#ifndef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
     pthread_mutexattr_init(&_device_mutex_attr);
     pthread_mutexattr_settype(&_device_mutex_attr, PTHREAD_MUTEX_RECURSIVE);
     pthread_mutex_init(&_device_mutex, &_device_mutex_attr);
-#endif  // otherwise the mutex is already initialized
+    //#endif  // otherwise the mutex is already initialized
     srandom(time(NULL));
     
     if( (_sendsock = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -1899,9 +1925,9 @@ void _ick_close_discovery_registry (int wait) {
         pthread_join(_ick_sender_struct.thread, NULL);
     
     // I'm not sure this is going to work if we don't wait....
-#ifndef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
+    //#ifndef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
     pthread_mutex_destroy(&_device_mutex);
-#endif // must not destroy staically initialized mutex
+    //#endif // must not destroy staically initialized mutex
     pthread_mutex_destroy(&_ick_sender_mutex);
 }
 

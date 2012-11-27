@@ -31,7 +31,7 @@ static ickDiscovery_t * _ick_p2pDiscovery = NULL;
 /*static struct _ick_device_struct * __ickGetDevice4socket(struct libwebsocket * wsi) {
     if (!wsi) return NULL;
     
-    struct _ick_device_struct * iDev = _ickDeviceGet(NULL);
+    struct _ick_device_struct * iDev = _ickDeviceGetRoot();
     while (iDev) {
         if (iDev->wsi == wsi)
             return iDev;
@@ -149,11 +149,11 @@ int ickDeviceRemoveMessageCallback(ickDevice_message_callback_t callback) {
 }
 
 
-static int _ick_execute_MessageCallback (struct _ick_device_struct * device, void * data, size_t size, enum ickMessage_communicationstate state) {
+static int _ick_execute_MessageCallback (char * UUID, void * data, size_t size, enum ickMessage_communicationstate state) {
     struct _ickMessageCallbacks * cbTemp = _ick_MessageCallbacks;
-    
+
     while (cbTemp) {
-        cbTemp->callback(device->UUID, data, size, state);
+        cbTemp->callback(UUID, data, size, state);
         cbTemp = cbTemp->next;
     }
     return 0;
@@ -429,33 +429,48 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                     void *user, void *in, size_t len)
 {
     int n;
-    struct __p2p_server_session_data * pss = user;
-    char * UUID = pss->UUID;
-    
-    _ickDeviceLockAccess(1);
-    struct _ick_device_struct * device = _ickDeviceGet(UUID);
-    if (UUID && !device) {   // device doesn't exist anymore?
-        free (pss->UUID);
-        pss->UUID = NULL;
-    }
+    struct __p2p_server_session_data * pss = NULL;
+    char * UUID = NULL;
+    struct _ick_device_struct * device = NULL;    
     
 	switch (reason) {
             
+            // initialize connection
         case LWS_CALLBACK_ESTABLISHED:
         case LWS_CALLBACK_CLIENT_ESTABLISHED: {
-            char ipbuf[21];
-            char namebuf[255];
-            _ickDeviceLockAccess(0);
-            libwebsockets_get_peer_addresses(libwebsocket_get_socket_fd(wsi), namebuf, 255, ipbuf, 21);
+            
+            pss = user;
+            pss->bufIn = NULL;
+            pss->bufLen = 0;
+            if (reason == LWS_CALLBACK_CLIENT_ESTABLISHED) {
+                UUID = pss->UUID;
+                fprintf(stderr, "ick_callback_p2p_server: LWS_CALLBACK_CLIENT_ESTABLISHED, %s\n", UUID);
+            }
+            
             _ickDeviceLockAccess(1);
+            device = _ickDeviceGet(UUID);
+            if (UUID && !device) {   // device doesn't exist anymore? For an incoming connection, UUID should initially be NULL
+                free (pss->UUID);
+                pss->UUID = NULL;
+                UUID = NULL;
+            }
+            
             if (!device) {   // can't prefill for incomming connections, but then the filter should have prefilled the WSI
                 device = _ickDevice4wsi(wsi);
-                if (device && device->UUID)
+                if (device && device->UUID) {
                     pss->UUID = strdup(device->UUID);
-                else
-                    // weird: WSI should be filled upon acceptance testing so we _should_ have found the device.
+                    fprintf(stderr, "LWS_CALLBACK_X_ESTABLISHED, device found: %s\n", pss->UUID);
+                } else {
+                    // weird: WSI should be filled upon acceptance testing so we _should_ have found the device. Log.
+                    _ickDeviceLockAccess(0);
+                    char ipbuf[21];
+                    char namebuf[255];
+                    libwebsockets_get_peer_addresses(libwebsocket_get_socket_fd(wsi), namebuf, 255, ipbuf, 21);
+                    _ickDeviceLockAccess(1);
                     fprintf(stderr, "LWS_CALLBACK_X_ESTABLISHED, no device found on %s, %s\n", namebuf, ipbuf);
+                }
             }
+            
             if (reason == LWS_CALLBACK_ESTABLISHED) {
                 fprintf(stderr, "ick_callback_p2p_server: LWS_CALLBACK_ESTABLISHED\n");
                 if (device)
@@ -465,34 +480,47 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                 if (device)
                     device->isServer = 0;
             }
-            pss->bufIn = NULL;
-            pss->bufLen = 0;
-            //            pss->device = _ickDevice4wsi(wsi);
+            
             if (device && device->UUID) {
-                //UUID is prefilled, what we need to set is the WSI
                 device->wsi = wsi;
-                //pss->UUID = strdup(device->UUID);
             } else {
-                //                pss->UUID = NULL;
                 // something really weird happened: we got this call without a device UUID. This should not be because it's prefilled
-                fprintf(stderr, "LWS_CALLBACK_X_ESTABLISHED, no device found on %s, %s\n", namebuf, ipbuf);
+                fprintf(stderr, "LWS_CALLBACK_X_ESTABLISHED, no device found\n");
             }
+            
             if (device) {
                 device->t_connected = time(NULL);
                 device->t_disconnected = 0;
                 device->bufLen = 0;
                 device->reconnecting = 0;
             }
+            _ickDeviceLockAccess(0);
         }
             break;
             
+            
+            // write data
+        case LWS_CALLBACK_SERVER_WRITEABLE:
         case LWS_CALLBACK_CLIENT_WRITEABLE: {
+            // quitting? bail
             if (_ick_discovery_locked(_ick_p2pDiscovery) == ICK_DISCOVERY_QUIT)
                 break;
+
+            pss = user;
+            UUID = pss->UUID;
             
-            //            device = __ickGetDevice4socket(wsi);
-            if (!device)
+            _ickDeviceLockAccess(1);
+            device = _ickDeviceGet(UUID);
+            if (UUID && !device) {   // device doesn't exist anymore?
+                free (pss->UUID);
+                pss->UUID = NULL;
+                UUID = NULL;
+            }
+            if (!device) { //  nothing to write -> bail
+                _ickDeviceLockAccess(0);
                 break;
+            }
+            
             struct _ick_message_struct * message = __ickGetFirstMessage(device);
             if (message) {
                 _ickDeviceLockAccess(0);
@@ -501,51 +529,25 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                                        message->size,
                                        LWS_WRITE_TEXT);
                 _ickDeviceLockAccess(1);
-                if (!_ickDeviceCheck(device))
+                if (!_ickDeviceCheck(device)) {
+                    _ickDeviceLockAccess(0);
                     break;                      // still valid?
+                }
                 if (n < 0) {
                     fprintf(stderr, "ERROR writing to socket\n");
                 } else {
                     device->lastout = time(NULL);
+                    __ickDeleteMessage(device, message);
                 }
-                __ickDeleteMessage(device, message);
                 _ickDeviceLockAccess(0);
                 libwebsocket_callback_on_writable(context, wsi);
-                _ickDeviceLockAccess(1);
-            }
+            } else
+                _ickDeviceLockAccess(0);
         }
             break;
             
-        case LWS_CALLBACK_SERVER_WRITEABLE: {
-            if (_ick_discovery_locked(_ick_p2pDiscovery) == ICK_DISCOVERY_QUIT)
-                break;
             
-            //            device = __ickGetDevice4socket(wsi);
-            if (!device)
-                break;
-            struct _ick_message_struct * message = __ickGetFirstMessage(device);
-            if (message) {
-                _ickDeviceLockAccess(0);
-                n = libwebsocket_write(wsi, message->paddedData +
-                                       LWS_SEND_BUFFER_PRE_PADDING,
-                                       message->size,
-                                       LWS_WRITE_TEXT);
-                _ickDeviceLockAccess(1);
-                if (!_ickDeviceCheck(device))
-                    break;                      // still valid?
-                if (n < 0) {
-                    fprintf(stderr, "ERROR writing to socket\n");
-                } else {
-                    device->lastout = time(NULL);
-                }
-                __ickDeleteMessage(device, message);
-                _ickDeviceLockAccess(0);
-                libwebsocket_callback_on_writable(context, wsi);
-                _ickDeviceLockAccess(1);
-            }
-        }
-            break;
-            
+            // broadcast - we don't do that.
         case LWS_CALLBACK_BROADCAST:
             // no broadcasts right now
 /*            n = libwebsocket_write(wsi, in, len, LWS_WRITE_TEXT);
@@ -553,76 +555,94 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                 fprintf(stderr, "mirror write failed\n");*/
             break;
             
+            
+            // receive data
         case LWS_CALLBACK_CLIENT_RECEIVE:
         case LWS_CALLBACK_RECEIVE: {
-            //            device = __ickGetDevice4socket(wsi);
+            
+            pss = user;
+            UUID = pss->UUID;
+
+            _ickDeviceLockAccess(1);
+            device = _ickDeviceGet(UUID);
+            if (UUID && !device) {   // device doesn't exist anymore?
+                free (pss->UUID);
+                pss->UUID = NULL;
+                UUID = NULL;
+            }
             if (!device) {  // might be the looback server socket
                 if (_ick_p2pDiscovery && (wsi == _ick_p2pDiscovery->wsi))
                     device = _ickDeviceGet(_ick_p2pDiscovery->UUID);
-                if (!device) // still no device found? can't process
+                if (!device) { // still no device found? can't process
+                    _ickDeviceLockAccess(0);
                     break;
+                }
             }
+            
             device->lastin = time(NULL);
             // old packet part present?
             if (pss->bufIn) {
                 void * tmp = pss->bufIn;
                 pss->bufIn = realloc(pss->bufIn, pss->bufLen + len);
-                if (!pss->bufIn) {
+                if (!pss->bufIn) { // can't complete read? bail
                     pss->bufLen = 0;
                     device->bufLen = 0;
                     free(tmp);
+                    _ickDeviceLockAccess(0);
                     break;
                 }
                 memcpy(pss->bufIn + pss->bufLen, in, len);
                 pss->bufLen += len;
                 device->bufLen = pss->bufLen;
             }
+            
             // packet not yet complete?
             size_t r = libwebsockets_remaining_packet_payload (wsi);
             if (r) {
                 if (!pss->bufIn) {
                     pss->bufIn = malloc(len);
-                    if (!pss->bufIn)
+                    if (!pss->bufIn) {
+                        _ickDeviceLockAccess(0);
                         break;
+                    }
                     memcpy(pss->bufIn, in, len);
                     pss->bufLen = len;
                     device->bufLen = len;
                 }
+                _ickDeviceLockAccess(0);
             } else {    // complete? call callback
                 if (pss->bufIn) {    // we have a concatenated packet?
                     if (pss->bufLen == 1)
                         if (pss->bufIn[0] == 0) { // ignore empty packets
                             pss->bufLen = 0;
-                            device->bufLen = 0;
                         }
+                    device->bufLen = 0; // bit premature, but don't want to re-query device just for this, it's for logging only anyway
+                    _ickDeviceLockAccess(0);
                     if (pss->bufLen)
-                        _ick_execute_MessageCallback(device, pss->bufIn, pss->bufLen, ICKMESSAGE_INCOMING_DATA);
+                        _ick_execute_MessageCallback(UUID, pss->bufIn, pss->bufLen, ICKMESSAGE_INCOMING_DATA);
                     free(pss->bufIn);
                     pss->bufIn = NULL;
                     pss->bufLen = 0;
-                    device->bufLen = 0;
                 } else {  // this should be the usual case: return packet in one
                     if (len == 1)
                         if (((unsigned char *)in)[0] == 0)
                             len = 0;
+                    device->bufLen = 0; // see above
+                    _ickDeviceLockAccess(0);
                     if (len)
-                        _ick_execute_MessageCallback(device, in, len, ICKMESSAGE_INCOMING_DATA);
-                    device->bufLen = 0;
+                        _ick_execute_MessageCallback(UUID, in, len, ICKMESSAGE_INCOMING_DATA);
                 }
                 // try to write packet since we assume that the application will at least try to send an acknowledge packet.
-                _ickDeviceLockAccess(0);
                 libwebsocket_callback_on_writable(context, wsi);
-                _ickDeviceLockAccess(1);
             }
+            // the device is not locked here!
         }
             break;
-            /*
-             * this just demonstrates how to use the protocol filter. If you won't
-             * study and reject connections based on header content, you don't need
-             * to handle this callback
-             */
             
+            
+            // use protocol filter to initialize wsi and device
         case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION: {
+            
             struct lws_tokens * tokens = (struct lws_tokens *)user;
             // No origin? Can't identify client -> deny
             if (tokens[WSI_TOKEN_ORIGIN].token == NULL) {
@@ -630,19 +650,23 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                 fprintf(stderr, "Connection rejected, no UUID\n");
                 return 1;
             }
+            
             // here, the user pointer points to the tokens instead of the user info
             UUID = malloc(tokens[WSI_TOKEN_ORIGIN].token_len + 1);
             strncpy(UUID, tokens[WSI_TOKEN_ORIGIN].token, tokens[WSI_TOKEN_ORIGIN].token_len);
             UUID[tokens[WSI_TOKEN_ORIGIN].token_len] = 0;
-            device = _ickDeviceGet(UUID);
             int is_self = !strcmp(UUID, _ick_p2pDiscovery->UUID);
+            
+            _ickDeviceLockAccess(1);
+            device = _ickDeviceGet(UUID);
             // we do already have a connecting client or a connected server for this UUID and it's not a loopback then don't connect.
             if (device && device->wsi && !is_self) {
                 _ickDeviceLockAccess(0);
-                fprintf(stderr, "Connection rejected, wsi present for %s:%d\n", device->URL, device->port);
+                fprintf(stderr, "Connection rejected, wsi present for %s:%d device-wsi: %p, wsi %p\n", device->URL, device->port, device->wsi, wsi);
                 free(UUID);
                 return 1;
             }
+            
             // if this is a loopback, the server uses the discovery struct to store the wsi; need the device strcut for the client side of the connection
             if (is_self) {
                 if (_ick_p2pDiscovery->wsi) {
@@ -673,55 +697,64 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                 device = _ickDeviceCreateNew(UUID, URL, NULL, 0, port, wsi);
                 if (port)
                     _ick_load_xml_data(device); // if we have a valid port, try to get more device data
+                                                // need to stay locked till the end for both the device creation and the xml loading
             }
+            _ickDeviceLockAccess(0);
         }
             break;
         
         case LWS_CALLBACK_CLOSED: {
+            
+            pss = user;
+            UUID = pss->UUID;
             // can't process input buffer anymore
             if (pss->bufIn) {
                 free(pss->bufIn);
                 pss->bufIn = NULL;
                 pss->bufLen = 0;
-                device->bufLen = 0;
             }
-            
+                        
+            _ickDeviceLockAccess(1);
+            device = _ickDeviceGet(UUID);
+
             if (!device || (device->wsi && device->wsi != wsi)) // le's see whether we know the WSI
                 device = _ickDevice4wsi(wsi);
             
-            if (device)
-                fprintf(stderr, "LWS_CALLBACK_CLOSED device: %s on %s user:%p\n", device->UUID, device->URL, pss);
-            else
-                fprintf(stderr, "LWS_CALLBACK_CLOSED no device user: %p\n", pss);
             if (_ick_p2pDiscovery && (wsi == _ick_p2pDiscovery->wsi)) {
                 fprintf(stderr, "LWS_CALLBACK_CLOSED loopback\n");
                 device = _ickDeviceGet(_ick_p2pDiscovery->UUID);
                 _ick_p2pDiscovery->wsi = NULL;
             }
             if (!device) { // still no device found? can't process. Probably already released
+                _ickDeviceLockAccess(0);
+                fprintf(stderr, "LWS_CALLBACK_CLOSED no device user: %p UUID: %s\n", pss, pss->UUID);
                 free(pss->UUID);
-                //                    free(pss);
                 break;
             }
+            fprintf(stderr, "LWS_CALLBACK_CLOSED device: %s on %s user:%p\n", device->UUID, device->URL, pss);
             device->t_disconnected = time(NULL);
+            device->bufLen = 0;
 
             // A bit risky... but this is how we cover loopback for now: delete the wsi whenever one of the two ends fails
             // should not be any issue in other cases
             //            if (wsi == device->wsi)
             device->wsi = NULL;
+            
             // OK, try to re-establish as long as the device is still there
             // and wait 
             // forget about this socket
             // let's hope these pointer operations are really atomic....
+            
             UUID = strdup(device->UUID);
             pthread_t mythread;
             free(pss->UUID);
             pss->UUID = NULL;
             //            free(pss); done by libwebsockets!
-            if (!device->reconnecting) {
+            if (!device->reconnecting && UUID) {
                 device->reconnecting = 1;
                 pthread_create(&mythread, NULL, _ickReOpenWebsocket, UUID);
             }
+            _ickDeviceLockAccess(0);
         }
             break;
             
@@ -730,7 +763,6 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
             break;
 	}
     
-    _ickDeviceLockAccess(0);
 	return 0;
 }
 
@@ -951,7 +983,7 @@ static void _ickOpenDeviceWebsocket(const char * UUID, enum ickDiscovery_command
 void _ickConnectUnconnectedPlayers(void) {
     int restart = 0;
     _ickDeviceLockAccess(1);
-    struct _ick_device_struct * device = _ickDeviceGet(NULL);
+    struct _ick_device_struct * device = _ickDeviceGetRoot();
     while (device) {
         restart = (device->next != NULL);
         if (((device->type & ICKDEVICE_PLAYER) || (device->type & ICKDEVICE_SERVER_GENERIC)) && (device->wsi == NULL))
@@ -1023,8 +1055,12 @@ int _ickCloseP2PComm(int wait) {
 enum ickMessage_communicationstate ickDeviceSendMsg(const char * UUID, const void * message, const size_t message_size) {
     
     _ickDeviceLockAccess(1);
-    struct _ick_device_struct * device = _ickDeviceGet(UUID);
-    if (!device || (UUID && strcmp(UUID, device->UUID))) {
+    struct _ick_device_struct * device;
+    if (UUID)
+        device = _ickDeviceGet(UUID);
+    else
+        device = _ickDeviceGetRoot();
+    if (!device) {
         _ickDeviceLockAccess(0);
         return ICKMESSAGE_UNKNOWN_TARGET;
     }

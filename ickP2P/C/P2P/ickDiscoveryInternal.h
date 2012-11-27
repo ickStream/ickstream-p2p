@@ -136,6 +136,7 @@ struct _ick_device_struct {
 
 // get an element
 struct _ick_device_struct * _ickDeviceGet(const char * UUID);
+struct _ick_device_struct * _ickDeviceGetRoot();
 struct _ick_device_struct * _ickDevice4wsi(struct libwebsocket * wsi);
 
 
