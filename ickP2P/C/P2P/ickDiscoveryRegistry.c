@@ -1702,7 +1702,8 @@ static void * _ick_notification_request_thread (void * dummy) {
                     LIST_VALIDATE_PRESENT(&servicelisthead, var, entry, entries);
                     if (entry || !(cmd->data)) {
                         _ick_notifications_send(ICK_SEND_CMD_NOTIFY_ADD, entry);
-                        ms = ICKDISCOVERY_ANNOUNCE_INTERVAL * 500000;  // 1000 / 2 ... this is supposed to be seconds.
+                        ms = ICKDISCOVERY_ANNOUNCE_INTERVAL * 300000;  // 1000 * 0.3 ... this is supposed to be seconds.
+                                                                       // 50% doesn't work since it risks putting us beyond the expiration threshold when including delays.
                                                                        //                        debug("ICK_SEND:CMD_NOTIFY_PERIODICADD interval %d\n", ms);
                         TIME_ADD(cmd->time, ms +  (random() % ms));
                         _ick_notification_queue(cmd);
@@ -1712,7 +1713,7 @@ static void * _ick_notification_request_thread (void * dummy) {
                     
                 case ICK_SEND_CMD_NOTIFY_PERIODICSEARCH:
                     _ick_notifications_send(ICK_SEND_CMD_SEARCH, NULL);
-                    ms = ICKDISCOVERY_SEARCH_INTERVAL * 500000;  // 1000 / 2;
+                    ms = ICKDISCOVERY_SEARCH_INTERVAL * 300000;  // 1000 * 0.3;
                                                                  //                    debug("ICK_SEND:CMD_NOTIFY_PERIODICSEARCH interval %d\n", ms);
                     TIME_ADD(cmd->time, ms +  (random() % ms));
                     _ick_notification_queue(cmd);

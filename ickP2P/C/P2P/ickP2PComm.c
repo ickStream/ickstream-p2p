@@ -491,6 +491,7 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
             if (device) {
                 device->t_connected = time(NULL);
                 device->t_disconnected = 0;
+                device->lastout = 0;
                 device->bufLen = 0;
                 device->reconnecting = 0;
             }
@@ -642,6 +643,9 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
             
             // use protocol filter to initialize wsi and device
         case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION: {
+            // quitting? bail
+            if (_ick_discovery_locked(_ick_p2pDiscovery) == ICK_DISCOVERY_QUIT)
+                return 1;
             
             struct lws_tokens * tokens = (struct lws_tokens *)user;
             // No origin? Can't identify client -> deny
@@ -750,7 +754,7 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
             free(pss->UUID);
             pss->UUID = NULL;
             //            free(pss); done by libwebsockets!
-            if (!device->reconnecting && UUID) {
+            if (!device->reconnecting && UUID && (_ick_discovery_locked(_ick_p2pDiscovery) != ICK_DISCOVERY_QUIT)) {
                 device->reconnecting = 1;
                 pthread_create(&mythread, NULL, _ickReOpenWebsocket, UUID);
             }
@@ -812,6 +816,11 @@ static void __ickOpenWebsocket(struct _ick_device_struct ** devSrc) {
     struct _ick_device_struct * device = *devSrc;
     char * URL = NULL;
     unsigned short port = __port;
+    
+    // quitting? bail
+    if (_ick_discovery_locked(_ick_p2pDiscovery) == ICK_DISCOVERY_QUIT)
+        return;
+
     // loopback?
     if (strcmp(device->UUID, _ick_p2pDiscovery->UUID)) {
         // no - use data
@@ -864,6 +873,11 @@ static void *_ickReOpenWebsocket(void * UUID) {
         long delay = ICK_RECONNECT_DELAY * 500;
         delay += (random() % delay);
         usleep(delay);
+        
+        // quitting? bail
+        if (_ick_discovery_locked(_ick_p2pDiscovery) == ICK_DISCOVERY_QUIT) {
+            break;
+        }
         
         // device still there and not connected? Context still there? Reconnect
         _ickDeviceLockAccess(1);

@@ -226,6 +226,7 @@ static void _ickEndDiscovery(ickDiscovery_t *discovery, int wait) {
 // use singleton
 
 void ickEndDiscovery(int wait) {
+    _ick_quit_discovery(&_ick_discovery);
     _ick_close_discovery_registry(wait);
     _ickCloseP2PComm(wait);
     
