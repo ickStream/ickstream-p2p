@@ -2,9 +2,10 @@
 //  ickDiscoveryInternal.h
 //  ickStreamProto
 //
-//  Created by Jörg Schwieder on 13.02.12.
-//  Copyright (c) 2012 Du!Business GmbH. All rights reserved.
-//
+//  ========
+//  Copyright (c) 2013 ickStream GmbH.
+//  All rights reserved.
+//  ========
 
 #ifndef ickStreamProto_ickDiscoveryInternal_h
 #define ickStreamProto_ickDiscoveryInternal_h
