@@ -3,7 +3,7 @@
 	url = https://github.com/jfearon/miniupnp.git
 [submodule "libwebsockets"]
 	path = libwebsockets
-	url = https://bitbucket.org/jfearon/libwebsockets.git
+	url = https://bitbucket.org/ickstream/libwebsockets.git
 [submodule "jansson"]
 	path = jansson
 	url = https://github.com/jfearon/jansson.git
