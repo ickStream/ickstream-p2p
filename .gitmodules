@@ -1,0 +1,9 @@
+[submodule "libwebsockets"]
+	path = libwebsockets
+	url = https://bitbucket.org/ickstream/libwebsockets.git
+[submodule "jansson"]
+	path = jansson
+	url = https://github.com/jfearon/jansson.git
+[submodule "miniupnp"]
+	path = miniupnp
+	url = https://github.com/jfearon/miniupnp.git
