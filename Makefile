@@ -51,7 +51,8 @@ OBJECTS         = $(SRC:.c=.o)
 INTERNALINCLUDES = -IickP2P/C/P2P -Iminiupnp/minissdpd -Iminiupnp/miniupnpc -Ilibwebsockets/lib -Ijansson/src
 PUBLICHEADERS    = ickP2P/C/P2P/ickDiscovery.h
 GENHEADERS       = jansson/src/jansson_config.h miniupnp/miniupnpc/miniupnpcstrings.h
-
+ZLIBINCLUDES     = 
+INCLUDES         = $(ZLIBINCLUDES)
 
 # How to compile c source files
 %.o: %.c
