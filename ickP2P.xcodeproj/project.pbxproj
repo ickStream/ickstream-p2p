@@ -40,7 +40,7 @@
 		1A5335B21650491B001FD018 /* utf.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5335A31650491A001FD018 /* utf.h */; };
 		1A5335B31650491B001FD018 /* value.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A5335A41650491A001FD018 /* value.c */; };
 		4C2D921716092ED4001C69EA /* ickDiscovery.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D91FF16092ED4001C69EA /* ickDiscovery.c */; };
-		4C2D921816092ED4001C69EA /* ickDiscovery.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D920016092ED4001C69EA /* ickDiscovery.h */; };
+		4C2D921816092ED4001C69EA /* ickDiscovery.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D920016092ED4001C69EA /* ickDiscovery.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		4C2D921916092ED4001C69EA /* ickDiscoveryInternal.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C2D920116092ED4001C69EA /* ickDiscoveryInternal.h */; };
 		4C2D921A16092ED4001C69EA /* ickDiscoveryRegistry.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D920216092ED4001C69EA /* ickDiscoveryRegistry.c */; };
 		4C2D921B16092ED4001C69EA /* ickP2PComm.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D920316092ED4001C69EA /* ickP2PComm.c */; };
@@ -392,7 +392,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "git=/usr/local/git/bin/git\nversion=`$git rev-parse -q HEAD`\necho \"#define GIT_VERSION $version\" > GitVersionP2P.h\ntouch Info.plist";
+			shellScript = "git=/usr/bin/git\nversion=`$git rev-parse -q HEAD`\necho \"#define GIT_VERSION $version\" > GitVersionP2P.h\ntouch Info.plist";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -500,6 +500,7 @@
 				EXECUTABLE_PREFIX = lib;
 				GCC_PRECOMPILE_PREFIX_HEADER = NO;
 				GCC_PREFIX_HEADER = "";
+				HEADER_SEARCH_PATHS = "";
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_LDFLAGS = "-ObjC";
 				PRIVATE_HEADERS_FOLDER_PATH = ../..;
@@ -519,6 +520,7 @@
 				EXECUTABLE_PREFIX = lib;
 				GCC_PRECOMPILE_PREFIX_HEADER = NO;
 				GCC_PREFIX_HEADER = "";
+				HEADER_SEARCH_PATHS = "";
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_LDFLAGS = "-ObjC";
 				PRIVATE_HEADERS_FOLDER_PATH = ../..;
