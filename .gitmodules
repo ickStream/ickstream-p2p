@@ -4,3 +4,6 @@
 [submodule "jansson"]
 	path = jansson
 	url = https://github.com/jfearon/jansson.git
+[submodule "libwebsockets"]
+	path = libwebsockets
+	url = git@bitbucket.org:ickstream/libwebsockets.git
