@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		1A1A8A8716504DE400584F17 /* jansson_config.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A1A8A8616504DE400584F17 /* jansson_config.h */; };
-		1A27C804164AEDA300F4ED71 /* libliblibwebsockets.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A27C7FF164AED6C00F4ED71 /* libliblibwebsockets.a */; };
 		1A27C827164AF7C300F4ED71 /* config.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A27C818164AF7C300F4ED71 /* config.h */; };
 		1A27C82E164AF7C300F4ED71 /* openssdpsocket.c in Sources */ = {isa = PBXBuildFile; fileRef = 1A27C820164AF7C300F4ED71 /* openssdpsocket.c */; };
 		1A27C82F164AF7C300F4ED71 /* openssdpsocket.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A27C821164AF7C300F4ED71 /* openssdpsocket.h */; };
@@ -45,6 +44,7 @@
 		4C2D921A16092ED4001C69EA /* ickDiscoveryRegistry.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D920216092ED4001C69EA /* ickDiscoveryRegistry.c */; };
 		4C2D921B16092ED4001C69EA /* ickP2PComm.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D920316092ED4001C69EA /* ickP2PComm.c */; };
 		4C2D924116093C35001C69EA /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4C2D924016093C35001C69EA /* Foundation.framework */; };
+		4C32D4AF1712875800E511B8 /* libliblibwebsockets.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A27C7FF164AED6C00F4ED71 /* libliblibwebsockets.a */; };
 		4C4D5278165F6F4B00455BF0 /* GitVersionP2P.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C4D5277165F6F4A00455BF0 /* GitVersionP2P.h */; };
 /* End PBXBuildFile section */
 
@@ -122,7 +122,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1A27C804164AEDA300F4ED71 /* libliblibwebsockets.a in Frameworks */,
+				4C32D4AF1712875800E511B8 /* libliblibwebsockets.a in Frameworks */,
 				4C2D924116093C35001C69EA /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

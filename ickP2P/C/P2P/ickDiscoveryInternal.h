@@ -85,13 +85,24 @@ struct _ick_callback_list {
 };
 
 
-// message lsit struct for websocket communication, from ickP2PComm.c
+// protocol level
+
+enum ickDiscovery_protocol_level {
+    ICKPROTOCOL_P2P_GENERIC             = 0,    // first protocol version or unknown
+    ICKPROTOCOL_P2P_INCLUDE_SERVICETYPE = 0x1,  // include target servicetype with messages
+    ICKPROTOCOL_P2P_INCLUDE_UUID        = 0x2,  // include target UUID with services (when supporting more than one UUID per websocket)
+    ICKPROTOCOL_P2P_CURRENT_SUPPORT     = 0x1,  // that's what we currently support: including the service type
+    ICKPROTOCOL_P2P_DEFAULT             = 0,    // that's what we curreently use as the default
+    ICKPROTOCOL_P2P_INVALID             =0xe0   // mask to find illegal codes. Used to be backward compatible with previous implementations usually starting messages with "{" or "[". Should be deprecated until launch, then we can use 8 bits for protocol properties
+};
+
+
+// message list struct for websocket communication, from ickP2PComm.c
 
 struct _ick_message_struct {
     struct _ick_message_struct * next;
     unsigned char * paddedData;
     size_t size;
-    
 };
 
 
@@ -113,6 +124,8 @@ struct _ick_device_struct {
     char * UUID;
     char * URL;
     unsigned short port;
+    
+    enum ickDiscovery_protocol_level protocolLevel;
     
     char * name;
     
@@ -283,7 +296,6 @@ enum _ick_send_cmd {
     ICK_SEND_CMD_NOTIFY_ADD,
     ICK_SEND_CMD_EXPIRE_DEVICE
 };
-
 
 
 void _ick_init_discovery_registry(ickDiscovery_t * _ick_discovery);

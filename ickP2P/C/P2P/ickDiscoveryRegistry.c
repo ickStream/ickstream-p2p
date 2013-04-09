@@ -346,6 +346,7 @@ struct _ick_device_struct * _ickDeviceCreateNew(char * UUID, char * URL, void * 
     device->wsi = wsi;
     device->type = type;
     device->port = port;
+    device->protocolLevel = ICKPROTOCOL_P2P_GENERIC;    // TBD: change to some other default level later
     device->messageOut = NULL;
     device->messageMutex = malloc(sizeof(pthread_mutex_t));
     device->isServer = -1; //undefined
@@ -420,6 +421,7 @@ static enum ickDevice_servicetype _ick_isIckDevice(const struct _upnp_device * d
 
 struct _ick_xmlparser_s {
     char * name;
+    enum ickDiscovery_protocol_level protocolLevel;
     int level;
     char elt[XMLMAX];
     int writeme;
@@ -459,7 +461,10 @@ static void _ick_parsexml_processelt(void * data, const char * content, int l) {
             memcpy(ps->name, content, l);
             (ps->name)[l] = 0;
         }
+    } else if ((ps->writeme == ps->level) && !strcmp(ps->elt, "protocolLevel")) {
+        ps->protocolLevel = atoi(content);
     }
+
 }
 
 static void * _ick_loadxmldata_thread(void * param) {
@@ -492,6 +497,7 @@ static void * _ick_loadxmldata_thread(void * param) {
     device_parser.name = NULL;
     device_parser.level = 0;
     device_parser.writeme = 0;
+    device_parser.protocolLevel = ICKPROTOCOL_P2P_GENERIC;
     
     struct xmlparser parser;
 	/* xmlparser object */
@@ -518,6 +524,7 @@ static void * _ick_loadxmldata_thread(void * param) {
             if (device_parser.name)
                 free(device_parser.name);
         }
+        iDev->protocolLevel = device_parser.protocolLevel;
     }
     pthread_mutex_unlock(&_device_mutex);
     

@@ -150,11 +150,34 @@ int ickDeviceRemoveMessageCallback(ickDevice_message_callback_t callback) {
 }
 
 
-static int _ick_execute_MessageCallback (char * UUID, void * data, size_t size, enum ickMessage_communicationstate state) {
+static int _ick_execute_MessageCallback (char * UUID,
+                                         void * vdata,
+                                         size_t size,
+                                         enum ickMessage_communicationstate state) {
+    unsigned char * data = vdata;
+    enum ickDiscovery_protocol_level protocolLevel = data[0];
+    enum ickDevice_servicetype service = ICKDEVICE_ANY;
+    if (!(protocolLevel & ICKPROTOCOL_P2P_INVALID)) { // check for masked bits
+        data++;
+        size -=2;   // trailing 0 and protocol
+        if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SERVICETYPE) {
+            service = data[0];
+            data++;
+            size--;
+        }
+        if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_UUID) {
+            UUID = strdup((char *)data);
+            int len = strlen(UUID);
+            data += len;
+            size -= len;
+        }
+    }
+    
+    
     struct _ickMessageCallbacks * cbTemp = _ick_MessageCallbacks;
 
     while (cbTemp) {
-        cbTemp->callback(UUID, data, size, state);
+        cbTemp->callback(UUID, data, size, state, service);
         cbTemp = cbTemp->next;
     }
     return 0;
@@ -162,7 +185,11 @@ static int _ick_execute_MessageCallback (char * UUID, void * data, size_t size, 
 
 // debug handling
 
-void _ick_debug_handleSpecialCommands(const char * UUID, const void * message, size_t message_size, enum ickMessage_communicationstate state) {
+void _ick_debug_handleSpecialCommands(const char * UUID,
+                                      const void * message,
+                                      size_t message_size,
+                                      enum ickMessage_communicationstate state,
+                                      enum ickDevice_servicetype service) {
     if (state != ICKMESSAGE_INCOMING_DATA)
         return;
 
@@ -226,11 +253,13 @@ static int _ick_serve_xml_file(struct libwebsocket *wsi) {
                  "  <modelName>ickStreamDevice</modelName>\r\n"
                  "  <UDN>uuid:%s</UDN>\r\n"                      // uuid
                  //                 "  <presentationURL>%s</presentationURL>\r\n"  // url
+                 "  <protocolLevel>%d</protocolLevel>"
                  " </device>\r\n"
                  "</root>",
                  _ick_p2pDiscovery->friendlyName,
-                 _ick_p2pDiscovery->UUID
+                 _ick_p2pDiscovery->UUID,
                  //                 _ick_p2pDiscovery->interface
+                 ICKPROTOCOL_P2P_CURRENT_SUPPORT
                  );
     
     if (l < 0) {
@@ -456,8 +485,14 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                 UUID = NULL;
             }
             
+            int isMyself = 0;
             if (!device) {   // can't prefill for incomming connections, but then the filter should have prefilled the WSI
                 device = _ickDevice4wsi(wsi);
+                if (!device && (_ick_p2pDiscovery->wsi == wsi)) { // loopback coming in, let's find own device.
+                    device = _ickDeviceGet(_ick_p2pDiscovery->UUID);
+                    isMyself = 1;
+                }
+
                 if (device && device->UUID) {
                     pss->UUID = strdup(device->UUID);
                     fprintf(stderr, "LWS_CALLBACK_X_ESTABLISHED, device found: %s\n", pss->UUID);
@@ -471,25 +506,27 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                     fprintf(stderr, "LWS_CALLBACK_X_ESTABLISHED, no device found on %s, %s\n", namebuf, ipbuf);
                 }
             }
-            
-            if (reason == LWS_CALLBACK_ESTABLISHED) {
-                fprintf(stderr, "ick_callback_p2p_server: LWS_CALLBACK_ESTABLISHED\n");
-                if (device)
-                    device->isServer = 1;
-            } else {
-                fprintf(stderr, "ick_callback_p2p_server: LWS_CALLBACK_CLIENT_ESTABLISHED\n");
-                if (device)
-                    device->isServer = 0;
+
+            if (!isMyself) { // don't fill client struct with server side info! for loopback
+                if (reason == LWS_CALLBACK_ESTABLISHED) {
+                    fprintf(stderr, "ick_callback_p2p_server: LWS_CALLBACK_ESTABLISHED\n");
+                    if (device)
+                        device->isServer = 1;
+                } else {
+                    fprintf(stderr, "ick_callback_p2p_server: LWS_CALLBACK_CLIENT_ESTABLISHED\n");
+                    if (device)
+                        device->isServer = 0;
+                }
+                
+                if (device && device->UUID) {
+                    device->wsi = wsi;
+                } else {
+                    // something really weird happened: we got this call without a device UUID. This should not be because it's prefilled
+                    fprintf(stderr, "LWS_CALLBACK_X_ESTABLISHED, no device found\n");
+                }
             }
             
-            if (device && device->UUID) {
-                device->wsi = wsi;
-            } else {
-                // something really weird happened: we got this call without a device UUID. This should not be because it's prefilled
-                fprintf(stderr, "LWS_CALLBACK_X_ESTABLISHED, no device found\n");
-            }
-            
-            if (device) {
+            if (device) { // loopback: we use this for both sides. If we see any side, it's there....
                 device->t_connected = time(NULL);
                 device->t_disconnected = 0;
                 device->lastout = 0;
@@ -529,7 +566,7 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
                 n = libwebsocket_write(wsi, message->paddedData +
                                        LWS_SEND_BUFFER_PRE_PADDING,
                                        message->size,
-                                       LWS_WRITE_TEXT);
+                                       LWS_WRITE_BINARY);
                 _ickDeviceLockAccess(1);
                 if (!_ickDeviceCheck(device)) {
                     _ickDeviceLockAccess(0);
@@ -552,7 +589,7 @@ _ick_callback_p2p_server(struct libwebsocket_context * context,
             // broadcast - we don't do that.
         case LWS_CALLBACK_BROADCAST:
             // no broadcasts right now
-/*            n = libwebsocket_write(wsi, in, len, LWS_WRITE_TEXT);
+/*            n = libwebsocket_write(wsi, in, len, LWS_WRITE_BINARY);
             if (n < 0)
                 fprintf(stderr, "mirror write failed\n");*/
             break;
@@ -1066,8 +1103,21 @@ int _ickCloseP2PComm(int wait) {
     return 0;
 }
 
+;
+enum ickMessage_communicationstate ickDeviceSendMsg(const char * UUID,
+                                                    const void * message,
+                                                    const size_t message_size) {
+    return ickDeviceSendTargetedMsg(UUID,
+                                    message,
+                                    message_size,
+                                    ICKDEVICE_ANY);
+}
+
 // send a message to device UUID
-enum ickMessage_communicationstate ickDeviceSendMsg(const char * UUID, const void * message, const size_t message_size) {
+enum ickMessage_communicationstate ickDeviceSendTargetedMsg(const char * UUID,
+                                                            const void * message,
+                                                            const size_t message_size,
+                                                            enum ickDevice_servicetype service_type) {
     
     _ickDeviceLockAccess(1);
     struct _ick_device_struct * device;
@@ -1086,16 +1136,53 @@ enum ickMessage_communicationstate ickDeviceSendMsg(const char * UUID, const voi
             _ickDeviceLockAccess(0);
             return ICKMESSAGE_COULD_NOT_SEND;
         }
-        unsigned char * data = malloc(LWS_SEND_BUFFER_PRE_PADDING + message_size + LWS_SEND_BUFFER_POST_PADDING);
+        int protocolBytes = 0;
+        int zero = 0;
+        unsigned char protocolLevel = ICKPROTOCOL_P2P_CURRENT_SUPPORT;
+        // generic protocol only? If no, we will include a protocol level with the message, no matter whether it's used or not
+        if (device->protocolLevel != ICKPROTOCOL_P2P_GENERIC) {
+            protocolBytes ++;    // include protocol levl
+            zero = 1;            //and trailing 0
+        } else
+            protocolLevel = ICKPROTOCOL_P2P_GENERIC;
+        // support servicetype?
+        if ((protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SERVICETYPE) &&
+            (device->protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SERVICETYPE))
+            protocolBytes ++;   // include service type
+        else
+            protocolLevel &= ~ICKPROTOCOL_P2P_INCLUDE_SERVICETYPE;
+        // support and use target UUID?
+        if ((protocolLevel & ICKPROTOCOL_P2P_INCLUDE_UUID) &&
+            (device->protocolLevel & ICKPROTOCOL_P2P_INCLUDE_UUID) &&
+             UUID)
+            protocolBytes += strlen(UUID) + 1;  // include UUID
+        
+        unsigned char * data = malloc(LWS_SEND_BUFFER_PRE_PADDING +
+                                      protocolBytes +
+                                      message_size +
+                                      zero +
+                                      LWS_SEND_BUFFER_POST_PADDING);
         if (!data) {
             _ickDeviceLockAccess(0);
             free(newMessage);
             return ICKMESSAGE_COULD_NOT_SEND;
         }
         newMessage->paddedData = data;
-        memcpy(newMessage->paddedData + LWS_SEND_BUFFER_PRE_PADDING, message, message_size);
+        memcpy(newMessage->paddedData + LWS_SEND_BUFFER_PRE_PADDING + protocolBytes, message, message_size);
+        if (protocolBytes) { // not level! if supported, even communicate level 0 plus add trailing 0!
+            newMessage->paddedData[LWS_SEND_BUFFER_PRE_PADDING] = protocolLevel;
+            newMessage->paddedData[LWS_SEND_BUFFER_PRE_PADDING + protocolBytes + message_size] = 0; // add trailing 0;
+        }
+        int offset = 1;
+        if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SERVICETYPE) {
+            newMessage->paddedData[LWS_SEND_BUFFER_PRE_PADDING + offset] = (unsigned char)service_type;
+            offset++;
+        }
+        if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_UUID) {
+            strcpy(LWS_SEND_BUFFER_PRE_PADDING + offset, UUID);
+        }
         newMessage->next = NULL;
-        newMessage->size = message_size;
+        newMessage->size = message_size + protocolBytes + zero;
         
         __ickInsertMessage(device, newMessage);
         

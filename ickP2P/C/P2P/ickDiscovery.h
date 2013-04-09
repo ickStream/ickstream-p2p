@@ -228,7 +228,11 @@ extern "C" {
     // Broadcast: cou can send a broadcast message to all known devices using "NULL" as a UUID parameter.
     //
     enum ickMessage_communicationstate ickDeviceSendMsg(const char * UUID, const void * message, const size_t message_size);
-        
+    enum ickMessage_communicationstate ickDeviceSendTargetedMsg(const char * UUID,
+                                                        const void * message,
+                                                        const size_t message_size,
+                                                        enum ickDevice_servicetype service_type);
+    
     //
     // Callback function type for callback that is being called whenever a message comes in
     // NOTE: since ickStreamP2P currently is completely asynchronous, both notifications and replies are being retrievd through this.
@@ -236,13 +240,13 @@ extern "C" {
     //
     // NOTE: To use the data handed over, you MUST copy it and you MUST NOT free it. More than one callback can be registered and all receive the same data block, after this it's being freed or reused and overwritten with new data.
     //
-    typedef void (* ickDevice_message_callback_t)(const char * UUID, const void * message, size_t message_size, enum ickMessage_communicationstate state);
+    typedef void (* ickDevice_message_callback_t)(const char * UUID, const void * message, size_t message_size, enum ickMessage_communicationstate state, enum ickDevice_servicetype service_type);
     
     //
     // register message callback
     //
     int ickDeviceRegisterMessageCallback(ickDevice_message_callback_t callback);
-
+    
     //
     // remove message callback
     //
