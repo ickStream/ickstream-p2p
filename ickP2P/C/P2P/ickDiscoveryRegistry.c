@@ -123,6 +123,12 @@ int _ickDeviceCheck(struct _ick_device_struct * cDev) {
     return (iDev == cDev);
 }
 
+
+//
+// Debug info
+//
+
+
 json_t * _j_ickDeviceGetDebugInfo(struct _ick_device_struct * device) {
     json_t * j_xmlString = NULL;
     if (device->xmlSize && device->xmlData) {
@@ -135,7 +141,7 @@ json_t * _j_ickDeviceGetDebugInfo(struct _ick_device_struct * device) {
     json_t * j_element = NULL;
     struct _upnp_device * element = device->element;
     if (element) {
-        char * header1, * header2, * header3;
+        char * header1 = NULL, * header2 = NULL, * header3 = NULL;
         j_element = json_object();
         json_object_set_new(j_element, "validity", json_integer(element->t));
         if (element->headers[0].l)
@@ -191,15 +197,17 @@ json_t * _j_ickDeviceGetDebugInfo(struct _ick_device_struct * device) {
     return j_device;
 }
 
+
 json_t * _j_ickWrapMiscInfo(json_t * data) {
     json_t * wrappedData = json_object();
     if (data)
         json_object_set_new(wrappedData, "debug_data", data);
-#ifdef GIT_VERSION
-#define STRINGIZE(X) #X
-#define GIT_STRING(X) STRINGIZE(X)
-    json_object_set_new(wrappedData, "git_version", json_string(GIT_STRING(GIT_VERSION)));
-#endif
+    //#ifdef GIT_VERSION
+    //#define STRINGIZE(X) #X
+    //#define GIT_STRING(X) STRINGIZE(X)
+    //    json_object_set_new(wrappedData, "git_version", json_string(GIT_STRING(GIT_VERSION)));
+    //#endif
+    json_object_set_new(wrappedData, "git_version", json_string(ickDiscoveryGetGitVersion()));
     return wrappedData;
 }
 
@@ -270,6 +278,19 @@ char * ickDeviceGetRemoteDebugInfoForDevice(char * UUID) {
 }
 
 
+//
+// set debug log facility.
+//
+
+void ickDiscoverySetLogFacility(ickDiscovery_log_facility_t * function) {
+    _srvlog = function;
+}
+
+
+//
+// get device information
+//
+
 
 struct _ick_device_struct * _ickDevice4wsi(struct libwebsocket * wsi) {
     if (!wsi)
@@ -327,7 +348,9 @@ char * ickDeviceName(const char * UUID) {
 }
 
 
-
+//
+// Create Device Info
+//
 
 struct _ick_device_struct * _ickDeviceCreateNew(char * UUID, char * URL, void * element, enum ickDevice_servicetype type, unsigned short port, struct libwebsocket * wsi) {
     if (!_sendsock) // we are shutting down? Don't create.
@@ -416,6 +439,11 @@ static enum ickDevice_servicetype _ick_isIckDevice(const struct _upnp_device * d
 
     return ICKDEVICE_GENERIC;
 }
+
+
+//
+// parse XML device description
+//
 
 #define XMLMAX  256
 

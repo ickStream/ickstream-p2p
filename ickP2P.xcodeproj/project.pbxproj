@@ -45,6 +45,8 @@
 		4C2D921B16092ED4001C69EA /* ickP2PComm.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C2D920316092ED4001C69EA /* ickP2PComm.c */; };
 		4C2D924116093C35001C69EA /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4C2D924016093C35001C69EA /* Foundation.framework */; };
 		4C32D4AF1712875800E511B8 /* libliblibwebsockets.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A27C7FF164AED6C00F4ED71 /* libliblibwebsockets.a */; };
+		4C32D4DE17177FBC00E511B8 /* logutils.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C32D4DC17177FBC00E511B8 /* logutils.c */; };
+		4C32D4DF17177FBC00E511B8 /* logutils.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C32D4DD17177FBC00E511B8 /* logutils.h */; };
 		4C4D5278165F6F4B00455BF0 /* GitVersionP2P.h in Headers */ = {isa = PBXBuildFile; fileRef = 4C4D5277165F6F4A00455BF0 /* GitVersionP2P.h */; };
 /* End PBXBuildFile section */
 
@@ -114,6 +116,8 @@
 		4C2D922B1609306F001C69EA /* README */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 		4C2D922C1609311B001C69EA /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		4C2D924016093C35001C69EA /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
+		4C32D4DC17177FBC00E511B8 /* logutils.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = logutils.c; sourceTree = "<group>"; };
+		4C32D4DD17177FBC00E511B8 /* logutils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = logutils.h; sourceTree = "<group>"; };
 		4C4D5277165F6F4A00455BF0 /* GitVersionP2P.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GitVersionP2P.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -220,6 +224,7 @@
 				1A533594165048E9001FD018 /* jannson */,
 				1A27C83C164AF95E00F4ED71 /* miniupnpc */,
 				1A27C816164AF79C00F4ED71 /* minissdpd */,
+				4C32D4D917177E6300E511B8 /* utils */,
 				4C2D91FA16092DB8001C69EA /* C */,
 			);
 			path = ickP2P;
@@ -243,6 +248,16 @@
 				4C2D920316092ED4001C69EA /* ickP2PComm.c */,
 			);
 			path = P2P;
+			sourceTree = "<group>";
+		};
+		4C32D4D917177E6300E511B8 /* utils */ = {
+			isa = PBXGroup;
+			children = (
+				4C32D4DC17177FBC00E511B8 /* logutils.c */,
+				4C32D4DD17177FBC00E511B8 /* logutils.h */,
+			);
+			name = utils;
+			path = C/P2P;
 			sourceTree = "<group>";
 		};
 		4C4D5279165F6F6000455BF0 /* other */ = {
@@ -278,6 +293,7 @@
 				1A5335B21650491B001FD018 /* utf.h in Headers */,
 				1A1A8A8716504DE400584F17 /* jansson_config.h in Headers */,
 				4C4D5278165F6F4B00455BF0 /* GitVersionP2P.h in Headers */,
+				4C32D4DF17177FBC00E511B8 /* logutils.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -420,6 +436,7 @@
 				1A5335B01650491B001FD018 /* strconv.c in Sources */,
 				1A5335B11650491B001FD018 /* utf.c in Sources */,
 				1A5335B31650491B001FD018 /* value.c in Sources */,
+				4C32D4DE17177FBC00E511B8 /* logutils.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

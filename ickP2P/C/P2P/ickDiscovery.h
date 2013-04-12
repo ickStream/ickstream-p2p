@@ -227,9 +227,9 @@ extern "C" {
     //
     // Broadcast: cou can send a broadcast message to all known devices using "NULL" as a UUID parameter.
     //
-    enum ickMessage_communicationstate ickDeviceSendMsg(const char * UUID, const void * message, const size_t message_size);
+    enum ickMessage_communicationstate ickDeviceSendMsg(const char * UUID, const char * message, const size_t message_size);
     enum ickMessage_communicationstate ickDeviceSendTargetedMsg(const char * UUID,
-                                                        const void * message,
+                                                        const char * message,
                                                         const size_t message_size,
                                                         enum ickDevice_servicetype service_type);
     
@@ -281,6 +281,15 @@ extern "C" {
     
     // enable debug mirroring and broadcasting
     void enableDebugCallback(int on);
+    
+    // set logging callback
+    typedef void (ickDiscovery_log_facility_t)( const char *file, int line, int prio, const char * format, ... );
+    void ickDiscoverySetLogFacility(ickDiscovery_log_facility_t * function);
+    
+    // get version information. Returns version information in major/minor ints and returns version string
+    char * ickDiscoveryGetVersion(int *major, int *minor);
+    // return git version of build
+    char * ickDiscoveryGetGitVersion();
     
     
 #ifdef __cplusplus

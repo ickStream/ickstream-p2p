@@ -30,19 +30,7 @@
 
 #include "libwebsockets.h"
 
-#ifdef DEBUG
-static inline
-void debug(const char *format, ...)
-{
-	va_list ap;
-	va_start(ap, format); vfprintf(stderr, format, ap); va_end(ap);
-}
-#else
-static inline
-void debug(const char *format, ...)
-{
-}
-#endif
+#include "logutils.h"
 
 
 //
@@ -72,6 +60,31 @@ typedef enum _ickTristate {
 #define UPNP_PORT       1900
 #define UPNP_MCAST_ADDR "239.255.255.250"
 #define LOCALHOST_ADDR  "127.0.0.1"
+#define ICK_VERSION_MAJOR   1   // max 2 digits
+#define ICK_VERSION_MINOR   0   // max 4 digits
+
+inline
+char * ickDiscoveryGetVersion(int *major, int *minor) {
+    static char buffer[8];
+    sprintf(buffer, "%d.%d", ICK_VERSION_MAJOR, ICK_VERSION_MINOR);
+    if (major)
+        *major = ICK_VERSION_MAJOR;
+    if (minor)
+        *minor = ICK_VERSION_MINOR;
+    return buffer;
+}
+
+inline
+char * ickDiscoveryGetGitVersion() {
+    static char buffer[33];
+#ifdef GIT_VERSION
+#define STRINGIZE(X) #X
+#define GIT_STRING(X) STRINGIZE(X)
+    sprintf(buffer, "%s", GIT_STRING(GIT_VERSION));
+#endif
+    return buffer;
+}
+
 
 struct _upnp_device;
 
