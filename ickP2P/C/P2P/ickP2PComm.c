@@ -833,8 +833,8 @@ static int __quit_thread = 0;
 static pthread_t __service_thread;
 static int __port;
 
-// 0.2ms
-#define ICK_SLEEP_INTERVAL 200
+// 10ms
+#define ICK_SLEEP_INTERVAL 10000
 
 static void * __ickP2PServiceThread(void * dummy) {
     while (!__quit_thread) {

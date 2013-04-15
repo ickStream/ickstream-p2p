@@ -40,29 +40,29 @@ extern "C" {
 #define WEBSOCKET_PORT  7862
     
     
-    enum ickDiscovery_result {
+    typedef enum ickDiscovery_result {
         ICKDISCOVERY_SUCCESS            = 0,
         ICKDISCOVERY_RUNNING            = 1,
         ICKDISCOVERY_SOCKET_ERROR       = 2,
         ICKDISCOVERY_THREAD_ERROR       = 3,
         ICKDISCOVERY_MEMORY_ERROR       = 4
-    };
+    } ickDiscoveryResult_t;
     
-    enum ICKDISCOVERY_SSDP_TYPES {
+    typedef enum ICKDISCOVERY_SSDP_TYPES {
         ICKDISCOVERY_TYPE_NOTIFY,
         ICKDISCOVERY_TYPE_SEARCH,
         ICKDISCOVERY_TYPE_RESPONSE,
         
         ICKDISCOVERY_SSDP_TYPES_COUNT
-    };
+    } ickDiscoverySSDPTypes_t;
     
-    enum ickDiscovery_command {
+    typedef enum ickDiscovery_command {
         ICKDISCOVERY_ADD_DEVICE,
         ICKDISCOVERY_REMOVE_DEVICE,
         ICKDISCOVERY_UPDATE_DEVICE
-    };
+    } ickDiscoveryCommand_t;
     
-    enum ickDevice_servicetype {
+    typedef enum ickDevice_servicetype {
         ICKDEVICE_GENERIC           = 0,
         ICKDEVICE_PLAYER            = 0x1,
         ICKDEVICE_CONTROLLER        = 0x2,
@@ -71,7 +71,7 @@ extern "C" {
         ICKDEVICE_MAX               = 0x8,
         ICKDEVICE_ANY               = (ICKDEVICE_MAX * 2) - 1,
         ICKDEVICE_NONE              = -1
-    };
+    } ickDeviceServicetype_t;
     
     struct _ick_discovery_struct;
     typedef struct _ick_discovery_struct ickDiscovery_t;
@@ -88,7 +88,9 @@ extern "C" {
     //
     // Spawns a communication handling thread and is reentrant but will not do anything on the second or subsequent call (other than returning ICKDISCOVERY_RUNNING
     //
-    enum ickDiscovery_result ickInitDiscovery(const char * UUID, const char * interface, ickDiscovery_discovery_exit_callback_t exitCallback);
+    ickDiscoveryResult_t ickInitDiscovery(const char * UUID,
+                                              const char * interface,
+                                              ickDiscovery_discovery_exit_callback_t exitCallback);
     
     // Stop the P2P component. "wait" is a synchronicity flag, it makes the function block until the discovery thread has really ended
     // Currently, using "wait" is recommended. 
@@ -107,13 +109,13 @@ extern "C" {
     //
     // Since the capabilities are bound to the discovery object, all Services have to be re-added after an ickEndDiscovery. We should consider whether we want an "ickDiscoverySuspend and ickDiscoveryResume to keep the object alive while shutting down the actual operation.
     //
-    int ickDiscoveryAddService(enum ickDevice_servicetype type);
+    int ickDiscoveryAddService(ickDeviceServicetype_t type);
         
     //
     // Remove a capability. We probably want to be able to correctly shut down a player.
     // Not needed befor ickEndDiscovery since this will announce the shutdown of the whole device.
     //
-    int ickDiscoveryRemoveService(enum ickDevice_servicetype type);
+    int ickDiscoveryRemoveService(ickDeviceServicetype_t type);
 
     //
     // This is another configuration function. 
@@ -147,7 +149,8 @@ extern "C" {
     // Also, deviceinformation is supposed to be static so changing it after a device has been detected will let the change go unnoticed until the device is completely unregistered.
     // Names are supposed to be UTF-8 encoded
     //
-    enum ickDiscovery_result ickDiscoverySetupConfigurationData(const char * defaultDeviceName, const char * dataFolder);
+    ickDiscoveryResult_t ickDiscoverySetupConfigurationData(const char * defaultDeviceName,
+                                                            const char * dataFolder);
     
 
     /* These are the main commands to communicate to the P2P Core for player/controller communication.
@@ -177,13 +180,13 @@ extern "C" {
     // Return value is a list of char * UUID values
     // type valie is a value of ORed together types, all of which have to match the type criteria of a device to be returned
     //
-    char ** ickDeviceList(enum ickDevice_servicetype type);
+    char ** ickDeviceList(ickDeviceServicetype_t type);
     
     //
     //  get the type of device UUID
     //  TBD: we might want to return a pointer to the whole service definition once we've defined service definitions....
     //
-    enum ickDevice_servicetype ickDeviceType(const char * UUID);
+    ickDeviceServicetype_t ickDeviceType(const char * UUID);
     
     //
     //  temporary hack: get device URL and port
@@ -198,7 +201,7 @@ extern "C" {
     //
     // Callback function type for callback that is being called whenever a device gets added or removed
     //
-    typedef void (* ickDiscovery_device_callback_t)(const char * device, enum ickDiscovery_command change, enum ickDevice_servicetype type);
+    typedef void (* ickDiscovery_device_callback_t)(const char * device, ickDiscoveryCommand_t change, ickDeviceServicetype_t type);
     
     //
     // register device list callback
@@ -207,7 +210,7 @@ extern "C" {
     int ickDeviceRegisterDeviceCallback(ickDiscovery_device_callback_t callback);
     
     
-    enum ickMessage_communicationstate {
+    typedef enum ickMessage_communicationstate {
         ICKMESSAGE_SUCCESS          = 0,
         ICKMESSAGE_INCOMING_DATA    = 0x1,
         ICKMESSAGE_OUTGOING_DATA    = 0x2,
@@ -217,7 +220,7 @@ extern "C" {
         ICKMESSAGE_UNKNOWN_TARGET    = 0x400,
         
         ICKMESSAGE_CONNECTION_LOST  = 0x20000
-    };
+    } ickMessageCommunicationstate_t;
     
     //
     // send a message to device UUID
@@ -227,11 +230,13 @@ extern "C" {
     //
     // Broadcast: cou can send a broadcast message to all known devices using "NULL" as a UUID parameter.
     //
-    enum ickMessage_communicationstate ickDeviceSendMsg(const char * UUID, const char * message, const size_t message_size);
-    enum ickMessage_communicationstate ickDeviceSendTargetedMsg(const char * UUID,
+    ickMessageCommunicationstate_t ickDeviceSendMsg(const char * UUID,
+                                                    const char * message,
+                                                    const size_t message_size);
+    ickMessageCommunicationstate_t ickDeviceSendTargetedMsg(const char * UUID,
                                                         const char * message,
                                                         const size_t message_size,
-                                                        enum ickDevice_servicetype service_type);
+                                                        ickDeviceServicetype_t service_type);
     
     //
     // Callback function type for callback that is being called whenever a message comes in
@@ -240,7 +245,7 @@ extern "C" {
     //
     // NOTE: To use the data handed over, you MUST copy it and you MUST NOT free it. More than one callback can be registered and all receive the same data block, after this it's being freed or reused and overwritten with new data.
     //
-    typedef void (* ickDevice_message_callback_t)(const char * UUID, const void * message, size_t message_size, enum ickMessage_communicationstate state, enum ickDevice_servicetype service_type);
+    typedef void (* ickDevice_message_callback_t)(const char * UUID, const char * message, size_t message_size, ickMessageCommunicationstate_t state, ickDeviceServicetype_t service_type);
     
     //
     // register message callback
