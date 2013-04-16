@@ -60,7 +60,7 @@ static int ickDiscoveryInitService(void);
 
 void * _ickDiscovery_poll_thread(void * _disc);
 
-static enum ickDiscovery_result _ickInitDiscovery(ickDiscovery_t * discovery) {
+static ickDiscoveryResult_t _ickInitDiscovery(ickDiscovery_t * discovery) {
     // discovery already active
     if (_ick_discovery_locked(discovery) == ICK_DISCOVERY_LOCKED)
         return ICKDISCOVERY_RUNNING;
