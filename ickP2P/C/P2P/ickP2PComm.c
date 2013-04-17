@@ -150,13 +150,15 @@ int ickDeviceRemoveMessageCallback(ickDevice_message_callback_t callback) {
 }
 
 
-static int _ick_execute_MessageCallback (char * UUID,
+static int _ick_execute_MessageCallback (char * sourceUUID,
                                          void * vdata,
                                          size_t size,
                                          enum ickMessage_communicationstate state) {
     unsigned char * data = vdata;
-    enum ickDiscovery_protocol_level protocolLevel = data[0];
-    enum ickDevice_servicetype service = ICKDEVICE_ANY;
+    ickDiscoveryProtocolLevel_t protocolLevel = data[0];
+    ickDeviceServicetype_t service = ICKDEVICE_ANY;
+    char * targetUUID = _ick_p2pDiscovery->UUID;
+    
     if (!(protocolLevel & ICKPROTOCOL_P2P_INVALID)) { // check for masked bits
         data++;
         size -=2;   // trailing 0 and protocol
@@ -165,19 +167,24 @@ static int _ick_execute_MessageCallback (char * UUID,
             data++;
             size--;
         }
-        if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_UUID) {
-            UUID = strdup((char *)data);
-            int len = strlen(UUID);
-            data += len;
-            size -= len;
+        if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_TARGETUUID) {
+            targetUUID = strdup((char *)data);
+            int len = strlen(targetUUID);
+            data += len + 1;
+            size -= len - 1;
+        }
+        if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID) {
+            sourceUUID = strdup((char *)data);
+            int len = strlen(sourceUUID);
+            data += len + 1;
+            size -= len - 1;
         }
     }
-    
     
     struct _ickMessageCallbacks * cbTemp = _ick_MessageCallbacks;
 
     while (cbTemp) {
-        cbTemp->callback(UUID, data, size, state, service);
+        cbTemp->callback(sourceUUID, (char *)data, size, state, service, targetUUID);
         cbTemp = cbTemp->next;
     }
     return 0;
@@ -1110,19 +1117,21 @@ enum ickMessage_communicationstate ickDeviceSendMsg(const char * UUID,
     return ickDeviceSendTargetedMsg(UUID,
                                     message,
                                     message_size,
-                                    ICKDEVICE_ANY);
+                                    ICKDEVICE_ANY,
+                                    NULL);
 }
 
 // send a message to device UUID
-enum ickMessage_communicationstate ickDeviceSendTargetedMsg(const char * UUID,
+enum ickMessage_communicationstate ickDeviceSendTargetedMsg(const char * targetUUID,
                                                             const char * message,
                                                             const size_t message_size,
-                                                            enum ickDevice_servicetype service_type) {
+                                                            ickDeviceServicetype_t service_type,
+                                                            const char * sourceUUID) {
     
     _ickDeviceLockAccess(1);
     struct _ick_device_struct * device;
-    if (UUID)
-        device = _ickDeviceGet(UUID);
+    if (targetUUID)
+        device = _ickDeviceGet(targetUUID);
     else
         device = _ickDeviceGetRoot();
     if (!device) {
@@ -1152,10 +1161,14 @@ enum ickMessage_communicationstate ickDeviceSendTargetedMsg(const char * UUID,
         else
             protocolLevel &= ~ICKPROTOCOL_P2P_INCLUDE_SERVICETYPE;
         // support and use target UUID?
-        if ((protocolLevel & ICKPROTOCOL_P2P_INCLUDE_UUID) &&
-            (device->protocolLevel & ICKPROTOCOL_P2P_INCLUDE_UUID) &&
-             UUID)
-            protocolBytes += strlen(UUID) + 1;  // include UUID
+        if ((protocolLevel & ICKPROTOCOL_P2P_INCLUDE_TARGETUUID) &&
+            (device->protocolLevel & ICKPROTOCOL_P2P_INCLUDE_TARGETUUID) &&
+             targetUUID)
+            protocolBytes += strlen(targetUUID) + 1;  // include UUID
+        if ((protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID) &&
+            (device->protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID) &&
+            targetUUID)
+            protocolBytes += strlen(sourceUUID) + 1;  // include UUID
         
         unsigned char * data = malloc(LWS_SEND_BUFFER_PRE_PADDING +
                                       protocolBytes +
@@ -1178,15 +1191,20 @@ enum ickMessage_communicationstate ickDeviceSendTargetedMsg(const char * UUID,
             newMessage->paddedData[LWS_SEND_BUFFER_PRE_PADDING + offset] = (unsigned char)service_type;
             offset++;
         }
-        if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_UUID) {
-            strcpy(LWS_SEND_BUFFER_PRE_PADDING + offset, UUID);
+        if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_TARGETUUID) {
+            strcpy(LWS_SEND_BUFFER_PRE_PADDING + offset, targetUUID);
+            offset += strlen(targetUUID) + 1;
+        }
+        if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID) {
+            strcpy(LWS_SEND_BUFFER_PRE_PADDING + offset, sourceUUID);
+            offset += strlen(targetUUID) + 1;
         }
         newMessage->next = NULL;
         newMessage->size = message_size + protocolBytes + zero;
         
         __ickInsertMessage(device, newMessage);
         
-        if (UUID) {
+        if (targetUUID) {
             _ickDeviceLockAccess(0);
             return ICKMESSAGE_SUCCESS;
         }

@@ -228,15 +228,27 @@ extern "C" {
     // Actual message sending is asynchronous and buffered, in case of disconnects the messages stay queued unless either a reconnect can be established or the target device is formally de-registered (either through a timeout of the device validity or a disconnect notification).
     // TBD: Do we need a timeout to determine when we want ickP2P to stop to try sending messages?
     //
-    // Broadcast: cou can send a broadcast message to all known devices using "NULL" as a UUID parameter.
+    // Parameters:
+    //      targetUUID: the UUID to send the message to. If NULL, the message will be broadcast to all known devices
+    //      message: the message to be sent. JSON object encoded as a UTF-8 encoded C-string.
+    //      message_size: the size of the message. if 0, the C string will be evaluated, otherwise,
+    //                    even non-0-terminated substrings may be sent
+    //      service_type: If a device hosts several services, this parameter allows you to target only a subset of them.
+    //                    It's an OR-mask of the services to be addressed. The message will still be sent to all callbacks,
+    //                    it's up to the callback to decide whether the message is relevant for it
+    //      sourceUUID: If a device hosts subdevices (with separate UUIDs), this can be used to tell the target,
+    //                  which UUID the message is originating from. '0' means the root UUID will be used.
+    //                  This feature is not yet supported, the value is reserved and should default to the UUID of the
+    //                  source where known.
     //
-    ickMessageCommunicationstate_t ickDeviceSendMsg(const char * UUID,
+    ickMessageCommunicationstate_t ickDeviceSendMsg(const char * targetUUID,
                                                     const char * message,
                                                     const size_t message_size);
-    ickMessageCommunicationstate_t ickDeviceSendTargetedMsg(const char * UUID,
-                                                        const char * message,
-                                                        const size_t message_size,
-                                                        ickDeviceServicetype_t service_type);
+    ickMessageCommunicationstate_t ickDeviceSendTargetedMsg(const char * targetUUID,
+                                                            const char * message,
+                                                            const size_t message_size,
+                                                            ickDeviceServicetype_t service_type,
+                                                            const char * sourceUUID);
     
     //
     // Callback function type for callback that is being called whenever a message comes in
@@ -245,7 +257,9 @@ extern "C" {
     //
     // NOTE: To use the data handed over, you MUST copy it and you MUST NOT free it. More than one callback can be registered and all receive the same data block, after this it's being freed or reused and overwritten with new data.
     //
-    typedef void (* ickDevice_message_callback_t)(const char * UUID, const char * message, size_t message_size, ickMessageCommunicationstate_t state, ickDeviceServicetype_t service_type);
+    //  NOTE: The target UUID is reserved and will currently always contain the UUID of the root device of the current client
+    //
+    typedef void (* ickDevice_message_callback_t)(const char * sourceUUID, const char * message, size_t message_size, ickMessageCommunicationstate_t state, ickDeviceServicetype_t service_type, const char * targetUUID);
     
     //
     // register message callback
