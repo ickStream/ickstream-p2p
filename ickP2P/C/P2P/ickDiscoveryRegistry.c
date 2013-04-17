@@ -211,6 +211,27 @@ json_t * _j_ickWrapMiscInfo(json_t * data) {
     return wrappedData;
 }
 
+char * ickDiscoveryGetVersion(int *major, int *minor) {
+    static char buffer[8];
+    sprintf(buffer, "%d.%d", ICK_VERSION_MAJOR, ICK_VERSION_MINOR);
+    if (major)
+        *major = ICK_VERSION_MAJOR;
+    if (minor)
+        *minor = ICK_VERSION_MINOR;
+    return buffer;
+}
+
+char * ickDiscoveryGetGitVersion() {
+    static char buffer[33];
+#ifdef GIT_VERSION
+#define STRINGIZE(X) #X
+#define GIT_STRING(X) STRINGIZE(X)
+    sprintf(buffer, "%s", GIT_STRING(GIT_VERSION));
+#endif
+    return buffer;
+}
+
+
 char * _ickDeviceGetDebugInfo(struct _ick_device_struct * device) {
     if (!device)
         return NULL;

@@ -63,28 +63,6 @@ typedef enum _ickTristate {
 #define ICK_VERSION_MAJOR   1   // max 2 digits
 #define ICK_VERSION_MINOR   0   // max 4 digits
 
-inline
-char * ickDiscoveryGetVersion(int *major, int *minor) {
-    static char buffer[8];
-    sprintf(buffer, "%d.%d", ICK_VERSION_MAJOR, ICK_VERSION_MINOR);
-    if (major)
-        *major = ICK_VERSION_MAJOR;
-    if (minor)
-        *minor = ICK_VERSION_MINOR;
-    return buffer;
-}
-
-inline
-char * ickDiscoveryGetGitVersion() {
-    static char buffer[33];
-#ifdef GIT_VERSION
-#define STRINGIZE(X) #X
-#define GIT_STRING(X) STRINGIZE(X)
-    sprintf(buffer, "%s", GIT_STRING(GIT_VERSION));
-#endif
-    return buffer;
-}
-
 
 struct _upnp_device;
 
