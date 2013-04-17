@@ -1192,11 +1192,11 @@ enum ickMessage_communicationstate ickDeviceSendTargetedMsg(const char * targetU
             offset++;
         }
         if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_TARGETUUID) {
-            strcpy(LWS_SEND_BUFFER_PRE_PADDING + offset, targetUUID);
+            strcpy((char *)(newMessage->paddedData + LWS_SEND_BUFFER_PRE_PADDING + offset), targetUUID);
             offset += strlen(targetUUID) + 1;
         }
         if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID) {
-            strcpy(LWS_SEND_BUFFER_PRE_PADDING + offset, sourceUUID);
+            strcpy((char *)(newMessage->paddedData + LWS_SEND_BUFFER_PRE_PADDING + offset), sourceUUID);
             offset += strlen(targetUUID) + 1;
         }
         newMessage->next = NULL;
