@@ -222,7 +222,7 @@ char * ickDiscoveryGetVersion(int *major, int *minor) {
 }
 
 char * ickDiscoveryGetGitVersion() {
-    static char buffer[33];
+    static char buffer[65];
 #ifdef GIT_VERSION
 #define STRINGIZE(X) #X
 #define GIT_STRING(X) STRINGIZE(X)
