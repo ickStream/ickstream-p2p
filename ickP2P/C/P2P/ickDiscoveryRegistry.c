@@ -664,6 +664,7 @@ void _ick_receive_notify(const struct _upnp_device * device, enum ickDiscovery_c
     switch (cmd) {
         case ICKDISCOVERY_ADD_DEVICE: {
             // What do we do if the element does already exist??? For now: overwrite it. It will not be freed but handling it is the responsibility if the upnp layer anyway.
+            debug("ICKDISCOVERY_ADD_DEVICE: %s\n", iDev->UUID);
             iDev->element = (void *)device;
             iDev->type |= devType;
             _ICK_DEVICE_SET_VALUE_LOCKED(iDev, UUID, UUID);
@@ -717,6 +718,7 @@ void _ick_receive_notify(const struct _upnp_device * device, enum ickDiscovery_c
         }
             break;
         case ICKDISCOVERY_REMOVE_DEVICE:
+            debug("ICKDISCOVERY_REMOVE_DEVICE: %s\n", iDev->UUID);
             _ick_execute_DeviceCallback(iDev, ICKDISCOVERY_REMOVE_DEVICE);
             
             int valid = 0;

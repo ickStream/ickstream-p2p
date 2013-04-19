@@ -155,6 +155,7 @@ static int _ick_execute_MessageCallback (char * sourceUUID,
                                          size_t size,
                                          enum ickMessage_communicationstate state) {
     unsigned char * data = vdata;
+    sourceUUID = strdup(sourceUUID);
     ickDiscoveryProtocolLevel_t protocolLevel = data[0];
     ickDeviceServicetype_t service = ICKDEVICE_ANY;
     char * targetUUID = _ick_p2pDiscovery->UUID;
@@ -174,6 +175,7 @@ static int _ick_execute_MessageCallback (char * sourceUUID,
             size -= len - 1;
         }
         if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID) {
+            free(sourceUUID);
             sourceUUID = strdup((char *)data);
             int len = strlen(sourceUUID);
             data += len + 1;
@@ -187,16 +189,20 @@ static int _ick_execute_MessageCallback (char * sourceUUID,
         cbTemp->callback(sourceUUID, (char *)data, size, state, service, targetUUID);
         cbTemp = cbTemp->next;
     }
+    free(sourceUUID);
+    if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_TARGETUUID)
+        free(targetUUID);
     return 0;
 }
 
 // debug handling
 
-void _ick_debug_handleSpecialCommands(const char * UUID,
-                                      const void * message,
+void _ick_debug_handleSpecialCommands(const char * sourceUUID,
+                                      const char * message,
                                       size_t message_size,
                                       enum ickMessage_communicationstate state,
-                                      enum ickDevice_servicetype service) {
+                                      enum ickDevice_servicetype service,
+                                      const char * targetUUID) {
     if (state != ICKMESSAGE_INCOMING_DATA)
         return;
 
@@ -207,7 +213,7 @@ void _ick_debug_handleSpecialCommands(const char * UUID,
         memcpy(newString, message, 11);
         memcpy(newString + 11, "debugReply", 10);
         memcpy(newString + 21, message + 22, message_size - 22);
-        ickDeviceSendMsg(UUID, newString, message_size - 1);
+        ickDeviceSendMsg(sourceUUID, newString, message_size - 1);
         free(newString);
         return;
     }
@@ -1197,7 +1203,7 @@ enum ickMessage_communicationstate ickDeviceSendTargetedMsg(const char * targetU
         }
         if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID) {
             strcpy((char *)(newMessage->paddedData + LWS_SEND_BUFFER_PRE_PADDING + offset), sourceUUID);
-            offset += strlen(targetUUID) + 1;
+            offset += strlen(sourceUUID) + 1;
         }
         newMessage->next = NULL;
         newMessage->size = message_size + protocolBytes + zero;
