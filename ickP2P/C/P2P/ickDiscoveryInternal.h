@@ -81,8 +81,8 @@ struct _ick_callback_list {
 typedef enum ickDiscovery_protocol_level {
     ICKPROTOCOL_P2P_GENERIC             = 0,    // first protocol version or unknown
     ICKPROTOCOL_P2P_INCLUDE_SERVICETYPE = 0x1,  // include target servicetype with messages
-    ICKPROTOCOL_P2P_INCLUDE_TARGETUUID        = 0x2,  // include target UUID with services (when supporting more than one UUID per websocket)
-    ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID  = 0x4,  // include source UUID with services (when supporting more than one UUID per websocket)
+    ICKPROTOCOL_P2P_INCLUDE_TARGETUUID  = 0x4,  // include target UUID with services (when supporting more than one UUID per websocket)
+    ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID  = 0x8,  // include source UUID with services (when supporting more than one UUID per websocket)
     ICKPROTOCOL_P2P_CURRENT_SUPPORT     = 0x1,  // that's what we currently support: including the service type
     ICKPROTOCOL_P2P_DEFAULT             = 0,    // that's what we curreently use as the default
     ICKPROTOCOL_P2P_INVALID             = 0xe0   // mask to find illegal codes. Used to be backward compatible with previous implementations usually starting messages with "{" or "[". Should be deprecated until launch, then we can use 8 bits for protocol properties

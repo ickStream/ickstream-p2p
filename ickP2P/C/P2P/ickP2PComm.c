@@ -158,9 +158,9 @@ static int _ick_execute_MessageCallback (char * sourceUUID,
     sourceUUID = strdup(sourceUUID);
     ickDiscoveryProtocolLevel_t protocolLevel = data[0];
     ickDeviceServicetype_t service = ICKDEVICE_ANY;
-    char * targetUUID = _ick_p2pDiscovery->UUID;
+    char * targetUUID = strdup(_ick_p2pDiscovery->UUID);
     
-    if (!(protocolLevel & ICKPROTOCOL_P2P_INVALID)) { // check for masked bits
+    if (!(protocolLevel & ICKPROTOCOL_P2P_INVALID)) { // check for masked bits. TODO: remove
         data++;
         size -=2;   // trailing 0 and protocol
         if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SERVICETYPE) {
@@ -169,6 +169,7 @@ static int _ick_execute_MessageCallback (char * sourceUUID,
             size--;
         }
         if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_TARGETUUID) {
+            free(targetUUID);
             targetUUID = strdup((char *)data);
             int len = strlen(targetUUID);
             data += len + 1;
@@ -190,8 +191,7 @@ static int _ick_execute_MessageCallback (char * sourceUUID,
         cbTemp = cbTemp->next;
     }
     free(sourceUUID);
-    if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_TARGETUUID)
-        free(targetUUID);
+    free(targetUUID);
     return 0;
 }
 
@@ -1153,13 +1153,14 @@ enum ickMessage_communicationstate ickDeviceSendTargetedMsg(const char * targetU
         }
         int protocolBytes = 0;
         int zero = 0;
+        
         unsigned char protocolLevel = ICKPROTOCOL_P2P_CURRENT_SUPPORT;
         // generic protocol only? If no, we will include a protocol level with the message, no matter whether it's used or not
-        if (device->protocolLevel != ICKPROTOCOL_P2P_GENERIC) {
-            protocolBytes ++;    // include protocol levl
-            zero = 1;            //and trailing 0
-        } else
+        if (device->protocolLevel == ICKPROTOCOL_P2P_GENERIC)
             protocolLevel = ICKPROTOCOL_P2P_GENERIC;
+        protocolBytes ++;    // include protocol levl
+        zero = 1;            //and trailing 0
+            
         // support servicetype?
         if ((protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SERVICETYPE) &&
             (device->protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SERVICETYPE))
@@ -1173,7 +1174,7 @@ enum ickMessage_communicationstate ickDeviceSendTargetedMsg(const char * targetU
             protocolBytes += strlen(targetUUID) + 1;  // include UUID
         if ((protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID) &&
             (device->protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID) &&
-            targetUUID)
+            sourceUUID)
             protocolBytes += strlen(sourceUUID) + 1;  // include UUID
         
         unsigned char * data = malloc(LWS_SEND_BUFFER_PRE_PADDING +
@@ -1188,23 +1189,31 @@ enum ickMessage_communicationstate ickDeviceSendTargetedMsg(const char * targetU
         }
         newMessage->paddedData = data;
         memcpy(newMessage->paddedData + LWS_SEND_BUFFER_PRE_PADDING + protocolBytes, message, message_size);
-        if (protocolBytes) { // not level! if supported, even communicate level 0 plus add trailing 0!
-            newMessage->paddedData[LWS_SEND_BUFFER_PRE_PADDING] = protocolLevel;
-            newMessage->paddedData[LWS_SEND_BUFFER_PRE_PADDING + protocolBytes + message_size] = 0; // add trailing 0;
-        }
         int offset = 1;
         if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SERVICETYPE) {
             newMessage->paddedData[LWS_SEND_BUFFER_PRE_PADDING + offset] = (unsigned char)service_type;
             offset++;
         }
+        
         if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_TARGETUUID) {
-            strcpy((char *)(newMessage->paddedData + LWS_SEND_BUFFER_PRE_PADDING + offset), targetUUID);
-            offset += strlen(targetUUID) + 1;
+            if (targetUUID) {
+                strcpy((char *)(newMessage->paddedData + LWS_SEND_BUFFER_PRE_PADDING + offset), targetUUID);
+                offset += strlen(targetUUID) + 1;
+            } else
+                protocolLevel &= ~ICKPROTOCOL_P2P_INCLUDE_TARGETUUID;
         }
         if (protocolLevel & ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID) {
-            strcpy((char *)(newMessage->paddedData + LWS_SEND_BUFFER_PRE_PADDING + offset), sourceUUID);
-            offset += strlen(sourceUUID) + 1;
+            if (sourceUUID) {
+                strcpy((char *)(newMessage->paddedData + LWS_SEND_BUFFER_PRE_PADDING + offset), sourceUUID);
+                offset += strlen(sourceUUID) + 1;
+            } else
+                protocolLevel &= ~ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID;
         }
+            //        if (protocolBytes) { // not level! if supported, even communicate level 0 plus add trailing 0!
+        newMessage->paddedData[LWS_SEND_BUFFER_PRE_PADDING] = protocolLevel;
+        newMessage->paddedData[LWS_SEND_BUFFER_PRE_PADDING + protocolBytes + message_size] = 0; // add trailing 0;
+                                                                                                    //        }
+        
         newMessage->next = NULL;
         newMessage->size = message_size + protocolBytes + zero;
         
