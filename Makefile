@@ -30,7 +30,7 @@ MKDEPFLAGS	= -Y
 
 # Source files to process
 ICKP2PSRCS      = ickP2P/C/P2P/ickDiscovery.c  ickP2P/C/P2P/ickDiscoveryRegistry.c  \
-                  ickP2P/C/P2P/ickP2PComm.c
+                  ickP2P/C/P2P/ickP2PComm.c ickP2P/C/P2P/logutils.c
 MINIUPNPSRCS    = miniupnp/miniupnpc/connecthostport.c miniupnp/miniupnpc/miniwget.c \
                   miniupnp/miniupnpc/minixml.c miniupnp/miniupnpc/receivedata.c
 MINISSDPDSRCS   = miniupnp/minissdpd/openssdpsocket.c miniupnp/minissdpd/upnputils.c
@@ -125,11 +125,13 @@ cleanall: clean
 
 ickP2P/C/P2P/ickDiscovery.o: ickP2P/C/P2P/ickDiscovery.h
 ickP2P/C/P2P/ickDiscovery.o: ickP2P/C/P2P/ickDiscoveryInternal.h
+ickP2P/C/P2P/ickDiscovery.o: ickP2P/C/P2P/logutils.h
 ickP2P/C/P2P/ickDiscovery.o: libwebsockets/lib/libwebsockets.h
 ickP2P/C/P2P/ickDiscovery.o: miniupnp/minissdpd/openssdpsocket.h
 ickP2P/C/P2P/ickDiscovery.o: miniupnp/minissdpd/upnputils.h
 ickP2P/C/P2P/ickDiscoveryRegistry.o: ickP2P/C/P2P/ickDiscovery.h
 ickP2P/C/P2P/ickDiscoveryRegistry.o: ickP2P/C/P2P/ickDiscoveryInternal.h
+ickP2P/C/P2P/ickDiscoveryRegistry.o: ickP2P/C/P2P/logutils.h
 ickP2P/C/P2P/ickDiscoveryRegistry.o: libwebsockets/lib/libwebsockets.h
 ickP2P/C/P2P/ickDiscoveryRegistry.o: miniupnp/miniupnpc/miniwget.h
 ickP2P/C/P2P/ickDiscoveryRegistry.o: miniupnp/miniupnpc/declspec.h
@@ -138,6 +140,8 @@ ickP2P/C/P2P/ickDiscoveryRegistry.o: jansson/src/jansson.h
 ickP2P/C/P2P/ickP2PComm.o: libwebsockets/lib/libwebsockets.h
 ickP2P/C/P2P/ickP2PComm.o: ickP2P/C/P2P/ickDiscovery.h
 ickP2P/C/P2P/ickP2PComm.o: ickP2P/C/P2P/ickDiscoveryInternal.h
+ickP2P/C/P2P/ickP2PComm.o: ickP2P/C/P2P/logutils.h
+ickP2P/C/P2P/logutils.o: ickP2P/C/P2P/logutils.h
 miniupnp/miniupnpc/connecthostport.o: miniupnp/miniupnpc/connecthostport.h
 miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/miniwget.h
 miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/declspec.h
