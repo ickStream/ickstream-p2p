@@ -64,6 +64,29 @@ int ickDeviceRegisterDeviceCallback(ickDiscovery_device_callback_t callback) {
     return 0;
 }
 
+int ickDeviceRemoveDeviceCallback(ickDiscovery_device_callback_t callback) {
+    struct _ickDeviceCallbacks * cbTemp = _ick_DeviceCallbacks;
+    
+    if (cbTemp->callback == callback) {
+        _ick_DeviceCallbacks = cbTemp->next;
+        usleep(10000); // try to make sure we don't use freed callback
+        free(cbTemp);
+        return 0;
+    }
+    
+    while (cbTemp->next)
+        if (cbTemp->next->callback == callback) {
+            struct _ickDeviceCallbacks * cbTemp1 = cbTemp->next;
+            cbTemp->next = cbTemp1->next;
+            usleep(10000); // try to make sure we don't use freed callback
+            free(cbTemp1);
+            return 0;
+        } else
+            (cbTemp = cbTemp->next);
+    
+    return -1;
+}
+
 
 static int _ick_execute_DeviceCallback (struct _ick_device_struct * device, enum ickDiscovery_command change) {
     struct _ickDeviceCallbacks * cbTemp = _ick_DeviceCallbacks;

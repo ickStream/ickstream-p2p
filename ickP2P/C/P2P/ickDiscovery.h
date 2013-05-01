@@ -210,6 +210,11 @@ extern "C" {
     //
     int ickDeviceRegisterDeviceCallback(ickDiscovery_device_callback_t callback);
     
+    //
+    // remove device callback
+    //
+    int ickDeviceRemoveDeviceCallback(ickDiscovery_device_callback_t callback);
+
     
     typedef enum ickMessage_communicationstate {
         ICKMESSAGE_SUCCESS          = 0,
