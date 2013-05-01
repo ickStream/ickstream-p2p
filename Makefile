@@ -55,16 +55,20 @@ ZLIBINCLUDES     =
 INCLUDES         = $(ZLIBINCLUDES)
 
 # How to compile c source files
-%.o: %.c
+%.o: %.c Makefile
 	$(CC) $(INTERNALINCLUDES) $(INCLUDES) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
 
 # Default rule: make all
 all:  $(GENHEADERS) $(INCLUDEDIR) $(LIBDIR)/$(LIBNAME).a 
 
+# Variant: make for debugging
+debug: DEBUGFLAGS = -g -DDEBUG
+debug: $(GENHEADERS) $(INCLUDEDIR) $(LIBDIR)/$(LIBNAME).a
+ 
 
 # Provide public headers
-$(INCLUDEDIR): $(PUBLICHEADERS)
+$(INCLUDEDIR): $(PUBLICHEADERS) Makefile
 	@echo '*************************************************************'
 	@echo "Collecting public headers:"
 	@mkdir -p $(INCLUDEDIR)
@@ -125,24 +129,26 @@ cleanall: clean
 
 ickP2P/C/P2P/ickDiscovery.o: ickP2P/C/P2P/ickDiscovery.h
 ickP2P/C/P2P/ickDiscovery.o: ickP2P/C/P2P/ickDiscoveryInternal.h
-ickP2P/C/P2P/ickDiscovery.o: ickP2P/C/P2P/logutils.h
 ickP2P/C/P2P/ickDiscovery.o: libwebsockets/lib/libwebsockets.h
+ickP2P/C/P2P/ickDiscovery.o: ickP2P/C/P2P/logutils.h
 ickP2P/C/P2P/ickDiscovery.o: miniupnp/minissdpd/openssdpsocket.h
 ickP2P/C/P2P/ickDiscovery.o: miniupnp/minissdpd/upnputils.h
 ickP2P/C/P2P/ickDiscoveryRegistry.o: ickP2P/C/P2P/ickDiscovery.h
 ickP2P/C/P2P/ickDiscoveryRegistry.o: ickP2P/C/P2P/ickDiscoveryInternal.h
-ickP2P/C/P2P/ickDiscoveryRegistry.o: ickP2P/C/P2P/logutils.h
 ickP2P/C/P2P/ickDiscoveryRegistry.o: libwebsockets/lib/libwebsockets.h
+ickP2P/C/P2P/ickDiscoveryRegistry.o: ickP2P/C/P2P/logutils.h
 ickP2P/C/P2P/ickDiscoveryRegistry.o: miniupnp/miniupnpc/miniwget.h
 ickP2P/C/P2P/ickDiscoveryRegistry.o: miniupnp/miniupnpc/declspec.h
 ickP2P/C/P2P/ickDiscoveryRegistry.o: miniupnp/miniupnpc/minixml.h
 ickP2P/C/P2P/ickDiscoveryRegistry.o: jansson/src/jansson.h
+ickP2P/C/P2P/ickDiscoveryRegistry.o: jansson/src/jansson_config.h
 ickP2P/C/P2P/ickP2PComm.o: libwebsockets/lib/libwebsockets.h
 ickP2P/C/P2P/ickP2PComm.o: ickP2P/C/P2P/ickDiscovery.h
 ickP2P/C/P2P/ickP2PComm.o: ickP2P/C/P2P/ickDiscoveryInternal.h
 ickP2P/C/P2P/ickP2PComm.o: ickP2P/C/P2P/logutils.h
-ickP2P/C/P2P/logutils.o: ickP2P/C/P2P/logutils.h
+ickP2P/C/P2P/logutils.o: ickP2P/C/P2P/ickDiscovery.h
 miniupnp/miniupnpc/connecthostport.o: miniupnp/miniupnpc/connecthostport.h
+miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/miniupnpcstrings.h
 miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/miniwget.h
 miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/declspec.h
 miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/connecthostport.h
@@ -172,24 +178,29 @@ libwebsockets/lib/extension-deflate-stream.o: libwebsockets/lib/extension-deflat
 libwebsockets/lib/extension-x-google-mux.o: libwebsockets/lib/private-libwebsockets.h
 libwebsockets/lib/extension-x-google-mux.o: libwebsockets/lib/libwebsockets.h
 libwebsockets/lib/extension-x-google-mux.o: libwebsockets/lib/extension-x-google-mux.h
-jansson/src/value.o: jansson/src/jansson.h jansson/src/hashtable.h
-jansson/src/value.o: jansson/src/jansson_private.h jansson/src/strbuffer.h
-jansson/src/value.o: jansson/src/utf.h
-jansson/src/memory.o: jansson/src/jansson.h jansson/src/jansson_private.h
-jansson/src/memory.o: jansson/src/hashtable.h jansson/src/strbuffer.h
-jansson/src/dump.o: jansson/src/jansson.h jansson/src/jansson_private.h
-jansson/src/dump.o: jansson/src/hashtable.h jansson/src/strbuffer.h
-jansson/src/dump.o: jansson/src/utf.h
+jansson/src/value.o: jansson/src/jansson.h jansson/src/jansson_config.h
+jansson/src/value.o: jansson/src/hashtable.h jansson/src/jansson_private.h
+jansson/src/value.o: jansson/src/strbuffer.h jansson/src/utf.h
+jansson/src/memory.o: jansson/src/jansson.h jansson/src/jansson_config.h
+jansson/src/memory.o: jansson/src/jansson_private.h jansson/src/hashtable.h
+jansson/src/memory.o: jansson/src/strbuffer.h
+jansson/src/dump.o: jansson/src/jansson.h jansson/src/jansson_config.h
+jansson/src/dump.o: jansson/src/jansson_private.h jansson/src/hashtable.h
+jansson/src/dump.o: jansson/src/strbuffer.h jansson/src/utf.h
+jansson/src/hashtable.o: jansson/src/jansson_config.h
 jansson/src/hashtable.o: jansson/src/jansson_private.h jansson/src/jansson.h
 jansson/src/hashtable.o: jansson/src/hashtable.h jansson/src/strbuffer.h
 jansson/src/strbuffer.o: jansson/src/jansson_private.h jansson/src/jansson.h
-jansson/src/strbuffer.o: jansson/src/hashtable.h jansson/src/strbuffer.h
+jansson/src/strbuffer.o: jansson/src/jansson_config.h jansson/src/hashtable.h
+jansson/src/strbuffer.o: jansson/src/strbuffer.h
 jansson/src/utf.o: jansson/src/utf.h
-jansson/src/pack_unpack.o: jansson/src/jansson.h
+jansson/src/pack_unpack.o: jansson/src/jansson.h jansson/src/jansson_config.h
 jansson/src/pack_unpack.o: jansson/src/jansson_private.h
 jansson/src/pack_unpack.o: jansson/src/hashtable.h jansson/src/strbuffer.h
 jansson/src/pack_unpack.o: jansson/src/utf.h
 jansson/src/error.o: jansson/src/jansson_private.h jansson/src/jansson.h
-jansson/src/error.o: jansson/src/hashtable.h jansson/src/strbuffer.h
+jansson/src/error.o: jansson/src/jansson_config.h jansson/src/hashtable.h
+jansson/src/error.o: jansson/src/strbuffer.h
 jansson/src/strconv.o: jansson/src/jansson_private.h jansson/src/jansson.h
-jansson/src/strconv.o: jansson/src/hashtable.h jansson/src/strbuffer.h
+jansson/src/strconv.o: jansson/src/jansson_config.h jansson/src/hashtable.h
+jansson/src/strconv.o: jansson/src/strbuffer.h

@@ -4,7 +4,7 @@ Name            : -
 
 Source File     : utils.h
 
-Description     : Main include file for fifo.c 
+Description     : Main include file for logutils.c
 
 Comments        : Posix log levels:
                    LOG_EMERG    0   system is unusable
@@ -18,7 +18,7 @@ Comments        : Posix log levels:
 
 Date            : 08.03.2013 
 
-Updates         : -
+Updates         : 21.04.2013 adapted for ickstream-p2p    //MAF
 
 Author          : //MAF 
 
@@ -54,54 +54,30 @@ Remarks         : -
 \************************************************************************/
 
 
-#ifndef __UTILS_H
-#define __UTILS_H
+#ifndef __LOGUTILS_H
+#define __LOGUTILS_H
 
 /*=========================================================================*\
 	Includes needed by definitions from this file
 \*=========================================================================*/
-#include <stdio.h>
-#include <syslog.h>
-#include <jansson.h>
-
+#include <sys/syslog.h>
 #include "ickDiscovery.h"
 
 /*=========================================================================*\
        Macro and type definitions 
 \*=========================================================================*/
 
-#ifndef MAX
-#define MAX(a,b) ((a)>(b)?(a):(b))
-#endif
-#ifndef MIN
-#define MIN(a,b) ((a)<(b)?(a):(b))
-#endif
-
-#define srvmsg(prio, args...) _srvlog( NULL, 0, prio, args )
-
-#ifdef ICK_DEBUG
-#define DBGMSG( args... ) _srvlog( __FILE__, __LINE__, LOG_DEBUG, args )
-//#define DBGMSG( args... ) printf( args );
-#define DBGMEM( title, pointer, size ) _srvdump( __FILE__, __LINE__, LOG_DEBUG, title, pointer, size )
-#ifdef __linux__
-#include <sys/prctl.h>
-#define PTHREADSETNAME( name )  prctl( PR_SET_NAME, (name) )
-#endif
-#else
-#define DBGMSG( args... ) { ;}
-#define DBGMEM( title, pointer, size  ) { ;}
-#endif
-
-
+// Define the debug macro. This could also used in libwebsockets...
 #ifdef DEBUG
-#define debug( args... ) _srvlog( __FILE__, __LINE__, LOG_DEBUG, args )
+ #define debug( args... ) ((*_icklog)( __FILE__, __LINE__, LOG_DEBUG, args ))
 
-/*static inline
- void debug(const char *format, ...)
- {
- va_list ap;
- va_start(ap, format); vfprintf(stderr, format, ap); va_end(ap);
- }*/
+/*static inline void debug(const char *format, ...)
+{
+//  va_list ap;
+//  va_start(ap, format); vfprintf(stderr, format, ap); va_end(ap);
+  (*_icklog)( __FILE__, __LINE__, LOG_DEBUG, format )
+} */
+
 #else
 #define debug( args... ) { ;}
 
@@ -111,60 +87,35 @@ Remarks         : -
  }*/
 #endif
 
+// Some convenience macros
+#define logerr( args... )     ((*_icklog)( __FILE__, __LINE__, LOG_ERR, args ))
+#define logwarn( args... )    ((*_icklog)( __FILE__, __LINE__, LOG_WARNING, args ))
+#define lognotice( args... )  ((*_icklog)( __FILE__, __LINE__, LOG_NOTICE, args ))
+#define loginfo( args... )    ((*_icklog)( __FILE__, __LINE__, LOG_INFO, args ))
 
-
-#ifndef PTHREADSETNAME
-#define PTHREADSETNAME( name )  { ;}
-#endif
-
+// Define location macros if not supplied by preprocessor
 #ifndef __LINE__
 #define __LINE__ 0
 #endif
 
 #ifndef __FILE__
-#define __FILE__ ""
+#define __FILE__ NULL
 #endif
 
-
-#define logerr( args... )     _srvlog( __FILE__, __LINE__, LOG_ERR, args )
-#define logwarn( args... )    _srvlog( __FILE__, __LINE__, LOG_WARNING, args )
-#define lognotice( args... )  _srvlog( __FILE__, __LINE__, LOG_NOTICE, args )
-#define loginfo( args... )    _srvlog( __FILE__, __LINE__, LOG_INFO, args )
-
-#if MEMDEBUG
-#define Sfree(p) {DBGMSG("free %p", (p)); if(p)free(p); (p)=NULL;}
-#define malloc(s)    _smalloc( __FILE__, __LINE__, (s) )
-#define calloc(n,s)  _scalloc( __FILE__, __LINE__, (n), (s) )
-#define realloc(p,s) _smalloc( __FILE__, __LINE__, (p), (s) )
-#define strdup( s )  _sstrdup( __FILE__, __LINE__, (s) )
-#else
-#define Sfree(p) {if(p)free(p); (p)=NULL;}
-#endif
 
 /*=========================================================================*\
        Global symbols 
 \*=========================================================================*/
-extern int  streamloglevel;
-extern int  sysloglevel;
-
-extern ickDiscovery_log_facility_t * _srvlog;
+extern ickDiscovery_log_facility_t *_icklog;
 
 
 /*========================================================================*\
    Prototypes
 \*========================================================================*/
-double srvtime( void );
-long   rndInteger( long min, long max );
-int    json_object_merge( json_t *target, json_t *source );
+void __icksrvlog( const char *file, int line, int prio, const char *fmt, ... );
 
-void   __srvlog( const char *file, int line, int prio, const char *fmt, ... );
-void   _srvdump( const char *file, int line, int prio, const char *title, const void *ptr, size_t size );
-void  *_smalloc( const char *file, int line, size_t s );
-void  *_scalloc( const char *file, int line, size_t n, size_t s );
-void  *_srealloc( const char *file, int line, void *p, size_t s );
-char  *_sstrdup( const char *file, int line, const char *s );
 
-#endif  /* __UTILS_H */
+#endif  /* __LOGUTILS_H */
 
 
 /*========================================================================*\
