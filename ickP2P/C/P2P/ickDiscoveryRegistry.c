@@ -124,6 +124,34 @@ int _ickDeviceCheck(struct _ick_device_struct * cDev) {
 }
 
 
+#define  DEFAULT_DEVICE_CNT 32
+
+//
+// return list of device UUIDs
+// NOTE: The list (not the UUIDs) needs to be freed by the caller!
+//
+char ** ickDeviceList(ickDeviceServicetype_t type) {
+    char ** returnlist = malloc(DEFAULT_DEVICE_CNT * sizeof(char *));
+    
+    pthread_mutex_lock(&_device_mutex);
+    struct _ick_device_struct * iDev = _ickStreamDevices;
+    int cnt = 0;
+    
+    while (iDev) {
+        if (iDev->UUID && (iDev->type & type)) {
+            if ((cnt + 2) > DEFAULT_DEVICE_CNT)
+                returnlist = realloc(returnlist, (cnt + 2) * sizeof(char *));
+            returnlist[cnt] = iDev->UUID;
+            cnt++;
+        }
+        iDev = iDev->next;
+    }
+    pthread_mutex_unlock(&_device_mutex);
+    returnlist[cnt] = NULL;
+    return returnlist;
+}
+
+
 //
 // Debug info
 //
@@ -304,7 +332,7 @@ char * ickDeviceGetRemoteDebugInfoForDevice(char * UUID) {
 //
 
 void ickDiscoverySetLogFacility(ickDiscovery_log_facility_t * function) {
-    _srvlog = function;
+    _icklog = function;
 }
 
 

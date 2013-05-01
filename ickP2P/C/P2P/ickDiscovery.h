@@ -177,8 +177,9 @@ extern "C" {
     
     //
     // List available devices
-    // Return value is a list of char * UUID values
+    // Return value is an array of char * UUID values
     // type valie is a value of ORed together types, all of which have to match the type criteria of a device to be returned
+    // NOTE: this array (not the UUIDs) needs to be freed after use by the caller!
     //
     char ** ickDeviceList(ickDeviceServicetype_t type);
     
