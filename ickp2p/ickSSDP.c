@@ -722,6 +722,8 @@ static void _ickDeviceExpireCb( const ickTimer_t *timer, void *data, int tag )
   upnp_device_t  *device = data;
   ickDiscovery_t *dh     = device->dh;
 
+  debug( "_ickDeviceExpireCb: %s", device->uuid );
+
 /*------------------------------------------------------------------------*\
     Lock device list
 \*------------------------------------------------------------------------*/

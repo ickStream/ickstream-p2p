@@ -50,6 +50,7 @@ Remarks         : -
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
 #include <pthread.h>
 #include <time.h>
@@ -193,6 +194,16 @@ ickErrcode_t ickP2pInit( const char *deviceName, const char *deviceUuid, int liv
   _ickLib->upnpConfigId = (configId>0) ? configId : (long)time(NULL);
 
 /*------------------------------------------------------------------------*\
+    Create pipe for poll breaking
+\*------------------------------------------------------------------------*/
+  rc = pipe( _ickLib->pollBreakPipe );
+  if( rc ) {
+    logerr( "ickP2pInit: Unable to start main thread: %s", strerror(errno) );
+    _ickLibDestruct( &_ickLib );
+    return ICKERR_NOTHREAD;
+  }
+
+/*------------------------------------------------------------------------*\
     Create thread for ickstream communication mainloop
 \*------------------------------------------------------------------------*/
   rc = pthread_create( &_ickThread, NULL, _ickMainThread, &_ickLib );
@@ -279,6 +290,7 @@ ickErrcode_t ickP2pEnd( ickP2pEndCb_t callback )
 void _ickLibDestruct( _ickP2pLibContext_t **icklibptr )
 {
   struct _cb_list *walk;
+  int              i;
   debug( "_ickLibDestruct: %p", *icklibptr );
 
 /*------------------------------------------------------------------------*\
@@ -313,6 +325,14 @@ void _ickLibDestruct( _ickP2pLibContext_t **icklibptr )
 \*------------------------------------------------------------------------*/
   pthread_mutex_destroy( &(*icklibptr)->mutex );
   pthread_cond_destroy( &(*icklibptr)->condIsReady );
+
+/*------------------------------------------------------------------------*\
+    Close help pipe for breaking polls
+\*------------------------------------------------------------------------*/
+  for( i=0; i<2; i++ ) {
+    if( _ickLib->pollBreakPipe[i]>=0 )
+      close( _ickLib->pollBreakPipe[i] );
+  }
 
 /*------------------------------------------------------------------------*\
     Free context descriptor

@@ -83,6 +83,7 @@ typedef struct {
   long              upnpBootId;
   long              upnpConfigId;
   struct _cb_list  *deviceCbList;
+  int               pollBreakPipe[2];
   ickP2pEndCb_t     cbEnd;
 } _ickP2pLibContext_t;
 

@@ -30,7 +30,7 @@ GITVERSION      = "undef"
 
 AR              = ar
 CC              = cc
-CFLAGS          = -Wall -Wno-pragmas -rdynamic -DLWS_NO_FORK -DGIT_VERSION=$(GITVERSION) -D_GNU_SOURCE
+CFLAGS          = -Wall -rdynamic -DLWS_NO_FORK -DGIT_VERSION=$(GITVERSION) -D_GNU_SOURCE
 MKDEPFLAGS	= -Y
 
 # Source files to process

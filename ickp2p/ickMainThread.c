@@ -50,8 +50,10 @@ Remarks         : -
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
 #include <pthread.h>
+#include <poll.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -100,7 +102,6 @@ static pthread_mutex_t   _timerListMutex = PTHREAD_MUTEX_INITIALIZER;
 static void _ickTimerLink( ickTimer_t *timer );
 static int _ickTimerUnlink( ickTimer_t *timer );
 
-
 /*=========================================================================*\
   Ickstream main communication thread
 \*=========================================================================*/
@@ -108,16 +109,24 @@ void *_ickMainThread( void *arg )
 {
   _ickP2pLibContext_t *icklib = *(_ickP2pLibContext_t**)arg;
   char                *buffer;
+  struct pollfd       *fds;
+  nfds_t               sfds = 10;
 
   debug( "ickp2p main thread: starting..." );
   PTHREADSETNAME( "ickP2P" );
 
 /*------------------------------------------------------------------------*\
-    Allocate buffer
+    Allocate buffers
 \*------------------------------------------------------------------------*/
   buffer = malloc( ICKDISCOVERY_HEADER_SIZE_MAX );
   if( !buffer ) {
     logerr( "ickp2p main thread: out of memory" );
+    return NULL;
+  }
+  fds = calloc( sfds, sizeof(struct pollfd) );
+  if( !fds ) {
+    logerr( "ickp2p main thread: out of memory" );
+    Sfree( buffer );
     return NULL;
   }
 
@@ -134,11 +143,9 @@ void *_ickMainThread( void *arg )
     struct sockaddr address;
     socklen_t       addrlen = sizeof(address);
     ickDiscovery_t *walk;
-    int             maxsock;
-    struct timeval  timeout;
-    fd_set          readSet;
+    nfds_t          nfds = 0;
+    int             timeout;
     int             retval;
-    ssize_t         rcv_size;
 
 /*------------------------------------------------------------------------*\
     Execute all pending timers
@@ -179,91 +186,118 @@ void *_ickMainThread( void *arg )
 /*------------------------------------------------------------------------*\
     Calculate time interval to next timer
 \*------------------------------------------------------------------------*/
-    timeout.tv_sec  = ICKMAINLOOP_TIMEOUT_MS/1000;
-    timeout.tv_usec = (ICKMAINLOOP_TIMEOUT_MS%1000)*1000;
+    timeout  = ICKMAINLOOP_TIMEOUT_MS;
     if( _timerList ) {
-      long   ds, dus;
       struct timeval now;
       gettimeofday( &now, NULL );
 
-      // Do some portable high resolution time algebra
-      ds  = _timerList->time.tv_sec-now.tv_sec;
-      dus = _timerList->time.tv_usec-now.tv_usec;
-      if( dus<0 ) {
-        dus += 1000000L;
-        ds  -= 1;
-      }
+      timeout = (_timerList->time.tv_sec-now.tv_sec)*1000 +
+                (_timerList->time.tv_usec-now.tv_usec)/1000;
       // debug( "ickp2p main thread: timer: %ld, %ld ", _timerList->time.tv_sec, _timerList->time.tv_usec);
       // debug( "ickp2p main thread:   now: %ld, %ld ", now.tv_sec, now.tv_usec);
-      // debug( "ickp2p main thread: delta: %ld, %ld ", ds, dus);
-      debug( "ickp2p main thread: next timer %p in %fs",
-             _timerList, ds+dus/1000000.0 );
-      if( ds<0 ) {
-        timeout.tv_sec  = 0;
-        timeout.tv_usec = 0;
-      }
-      if( ds*1000+dus/1000<ICKMAINLOOP_TIMEOUT_MS ) {
-        timeout.tv_sec  = ds;
-        timeout.tv_usec = dus;
-      }
+      debug( "ickp2p main thread: next timer %p in %.3fs",
+             _timerList, timeout/1000.0 );
+      if( timeout<0 )
+        timeout = 0;
+      else if( timeout>ICKMAINLOOP_TIMEOUT_MS )
+        timeout  = ICKMAINLOOP_TIMEOUT_MS;
     }
     _ickTimerListUnlock();
 
 /*------------------------------------------------------------------------*\
-    Check for incoming SSDP messages on all active SSDP sockets
+    fds[0] is always the help pipe to break the poll on timer updates
 \*------------------------------------------------------------------------*/
-    FD_ZERO( &readSet );
-    maxsock = 0;
+    fds[0].fd     = icklib->pollBreakPipe[0];
+    fds[0].events = POLLIN;
+    nfds          = 1;
+
+/*------------------------------------------------------------------------*\
+    Collect all SSDP sockets from discovery handlers
+\*------------------------------------------------------------------------*/
     pthread_mutex_lock( &_ickDiscoveryHandlerListMutex );
     for( walk=_ickDiscoveryHandlerList; walk; walk=walk->next ) {
-      FD_SET( walk->socket, &readSet );
-      if( walk->socket )
-        maxsock = walk->socket;
+      if( nfds>=sfds ) {
+        sfds += 5;
+        fds = realloc( fds, sfds*sizeof(struct pollfd) );
+        if( !fds )
+          break;
+      }
+      fds[nfds].fd = walk->socket;
+      fds[nfds].events = POLLIN;
+      nfds++;
     }
     pthread_mutex_unlock( &_ickDiscoveryHandlerListMutex );
+    if( !fds ) {
+      logerr( "ickp2p main thread: out of memory." );
+      break;
+    }
 
-    // Check for data
-    retval = select( maxsock+1, &readSet, NULL, NULL, &timeout );
+/*------------------------------------------------------------------------*\
+    Poll all sockets
+\*------------------------------------------------------------------------*/
+    debug( "ickp2p main thread: polling %d sockets (timeout %.3fs)...",
+            nfds, timeout/1000.0 );
+    retval = poll( fds, nfds, timeout );
     if( retval<0 ) {
-      logerr( "ickp2p main thread: select failed (%s).",
-               strerror(errno) );
+      logerr( "ickp2p main thread: poll failed (%s).", strerror(errno) );
       break;
     }
     if( !retval ) {
-      debug( "ickp2p main thread: timeout..." );
+      debug( "ickp2p main thread: timed out." );
       continue;
     }
     if( icklib->state==ICKLIB_TERMINATING )
       break;
 
-    // Process all data
+/*------------------------------------------------------------------------*\
+    Was there a timer update?
+\*------------------------------------------------------------------------*/
+    if( fds[0].revents&POLLIN ) {
+      ssize_t len = read( fds[0].fd, buffer, ICKDISCOVERY_HEADER_SIZE_MAX );
+      if( len<0 )
+        logerr( "ickp2p main thread (%s:%d): Unable to read poll break pipe: %s",
+                   walk->interface, walk->port, strerror(errno) );
+      else
+        debug( "ickp2p main thread: received break pipe signal (%dx)", (int)len );
+      if( retval==1 )
+        continue;
+    }
+
+/*------------------------------------------------------------------------*\
+    Process incoming data from SSDP ports
+\*------------------------------------------------------------------------*/
     pthread_mutex_lock( &_ickDiscoveryHandlerListMutex );
     for( walk=_ickDiscoveryHandlerList; walk; walk=walk->next ) {
-      if( !FD_ISSET(walk->socket,&readSet) )
+      int     i;
+      ssize_t len;
+
+      // Is this socket readable?
+      for( i=1; i<nfds&&fds[i].fd!=walk->socket; i++);
+      if( i==nfds || !(fds[i].revents&POLLIN) )
         continue;
 
       // receive data
       memset( buffer, 0, ICKDISCOVERY_HEADER_SIZE_MAX );
-      rcv_size = recvfrom( walk->socket, buffer, ICKDISCOVERY_HEADER_SIZE_MAX, 0, &address, &addrlen );
-      if( rcv_size<0 ) {
+      len = recvfrom( walk->socket, buffer, ICKDISCOVERY_HEADER_SIZE_MAX, 0, &address, &addrlen );
+      if( len<0 ) {
         logwarn( "ickp2p main thread (%s:%d): recvfrom failed (%s).",
                    walk->interface, walk->port, strerror(errno) );
         continue;
       }
-      if( !rcv_size ) {  // ?? Not possible for udp
+      if( !len ) {  // ?? Not possible for udp
         debug( "ickp2p main thread (%s:%d): disconnected.",
                walk->interface, walk->port );
         continue;
       }
 
       debug( "ickp2p main thread (%s:%d): received %ld bytes from %s:%d: \"%.*s\"",
-             walk->interface, walk->port, (long)rcv_size,
+             walk->interface, walk->port, (long)len,
              inet_ntoa(((const struct sockaddr_in *)&address)->sin_addr),
              ntohs(((const struct sockaddr_in *)&address)->sin_port),
-             rcv_size, buffer );
+             len, buffer );
 
       // Try to parse SSDP packet to internal representation
-      ickSsdp_t *ssdp = _ickSsdpParse( buffer, rcv_size, &address );
+      ickSsdp_t *ssdp = _ickSsdpParse( buffer, len, &address );
       if( !ssdp )
         continue;
 
@@ -291,6 +325,7 @@ void *_ickMainThread( void *arg )
     Clean up
 \*------------------------------------------------------------------------*/
   Sfree( buffer );
+  Sfree( fds );
 
 /*------------------------------------------------------------------------*\
     Clear all timer
@@ -322,8 +357,9 @@ void *_ickMainThread( void *arg )
 \*=========================================================================*/
 void _ickTimerListLock( void )
 {
-  debug ( "_ickTimerListLock: locked" );
+  debug ( "_ickTimerListLock: locking..." );
   pthread_mutex_lock( &_timerListMutex );
+  debug ( "_ickTimerListLock: locked" );
 }
 
 
@@ -535,10 +571,14 @@ static void _ickTimerLink( ickTimer_t *timer )
   timer->prev = last;
   if( last )
     last->next = timer;
-  else
+  else {
     _timerList = timer;
 
-  // fixme: signal main thread to terminate select()
+    // If root was changed write to help pipe to break main loop poll timer
+    debug( "_ickTimerLink: send break pipe signal" );
+    if( _ickLib  && write(_ickLib->pollBreakPipe[1],"",1)<0 )
+      logerr( "_ickTimerLink: Unable to write to poll break pipe: %s", strerror(errno) );
+  }
 
 /*------------------------------------------------------------------------*\
     That's all

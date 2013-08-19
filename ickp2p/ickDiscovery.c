@@ -489,8 +489,9 @@ void _ickDiscoveryExecDeviceCallback( ickDiscovery_t *dh, const upnp_device_t *d
 \*=========================================================================*/
 void _ickDiscoveryDeviceListLock( ickDiscovery_t *dh )
 {
-  debug ( "_ickDiscoveryDeviceLock (%s): locked", dh->interface );
+  debug ( "_ickDiscoveryDeviceLock (%s): locking...", dh->interface );
   pthread_mutex_lock( &dh->deviceListMutex );
+  debug ( "_ickDiscoveryDeviceLock (%s): locked", dh->interface );
 }
 
 
