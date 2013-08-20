@@ -55,11 +55,10 @@ Remarks         : -
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-
-
 #include "ickP2p.h"
 #include "ickP2pInternal.h"
 #include "logutils.h"
+#include "ickIpTools.h"
 
 
 /*=========================================================================*\
@@ -158,20 +157,118 @@ in_addr_t _ickIpGetIfAddr( const char *ifname )
     Get IP address via a virtual socket
 \*------------------------------------------------------------------------*/
   s = socket( PF_INET, SOCK_DGRAM, 0 );
-  if( s<0 )
+  if( s<0 ) {
+    logerr( "_ickIpGetIfAddr: could not get socket (%s)", strerror(errno) );
     return INADDR_NONE;
+  }
 
   memset( &ifr, 0, sizeof(struct ifreq) );
   strncpy( ifr.ifr_name, ifname, IFNAMSIZ );
 
   rc = ioctl( s, SIOCGIFADDR, &ifr, &ifrlen );
   if( rc<0 ) {
+    logerr( "_ickIpGetIfAddr: ioctl(SIOCGIFADDR) failes (%s)", strerror(errno) );
     close(s);
     return INADDR_NONE;
   }
   close( s );
 
   return ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr;
+}
+
+
+/*=========================================================================*\
+  Find a free TCP/IP port
+    If ifname is NULL, INADDR_ANY is used (all interfaces)
+    This will return a port out of the range 49,152 to 65,535
+    The use of this function is deprecated, use bind with port 0 instead.
+    Only used for libwebsocket, since that does not allow port 0.
+    return port on success or -1 on error
+\*=========================================================================*/
+int _ickIpGetFreePort( const char *ifname )
+{
+  int                s;
+  int                port;
+  struct sockaddr_in sockaddr;
+
+/*------------------------------------------------------------------------*\
+    Create virtual help socket
+\*------------------------------------------------------------------------*/
+  s = socket( AF_INET, SOCK_STREAM, 0 );
+  if( s<0 ) {
+    logerr( "_ickIpGetFreePort: could not get socket (%s)", strerror(errno) );
+    return -1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Set address to interface, port 0
+\*------------------------------------------------------------------------*/
+  memset( &sockaddr, 0, sizeof(sockaddr) );
+  sockaddr.sin_family      = AF_INET;
+  sockaddr.sin_port        = 0;
+  if( ifname )
+    sockaddr.sin_addr.s_addr = _ickIpGetIfAddr( ifname );
+  else
+    sockaddr.sin_addr.s_addr = INADDR_ANY;
+  if( sockaddr.sin_addr.s_addr==INADDR_NONE ) {
+    logerr( "_ickIpGetFreePort: no address for interface \"%s\".", ifname?ifname:"(nil)" );
+    close( s );
+    return -1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Try to bind the port
+\*------------------------------------------------------------------------*/
+  if( bind(s,(struct sockaddr *)&sockaddr,sizeof(sockaddr))<0 ) {
+    logerr( "_ickIpGetFreePort: could not bind socket (%s)", strerror(errno) );
+    close( s );
+    return -1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Get port assigned by OS
+\*------------------------------------------------------------------------*/
+  port = _ickIpGetSocketPort( s );
+
+/*------------------------------------------------------------------------*\
+    Don't need the virtual help socket any more
+\*------------------------------------------------------------------------*/
+  // int opt = 1;
+  // setsockopt( s, SOL_SOCKET, SO_REUSEADDR, (void *)&opt, sizeof(opt) );
+  if( close(s)<0 ) {
+    logerr( "_ickIpGetFreePort: could not close socket (%s)", strerror(errno) );
+    close( s );
+    return -1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Return port that got assigned to the probe socket
+\*------------------------------------------------------------------------*/
+  debug( "_ickIpGetFreePort (%s): found port %d", ifname, port );
+  return port;
+}
+
+
+/*=========================================================================*\
+  Get port a socket is bound to
+\*=========================================================================*/
+int _ickIpGetSocketPort( int s )
+{
+  struct sockaddr_in sockaddr;
+  socklen_t          sockaddr_len = sizeof(struct sockaddr_in);
+
+/*------------------------------------------------------------------------*\
+    Get port assigned by OS
+\*------------------------------------------------------------------------*/
+  if( getsockname(s,(struct sockaddr *)&sockaddr,&sockaddr_len) ) {
+    logerr( "_ickIpGetSocketPort: could not get socket name (%s)", strerror(errno) );
+    return -1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Return port that got assigned to the probe socket
+\*------------------------------------------------------------------------*/
+  return ntohs( sockaddr.sin_port );
 }
 
 /*=========================================================================*\

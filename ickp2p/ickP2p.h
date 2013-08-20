@@ -76,6 +76,7 @@ typedef enum {
   ICKERR_NOTHREAD,
   ICKERR_NOINTERFACE,
   ICKERR_NOSOCKET,
+  ICKERR_LWSERR,
   ICKERR_MAX
 } ickErrcode_t;
 
@@ -137,13 +138,14 @@ typedef void         (*ickP2pLogFacility_t)( const char *file, int line, int pri
 const char       *ickP2pGetVersion( int *major, int *minor );
 const char       *ickP2pGitVersion( void );
 
-ickErrcode_t      ickP2pInit( const char *deviceName, const char *deviceUuid, int liveTime, long bootId, long configId );
+ickErrcode_t      ickP2pInit( const char *deviceName, const char *deviceUuid, const char *upnpFolder, int liveTime, long bootId, long configId );
 ickErrcode_t      ickP2pEnd( ickP2pEndCb_t callback );
 ickErrcode_t      ickP2pSuspend( ickP2pSuspendCb_t callback  );
 ickErrcode_t      ickP2pResume( void );
 ickErrcode_t      ickP2pSetDeviceName( const char *deviceName );
 const char       *ickP2pGetDeviceName( void );
 const char       *ickP2pGetDeviceUuid( void );
+const char       *ickP2pGetUpnpFolder( void );
 ickP2pLibState_t  ickP2pGetState( void );
 int               ickP2pGetLiveTime( void );
 long              ickP2pGetBootId( void );
@@ -152,7 +154,7 @@ const char       *ickP2pGetOsName( void );
 ickErrcode_t      ickP2pRegisterDiscoveryCallback( ickDiscoveryDeviceCb_t callback );
 ickErrcode_t      ickP2pRemoveDiscoveryCallback( ickDiscoveryDeviceCb_t callback );
 
-ickDiscovery_t   *ickP2pDiscoveryInit( const char *interface, int port, const char *upnpFolder, ickDiscoveryEndCb_t callback, ickErrcode_t *error );
+ickDiscovery_t   *ickP2pDiscoveryInit( const char *interface, int port, ickDiscoveryEndCb_t callback, ickErrcode_t *error );
 ickErrcode_t      ickP2pDiscoveryEnd( ickDiscovery_t *dh );
 ickErrcode_t      ickP2pDiscoveryRegisterMessageCallback( ickDiscovery_t *dh, ickDiscoveryMessageCb_t callback );
 ickErrcode_t      ickDeviceRemoveMessageCallback( ickDiscovery_t *dh, ickDiscoveryMessageCb_t callback );

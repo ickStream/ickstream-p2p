@@ -133,15 +133,16 @@ const char *ickP2pGitVersion( void )
 /*=========================================================================*\
   Initialize ickstream library
 \*=========================================================================*/
-ickErrcode_t ickP2pInit( const char *deviceName, const char *deviceUuid, int liveTime, long bootId, long configId )
+ickErrcode_t ickP2pInit( const char *deviceName, const char *deviceUuid, const char *upnpFolder, int liveTime, long bootId, long configId )
 {
   int             rc;
+  ickErrcode_t    irc;
   struct utsname  name;
   struct timeval  now;
   struct timespec abstime;
 
-  debug( "ickP2pInit: \"%s\" (%s) lt=%d bid=%ld cid=%d",
-         deviceName, deviceUuid, liveTime, bootId, configId );
+  debug( "ickP2pInit: \"%s\" (%s) lt=%d bid=%ld cid=%d folder=\"\%s\"",
+         deviceName, deviceUuid, liveTime, bootId, configId, upnpFolder );
 
 /*------------------------------------------------------------------------*\
     Check status
@@ -177,11 +178,14 @@ ickErrcode_t ickP2pInit( const char *deviceName, const char *deviceUuid, int liv
   }
 
 /*------------------------------------------------------------------------*\
-    Store name and UUID
+    Store name and UUID and folder name
 \*------------------------------------------------------------------------*/
   _ickLib->deviceName = strdup( deviceName );
   _ickLib->deviceUuid = strdup( deviceUuid );
-  if( !_ickLib->deviceName || !_ickLib->deviceName || !_ickLib->osName ) {
+  if( upnpFolder )
+    _ickLib->upnpFolder = strdup( upnpFolder );
+  if( !_ickLib->deviceName || !_ickLib->deviceName || !_ickLib->osName ||
+      (upnpFolder&&!_ickLib->upnpFolder)) {
     logerr( "ickP2pInit: out of memory." );
     _ickLibDestruct( &_ickLib );
     return ICKERR_NOMEM;
@@ -214,7 +218,7 @@ ickErrcode_t ickP2pInit( const char *deviceName, const char *deviceUuid, int liv
   }
 
 /*------------------------------------------------------------------------*\
-    Wait for max. 5 seconds till thread is up an running
+    Wait for max. 5 seconds till thread is up and running
 \*------------------------------------------------------------------------*/
   pthread_mutex_lock( &_ickLib->mutex );
   gettimeofday( &now, NULL );
@@ -229,9 +233,10 @@ ickErrcode_t ickP2pInit( const char *deviceName, const char *deviceUuid, int liv
     pthread_mutex_unlock( &_ickLib->mutex );
   if( rc ) {
     logerr( "ickP2pInit: Unable to wait for main thread: %s", strerror(rc) );
+    irc = _ickLib->error;
     _ickLib->state = ICKLIB_TERMINATING;
     _ickLib = NULL;
-    return ICKERR_NOTHREAD;
+    return irc ? irc : ICKERR_NOTHREAD;
   }
 
 /*------------------------------------------------------------------------*\
@@ -319,6 +324,7 @@ void _ickLibDestruct( _ickP2pLibContext_t **icklibptr )
   Sfree( (*icklibptr)->osName );
   Sfree( (*icklibptr)->deviceName );
   Sfree( (*icklibptr)->deviceUuid );
+  Sfree( (*icklibptr)->upnpFolder );
 
 /*------------------------------------------------------------------------*\
     Delete mutex and condition

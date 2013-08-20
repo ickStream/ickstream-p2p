@@ -85,7 +85,6 @@ struct _ickDiscovery {
   char                        *interface;      // strong
   int                          port;
   char                        *location;       // strong
-  char                        *upnpFolder;     // strong
   ickP2pServicetype_t          services;       // strong
 
   // List of remote devices seen by this interface

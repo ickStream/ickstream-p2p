@@ -109,7 +109,7 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Init library
 \*------------------------------------------------------------------------*/
-  irc = ickP2pInit( DEVICENAME, UUID, 100, -1, -1 );
+  irc = ickP2pInit( DEVICENAME, UUID, "./httpFolder", 100, -1, -1 );
   if( irc ) {
     fprintf( stderr, "ickP2pInit: %s\n", ickStrError(irc) );
     return -1;
@@ -133,7 +133,7 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Create discovery handler
 \*------------------------------------------------------------------------*/
-  idh = ickP2pDiscoveryInit( "wlan0", 1900, "/dev/null", NULL, &irc );
+  idh = ickP2pDiscoveryInit( "wlan0", 1900, NULL, &irc );
   if( !idh ) {
     ickP2pEnd( NULL );
     printf( "ickP2pDiscoveryInit: %s\n", ickStrError(irc) );

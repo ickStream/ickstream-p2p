@@ -1,12 +1,12 @@
 /*$*********************************************************************\
 
-Source File     : ickP2p.c
+Source File     : ickMainThread.c
 
-Description     : implement ickp2p API calls
+Description     : implement ickp2p main thread
 
 Comments        : -
 
-Called by       : User code
+Called by       : API wrapper
 
 Calls           : Internal functions
 
@@ -59,12 +59,16 @@ Remarks         : -
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/stat.h>
 
+#include <libwebsockets.h>
 
 #include "ickP2p.h"
 #include "ickP2pInternal.h"
+#include "ickIpTools.h"
 #include "ickDiscovery.h"
 #include "ickSSDP.h"
+#include "ickP2pCom.h"
 #include "logutils.h"
 #include "ickMainThread.h"
 
@@ -79,8 +83,12 @@ Remarks         : -
   Private definitions and symbols
 \*=========================================================================*/
 #define ICKDISCOVERY_HEADER_SIZE_MAX    1536
+#define ICKPOLLIST_INITSIZE             10
+#define ICKPOLLIST_INCEMENT             10
 
-
+//
+// A timer descriptor
+//
 struct _ickTimer {
   ickTimer_t     *prev;
   ickTimer_t     *next;
@@ -92,15 +100,74 @@ struct _ickTimer {
   ickTimerCb_t    callback;
 };
 
-static ickTimer_t       *_timerList;
-static pthread_mutex_t   _timerListMutex = PTHREAD_MUTEX_INITIALIZER;
-
 
 /*=========================================================================*\
   Private prototypes
 \*=========================================================================*/
+
+static int  _ickPolllistInit( ickPolllist_t *plist, int size, int increment );
+static void _ickPolllistClear( ickPolllist_t *plist );
+static void _ickPolllistFree( ickPolllist_t *plist );
+static int  _ickPolllistAdd( ickPolllist_t *plist, int fd, int events );
+static int  _ickPolllistRemove( ickPolllist_t *plist, int fd );
+static int  _ickPolllistAppend( ickPolllist_t *plist, const ickPolllist_t *plista );
+static int  _ickPolllistSet( ickPolllist_t *plist, int fd, int events );
+static int  _ickPolllistUnset( ickPolllist_t *plist, int fd, int events );
+static int  _ickPolllistCheck( const ickPolllist_t *plist, int fd, int events );
+static int  _ickPolllistGetIndex( const ickPolllist_t *plist, int fd );
+
+static struct libwebsocket_context *_ickCreateLwsContext( _ickP2pLibContext_t *icklib, const char *ifname, int *port );
+static int  _lwsHttpCb( struct libwebsocket_context *context,
+                        struct libwebsocket *wsi,
+                        enum libwebsocket_callback_reasons reason, void *user,
+                        void *in, size_t len );
 static void _ickTimerLink( ickTimer_t *timer );
-static int _ickTimerUnlink( ickTimer_t *timer );
+static int  _ickTimerUnlink( ickTimer_t *timer );
+
+
+/*=========================================================================*\
+  Private symbols
+\*=========================================================================*/
+
+//
+// Protocols handled by libwebsocket
+//
+static struct libwebsocket_protocols _lwsProtocols[] = {
+  // first protocol must always be HTTP handler
+  {
+    "http-only",
+    _lwsHttpCb,
+    0
+  },
+
+/*
+  // the icktream protocol
+  {
+    "ickstream-p2p-message-protocol",
+    _ick_callback_p2p_server,
+    sizeof( struct __p2p_server_session_data )
+  },
+*/
+
+  // End of list
+  {
+    NULL, NULL, 0
+  }
+};
+
+
+//
+//  Polling descriptors
+//
+
+
+//
+//  Timer repository
+//
+static ickTimer_t       *_timerList;
+static pthread_mutex_t   _timerListMutex = PTHREAD_MUTEX_INITIALIZER;
+
+
 
 /*=========================================================================*\
   Ickstream main communication thread
@@ -108,12 +175,16 @@ static int _ickTimerUnlink( ickTimer_t *timer );
 void *_ickMainThread( void *arg )
 {
   _ickP2pLibContext_t *icklib = *(_ickP2pLibContext_t**)arg;
+  ickPolllist_t        plist;
   char                *buffer;
-  struct pollfd       *fds;
-  nfds_t               sfds = 10;
 
   debug( "ickp2p main thread: starting..." );
   PTHREADSETNAME( "ickP2P" );
+
+/*------------------------------------------------------------------------*\
+    Reset error state
+\*------------------------------------------------------------------------*/
+  icklib->error = ICKERR_SUCCESS;
 
 /*------------------------------------------------------------------------*\
     Allocate buffers
@@ -121,12 +192,32 @@ void *_ickMainThread( void *arg )
   buffer = malloc( ICKDISCOVERY_HEADER_SIZE_MAX );
   if( !buffer ) {
     logerr( "ickp2p main thread: out of memory" );
+    icklib->error = ICKERR_NOMEM;
     return NULL;
   }
-  fds = calloc( sfds, sizeof(struct pollfd) );
-  if( !fds ) {
+  if( _ickPolllistInit(&plist,ICKPOLLIST_INITSIZE,ICKPOLLIST_INCEMENT) ) {
     logerr( "ickp2p main thread: out of memory" );
     Sfree( buffer );
+    icklib->error = ICKERR_NOMEM;
+    return NULL;
+  }
+  if( _ickPolllistInit(&icklib->lwsPolllist,ICKPOLLIST_INITSIZE,ICKPOLLIST_INCEMENT) ) {
+    logerr( "ickp2p main thread: out of memory" );
+    Sfree( buffer );
+    _ickPolllistFree( &plist );
+    icklib->error = ICKERR_NOMEM;
+    return NULL;
+  }
+
+/*------------------------------------------------------------------------*\
+    Init libwebsocket server
+\*------------------------------------------------------------------------*/
+  icklib->lwsContext = _ickCreateLwsContext( icklib, NULL, &icklib->lwsPort );
+  if( !icklib->lwsContext ) {
+    Sfree( buffer );
+    _ickPolllistFree( &plist );
+    _ickPolllistFree( &icklib->lwsPolllist );
+    icklib->error = ICKERR_LWSERR;
     return NULL;
   }
 
@@ -143,9 +234,9 @@ void *_ickMainThread( void *arg )
     struct sockaddr address;
     socklen_t       addrlen = sizeof(address);
     ickDiscovery_t *walk;
-    nfds_t          nfds = 0;
     int             timeout;
     int             retval;
+    int             i;
 
 /*------------------------------------------------------------------------*\
     Execute all pending timers
@@ -205,39 +296,42 @@ void *_ickMainThread( void *arg )
     _ickTimerListUnlock();
 
 /*------------------------------------------------------------------------*\
-    fds[0] is always the help pipe to break the poll on timer updates
+    First poll descriptor is always the help pipe to break the poll on timer updates
 \*------------------------------------------------------------------------*/
-    fds[0].fd     = icklib->pollBreakPipe[0];
-    fds[0].events = POLLIN;
-    nfds          = 1;
+    _ickPolllistClear( &plist );
+    _ickPolllistAdd( &plist, icklib->pollBreakPipe[0], POLLIN );
 
 /*------------------------------------------------------------------------*\
     Collect all SSDP sockets from discovery handlers
 \*------------------------------------------------------------------------*/
     pthread_mutex_lock( &_ickDiscoveryHandlerListMutex );
-    for( walk=_ickDiscoveryHandlerList; walk; walk=walk->next ) {
-      if( nfds>=sfds ) {
-        sfds += 5;
-        fds = realloc( fds, sfds*sizeof(struct pollfd) );
-        if( !fds )
-          break;
-      }
-      fds[nfds].fd = walk->socket;
-      fds[nfds].events = POLLIN;
-      nfds++;
-    }
+    for( walk=_ickDiscoveryHandlerList; walk; walk=walk->next )
+      if( _ickPolllistAdd( &plist, walk->socket, POLLIN ) )
+        break;
     pthread_mutex_unlock( &_ickDiscoveryHandlerListMutex );
-    if( !fds ) {
+    if( walk ) {
       logerr( "ickp2p main thread: out of memory." );
       break;
     }
 
 /*------------------------------------------------------------------------*\
-    Poll all sockets
+    Merge sockets managed by libwebsockets
 \*------------------------------------------------------------------------*/
-    debug( "ickp2p main thread: polling %d sockets (timeout %.3fs)...",
-            nfds, timeout/1000.0 );
-    retval = poll( fds, nfds, timeout );
+    if( _ickPolllistAppend(&plist,&icklib->lwsPolllist) ) {
+      logerr( "ickp2p main thread: out of memory." );
+      break;
+    }
+
+
+/*------------------------------------------------------------------------*\
+    Do the polling...
+\*------------------------------------------------------------------------*/
+    debug( "ickp2p main thread: polling %d sockets (%d lws), timeout %.3fs...",
+            plist.nfds, icklib->lwsPolllist.nfds, timeout/1000.0 );
+    for( i=0; i<plist.nfds; i++ )
+      debug( "ickp2p main thread: poll list element %d - %d (event mask %02x)",
+             i, plist.fds[i].fd, plist.fds[i].events );
+    retval = poll( plist.fds, plist.nfds, timeout );
     if( retval<0 ) {
       logerr( "ickp2p main thread: poll failed (%s).", strerror(errno) );
       break;
@@ -248,12 +342,15 @@ void *_ickMainThread( void *arg )
     }
     if( icklib->state==ICKLIB_TERMINATING )
       break;
+    for( i=0; i<plist.nfds; i++ )
+      debug( "ickp2p main thread: poll list element %d - %d (revent mask %02x)",
+             i, plist.fds[i].fd, plist.fds[i].revents );
 
 /*------------------------------------------------------------------------*\
     Was there a timer update?
 \*------------------------------------------------------------------------*/
-    if( fds[0].revents&POLLIN ) {
-      ssize_t len = read( fds[0].fd, buffer, ICKDISCOVERY_HEADER_SIZE_MAX );
+    if( plist.fds[0].revents&POLLIN ) {
+      ssize_t len = read( plist.fds[0].fd, buffer, ICKDISCOVERY_HEADER_SIZE_MAX );
       if( len<0 )
         logerr( "ickp2p main thread (%s:%d): Unable to read poll break pipe: %s",
                    walk->interface, walk->port, strerror(errno) );
@@ -268,12 +365,10 @@ void *_ickMainThread( void *arg )
 \*------------------------------------------------------------------------*/
     pthread_mutex_lock( &_ickDiscoveryHandlerListMutex );
     for( walk=_ickDiscoveryHandlerList; walk; walk=walk->next ) {
-      int     i;
       ssize_t len;
 
       // Is this socket readable?
-      for( i=1; i<nfds&&fds[i].fd!=walk->socket; i++);
-      if( i==nfds || !(fds[i].revents&POLLIN) )
+      if( _ickPolllistCheck(&plist,walk->socket,POLLIN)<=0 )
         continue;
 
       // receive data
@@ -301,7 +396,7 @@ void *_ickMainThread( void *arg )
       if( !ssdp )
         continue;
 
-      // Ignore loopback messages from this instance
+      // Ignore loop back messages from ourself
       if( ssdp->uuid && !strcasecmp(ssdp->uuid,icklib->deviceUuid) ) {
         _ickSsdpFree( ssdp );
         continue;
@@ -318,14 +413,34 @@ void *_ickMainThread( void *arg )
     }
     pthread_mutex_unlock( &_ickDiscoveryHandlerListMutex );
 
+/*------------------------------------------------------------------------*\
+    Service libwebsockets descriptors
+\*------------------------------------------------------------------------*/
+    for( i=0; i<plist.nfds; i++ ) {
+      if( _ickPolllistGetIndex(&icklib->lwsPolllist,plist.fds[i].fd)<0 )
+        continue;
+      debug( "ickp2p main thread: servicing lws socket %d (event mask 0x%02x)",
+             plist.fds[i].fd, plist.fds[i].revents );
+      if( libwebsocket_service_fd(icklib->lwsContext, &plist.fds[i] )<0 ) {
+        logerr( "ickp2p main thread: libwebsocket_service_fd returned an error." );
+        break;
+      }
+    }
+
   } //  while( icklib->state<ICKLIB_TERMINATING )
   debug( "ickp2p main thread: terminating..." );
+
+/*------------------------------------------------------------------------*\
+    Get rid of libwebsocket context
+\*------------------------------------------------------------------------*/
+  libwebsocket_context_destroy( icklib->lwsContext );
 
 /*------------------------------------------------------------------------*\
     Clean up
 \*------------------------------------------------------------------------*/
   Sfree( buffer );
-  Sfree( fds );
+  _ickPolllistFree( &plist );
+  _ickPolllistFree( &icklib->lwsPolllist );
 
 /*------------------------------------------------------------------------*\
     Clear all timer
@@ -346,6 +461,521 @@ void *_ickMainThread( void *arg )
 \*------------------------------------------------------------------------*/
   _ickLibDestruct( (_ickP2pLibContext_t**)arg );
   return NULL;
+}
+
+#pragma mark -- Manage polling list
+
+
+/*=========================================================================*\
+  Init poll list
+    returns o on success or -1 on error (out of memory)
+\*=========================================================================*/
+static int _ickPolllistInit( ickPolllist_t *plist, int size, int increment )
+{
+
+/*------------------------------------------------------------------------*\
+    Init array
+\*------------------------------------------------------------------------*/
+  plist->fds = calloc( size, sizeof(struct pollfd) );
+  if( !plist->fds ) {
+    logerr( "_ickPolllistInit: out of memory" );
+    return -1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Init indexes
+\*------------------------------------------------------------------------*/
+  plist->nfds      = 0;
+  plist->size      = size;
+  plist->increment = increment;
+
+/*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
+  return 0;
+}
+
+
+/*=========================================================================*\
+  Clear poll list (remove all members)
+\*=========================================================================*/
+static void _ickPolllistClear( ickPolllist_t *plist )
+{
+
+/*------------------------------------------------------------------------*\
+    reset index
+\*------------------------------------------------------------------------*/
+  plist->nfds      = 0;
+
+}
+
+
+/*=========================================================================*\
+  Free poll list (do not use afterwards)
+\*=========================================================================*/
+static void _ickPolllistFree( ickPolllist_t *plist )
+{
+
+/*------------------------------------------------------------------------*\
+    Free array
+\*------------------------------------------------------------------------*/
+  Sfree( plist->fds );
+
+}
+
+
+/*=========================================================================*\
+  Add a socket to a poll list
+    returns -1 on error (out of memory)
+\*=========================================================================*/
+static int _ickPolllistAdd( ickPolllist_t *plist, int fd, int events )
+{
+  int idx;
+  debug( "_ickPolllistAdd (%p): fd %d mask 0x%02x", plist, fd, events );
+
+/*------------------------------------------------------------------------*\
+    Avoid duplicates
+\*------------------------------------------------------------------------*/
+  idx = _ickPolllistGetIndex( plist, fd );
+  if( idx>=0 ) {
+    logwarn( "_ickPolllistAdd: fd %d already member", fd );
+    plist->fds[idx].events = events;
+    return 0;
+  }
+
+/*------------------------------------------------------------------------*\
+    Need to extend array?
+\*------------------------------------------------------------------------*/
+  if( plist->nfds>=plist->size ) {
+    struct pollfd *fds;
+    fds = realloc( plist->fds, (plist->size+plist->increment) *sizeof(struct pollfd) );
+    if( !fds )
+      return -1;
+    plist->fds   = fds;
+    plist->size += plist->increment;
+  }
+
+/*------------------------------------------------------------------------*\
+    Append poll descriptor to end
+\*------------------------------------------------------------------------*/
+  plist->fds[plist->nfds].fd      = fd;
+  plist->fds[plist->nfds].events  = events;
+  plist->fds[plist->nfds].revents = 0;
+  plist->nfds++;
+
+/*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
+  return 0;
+}
+
+
+/*=========================================================================*\
+  Remove a socket from poll list
+    returns -1 on error (not member)
+\*=========================================================================*/
+static int _ickPolllistRemove( ickPolllist_t *plist, int fd )
+{
+  int idx;
+  debug( "_ickPolllistRemove (%p): fd %d", plist, fd );
+
+/*------------------------------------------------------------------------*\
+    Get list entry
+\*------------------------------------------------------------------------*/
+  idx = _ickPolllistGetIndex( plist, fd );
+  if( idx<0 ) {
+    logwarn( "_ickPolllistRemove: fd %d not element", fd );
+    return -1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Replace this entry with the last one
+\*------------------------------------------------------------------------*/
+  if( idx!=plist->nfds-1 )
+    memcpy( &plist->fds[idx], &plist->fds[plist->nfds-1], sizeof(struct pollfd) );
+  plist->nfds--;
+
+/*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
+  return 0;
+}
+
+
+/*=========================================================================*\
+  Append a polling list to another one
+    returns -1 on error (out of memory)
+\*=========================================================================*/
+static int _ickPolllistAppend( ickPolllist_t *plist, const ickPolllist_t *plista )
+{
+  int i;
+  debug( "_ickPolllistAppend (%p): %p (%d elements)", plist, plista, plista->nfds );
+
+/*------------------------------------------------------------------------*\
+    Loop over all append list members
+\*------------------------------------------------------------------------*/
+  for( i=0; i<plista->nfds; i++ ) {
+    if( _ickPolllistAdd(plist,plista->fds[i].fd,plista->fds[i].events) )
+      return -1;
+  }
+
+/*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
+  return 0;
+}
+
+
+/*=========================================================================*\
+  Set event type for poll list element
+    Note: the bits in event are ored to the bits already set
+    returns -1 on error (fd not member)
+\*=========================================================================*/
+static int _ickPolllistSet( ickPolllist_t *plist, int fd, int events )
+{
+  int idx;
+
+/*------------------------------------------------------------------------*\
+    Get list entry
+\*------------------------------------------------------------------------*/
+  idx = _ickPolllistGetIndex( plist, fd );
+  if( idx<0 ) {
+    logwarn( "_ickPolllistSet: fd %d not element", fd );
+    return -1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Set requested bists
+\*------------------------------------------------------------------------*/
+  plist->fds[idx].revents |= events;
+
+/*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
+  return 0;
+}
+
+
+/*=========================================================================*\
+  Unset event type for poll list element
+    Note: only the bits in event are reset
+    returns -1 on error (fd not member)
+\*=========================================================================*/
+static int _ickPolllistUnset( ickPolllist_t *plist, int fd, int events )
+{
+  int idx;
+
+/*------------------------------------------------------------------------*\
+    Get list entry
+\*------------------------------------------------------------------------*/
+  idx = _ickPolllistGetIndex( plist, fd );
+  if( idx<0 ) {
+    logwarn( "_ickPolllistUnset: fd %d not element", fd );
+    return -1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Set requested bists
+\*------------------------------------------------------------------------*/
+  plist->fds[idx].revents &= ~events;
+
+/*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
+  return 0;
+}
+
+
+
+/*=========================================================================*\
+  Check a socket of a poll list for one or more condition
+    returns -1 on error (fd not member)
+             Bit vector of conditions met
+\*=========================================================================*/
+static int _ickPolllistCheck( const ickPolllist_t *plist, int fd, int events )
+{
+  int idx;
+
+/*------------------------------------------------------------------------*\
+    Get list entry
+\*------------------------------------------------------------------------*/
+  idx = _ickPolllistGetIndex( plist, fd );
+  if( idx<0 ) {
+    logwarn( "_ickPolllistCheck: fd %d not element", fd );
+    return -1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Return result
+\*------------------------------------------------------------------------*/
+  return plist->fds[idx].revents & events;
+}
+
+
+/*=========================================================================*\
+  Search a socket descriptor in list
+    return index if found, -1 otherwhise
+\*=========================================================================*/
+static int _ickPolllistGetIndex( const ickPolllist_t *plist, int fd )
+{
+  int i;
+
+/*------------------------------------------------------------------------*\
+    Check all members
+\*------------------------------------------------------------------------*/
+  for( i=0; i<plist->nfds; i++ ) {
+    if( plist->fds[i].fd==fd )
+      return i;
+  }
+
+/*------------------------------------------------------------------------*\
+    Not found
+\*------------------------------------------------------------------------*/
+  return -1;
+}
+
+
+#pragma mark -- Libwebsocket init and HTTP handler
+
+
+/*=========================================================================*\
+  Create a libwebsocket instance
+\*=========================================================================*/
+static struct libwebsocket_context *_ickCreateLwsContext( _ickP2pLibContext_t *icklib, const char *ifname, int *port )
+{
+  struct libwebsocket_context *lwsContext;
+  struct lws_context_creation_info info;
+  memset( &info, 0, sizeof(info) );
+
+/*------------------------------------------------------------------------*\
+    Try to guess a free port
+      fixme: libwebsockets should be patched to accept port=-1 for
+             autoselecting a port
+\*------------------------------------------------------------------------*/
+#ifdef CONTEXT_PORT_CHOOSE_FREE
+  info.port = CONTEXT_PORT_CHOOSE_FREE;
+#else
+  info.port = _ickIpGetFreePort( ifname );
+  if( info.port<0 )
+    info.port = 49152 + random()%10000;
+  *port = info.port;
+#endif
+
+/*------------------------------------------------------------------------*\
+    Setup rest of configuration vector
+\*------------------------------------------------------------------------*/
+  info.iface                    = ifname;
+  info.protocols                = _lwsProtocols;
+  info.ssl_cert_filepath        = NULL;
+  info.ssl_private_key_filepath = NULL;
+  info.gid                      = -1;
+  info.uid                      = -1;
+  info.options                  = 0;
+  info.user                     = icklib;
+
+/*------------------------------------------------------------------------*\
+    Try to create the context
+\*------------------------------------------------------------------------*/
+  lwsContext = libwebsocket_create_context( &info );
+  if( !lwsContext )
+    logerr( "_ickCreateLwsContext: Could not get LWS context (%s:%d)", ifname, info.port );
+
+/*------------------------------------------------------------------------*\
+    Get port in patched library version
+\*------------------------------------------------------------------------*/
+#ifdef CONTEXT_PORT_CHOOSE_FREE
+  else
+    *port = libwebsocket_get_listen_port( lwsContext );
+#endif
+
+/*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
+  return lwsContext;
+}
+
+
+
+/*=========================================================================*\
+  Handle HTTP requests
+\*=========================================================================*/
+static int _lwsHttpCb( struct libwebsocket_context *context,
+                       struct libwebsocket *wsi,
+                       enum libwebsocket_callback_reasons reason, void *user,
+                       void *in, size_t len )
+{
+  _ickP2pLibContext_t *icklib = libwebsocket_context_user( context );
+  int                  fd     = (int)(long)in;
+
+/*------------------------------------------------------------------------*\
+    What to do?
+\*------------------------------------------------------------------------*/
+  switch( reason ) {
+
+/*------------------------------------------------------------------------*\
+    Init protocol
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_PROTOCOL_INIT:
+      debug( "_lwsHttpCb: init" );
+      break;
+
+/*------------------------------------------------------------------------*\
+    Shut down protocol
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_PROTOCOL_DESTROY:
+      debug( "_lwsHttpCb: shutdown" );
+      break;
+
+/*------------------------------------------------------------------------*\
+    Http connection was closed
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_CLOSED_HTTP:
+      debug( "_lwsHttpCb: connection closed" );
+      break;
+
+/*------------------------------------------------------------------------*\
+    Serve http content
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_HTTP:
+      debug( "_lwsHttpCb: requesting \"%s\"", in );
+
+      // We don't serve root or files if no folder is set
+      if( !icklib->upnpFolder || !strcmp(in, "/") ) {
+        void *response = "ickstream - file not found";
+        libwebsocket_write( wsi, response, strlen(response), LWS_WRITE_HTTP );
+        return 1;
+      }
+
+      // Serve file from folder
+      else {
+        char        *resource  = malloc( strlen(icklib->upnpFolder)+strlen(in)+1 );
+        char        *ext       = strrchr( in, '.' );
+        struct stat  sbuffer;
+        char        *mime;
+
+        // Get full path
+        sprintf( resource, "%s%s", icklib->upnpFolder, (char*)in );
+        debug( "_lwsHttpCb: resource path \"%s\"", resource );
+
+        if( stat(resource,&sbuffer) ) {
+          void *response = "ickstream - file not found";
+          libwebsocket_write( wsi, response, strlen(response), LWS_WRITE_HTTP );
+          return 1;
+        }
+
+        // choose mime type based on the file extension
+        if( !ext )
+          mime = "text/plain";
+        else if( !strcmp(ext,".png") )
+          mime = "image/png";
+        else if( !strcmp(ext,".jpg") )
+          mime = "image/jpg";
+        else if( !strcmp(ext,".gif") )
+          mime = "image/gif";
+        else if( !strcmp(ext,".ico") )
+          mime = "image/x-icon";
+        else if( !strcmp(ext,".html") )
+          mime = "text/html";
+        else if( !strcmp(ext,".css") )
+          mime = "text/css";
+        else
+          mime = "text/plain";
+
+        // through completion or error, close the socket
+        if( libwebsockets_serve_http_file(context,wsi,resource,mime) )
+          return -1;
+      }
+      break;
+
+/*------------------------------------------------------------------------*\
+    File transfer is complete
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_HTTP_FILE_COMPLETION:
+      debug( "_lwsHttpCb: file \"%s\" complete", in );
+      // kill the connection after we sent one file
+      return -1;
+
+/*------------------------------------------------------------------------*\
+    Send whatever there is
+\*------------------------------------------------------------------------*/
+#if 0
+    case LWS_CALLBACK_HTTP_WRITEABLE:
+      do {
+        n = read( pss->fd, buffer, sizeof buffer);
+        /* problem reading, close conn */
+        if( n<0 )
+          goto bail;
+        /* sent it all, close conn */
+        if( !n )
+          goto bail;
+        m = libwebsocket_write( wsi, buffer, n, LWS_WRITE_HTTP );
+        if( m<0 )
+          /* write failed, close conn */
+          goto bail;
+        if( m!=n )
+          /* partial write, adjust */
+          lseek( pss->fd, m-n, SEEK_CUR );
+      } while( !lws_send_pipe_choked(wsi) );
+      libwebsocket_callback_on_writable( context, wsi );
+      break;
+
+bail:
+      close( pss->fd );
+      return -1;
+#endif
+
+/*------------------------------------------------------------------------*\
+    Do IP filtering
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_FILTER_NETWORK_CONNECTION:
+      // Accept all connections
+      return 0;
+
+/*------------------------------------------------------------------------*\
+    Add a socket to poll list
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_ADD_POLL_FD:
+      debug( "_lwsHttpCb: adding socket %d (mask 0x%02x)", fd, (int)(long)len );
+      if( _ickPolllistAdd(&icklib->lwsPolllist,fd,(int)(long)len) )
+        return 1;
+      break;
+
+/*------------------------------------------------------------------------*\
+    Remove a socket from poll list
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_DEL_POLL_FD:
+      debug( "_lwsHttpCb: removing socket %d", fd );
+      if( _ickPolllistRemove(&icklib->lwsPolllist,fd) )
+        return 1;
+      break;
+
+/*------------------------------------------------------------------------*\
+    Set mode for poll list entry
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_SET_MODE_POLL_FD:
+      debug( "_lwsHttpCb: set events for socket %d (mask 0x%02x)", fd, (int)(long)len );
+      if( _ickPolllistSet(&icklib->lwsPolllist,fd,(int)(long)len) )
+        return 1;
+      break;
+
+    case LWS_CALLBACK_CLEAR_MODE_POLL_FD:
+      debug( "_lwsHttpCb: clear events for socket %d (mask 0x%02x)", fd, (int)(long)len );
+      if( _ickPolllistUnset(&icklib->lwsPolllist,fd,(int)(long)len) )
+        return 1;
+      break;
+
+/*------------------------------------------------------------------------*\
+    Unknown/unhandled request
+\*------------------------------------------------------------------------*/
+    default:
+      logerr( "_lwsHttpCb: unknown/unhandled reason (%d)", reason );
+      break;
+  }
+
+/*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
+  return 0;
 }
 
 

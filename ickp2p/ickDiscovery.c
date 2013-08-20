@@ -108,15 +108,15 @@ static void _ickDiscoveryDestruct( ickDiscovery_t *dh );
 /*=========================================================================*\
   Create a new instance of a discovery handler
 \*=========================================================================*/
-ickDiscovery_t *ickP2pDiscoveryInit( const char *interface, int port, const char *upnpFolder, ickDiscoveryEndCb_t callback, ickErrcode_t *error )
+ickDiscovery_t *ickP2pDiscoveryInit( const char *interface, int port, ickDiscoveryEndCb_t callback, ickErrcode_t *error )
 {
   ickDiscovery_t *dh;
   int             rc, opt;
   in_addr_t       ifaddr;
   char            buffer[64];
   ickErrcode_t    irc;
-  debug( "ickP2pDiscoveryInit: if=\"%s:%d\" folder=\"%s\" cb=%p",
-         interface, port, upnpFolder, callback );
+  debug( "ickP2pDiscoveryInit: if=\"%s:%d\" cb=%p",
+         interface, port, callback );
 
 /*------------------------------------------------------------------------*\
     Need to be initialized
@@ -153,8 +153,7 @@ ickDiscovery_t *ickP2pDiscoveryInit( const char *interface, int port, const char
 
   // Try to init/duplicate strings
   dh->interface    = strdup( interface );
-  dh->upnpFolder   = strdup( upnpFolder );
-  if( !dh->interface | !dh->upnpFolder ) {
+  if( !dh->interface ) {
     logerr( "ickP2pDiscoveryInit: out of memory." );
     _ickDiscoveryDestruct( dh );
     if( error )
@@ -357,7 +356,6 @@ static void _ickDiscoveryDestruct( ickDiscovery_t *dh )
 \*------------------------------------------------------------------------*/
   Sfree( dh->interface );
   Sfree( dh->location );
-  Sfree( dh->upnpFolder );
 
 /*------------------------------------------------------------------------*\
     Close socket (if any)

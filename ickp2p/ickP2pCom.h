@@ -1,12 +1,12 @@
 /*$*********************************************************************\
 
-Header File     : ickP2pInternal.h
+Header File     : ickP2pCom.h
 
-Description     : Internal include file for libickp2p
+Description     : Internal include file for communication functions
 
 Comments        : -
 
-Date            : 11.08.2013
+Date            : 20.08.2013
 
 Updates         : -
 
@@ -42,107 +42,45 @@ Remarks         : -
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 \************************************************************************/
 
-#ifndef __ICKP2PINTERNAL_H
-#define __ICKP2PINTERNAL_H
+#ifndef __ICKP2PCOM_H
+#define __ICKP2PCOM_H
 
 
 /*=========================================================================*\
   Includes required by definitions from this file
 \*=========================================================================*/
-#include <poll.h>
-#include <pthread.h>
-#include <libwebsockets.h>
-#include "ickP2p.h"
+// none
 
 
 /*=========================================================================*\
   Definition of constants
 \*=========================================================================*/
-
-// Protocol version
-#define ICK_VERSION_MAJOR 1
-#define ICK_VERSION_MINOR 0
-
+// none
 
 /*=========================================================================*\
   Macro and type definitions
 \*=========================================================================*/
-
-// List of polling descriptors
-typedef struct {
-  struct pollfd *fds;
-  nfds_t         nfds;
-  nfds_t         size;
-  nfds_t         increment;
-} ickPolllist_t;
-
-// Elements in linked list of callbacks
-struct _cb_list {
-  struct _cb_list        *next;
-  ickDiscoveryDeviceCb_t  callback;
-};
-
-
-typedef struct {
-  ickP2pLibState_t             state;
-  ickErrcode_t                 error;
-  pthread_mutex_t              mutex;
-  pthread_cond_t               condIsReady;
-  char                        *osName;      // strong
-  char                        *deviceName;  // strong
-  char                        *deviceUuid;  // strong
-  char                        *upnpFolder;  // strong
-  int                          liveTime;
-  long                         upnpBootId;
-  long                         upnpConfigId;
-  struct _cb_list             *deviceCbList;
-  int                          pollBreakPipe[2];
-
-  struct libwebsocket_context *lwsContext;
-  int                          lwsPort;
-  ickPolllist_t                lwsPolllist;
-
-  ickP2pEndCb_t                cbEnd;
-} _ickP2pLibContext_t;
 
 
 /*------------------------------------------------------------------------*\
   Macros
 \*------------------------------------------------------------------------*/
 
-// Conservative free
-#define Sfree(p) {if(p)free(p); (p)=NULL;}
-
-// Set name of threads in debugging mode
-#ifdef ICK_DEBUG
-#ifdef __linux__
-#include <sys/prctl.h>
-#define PTHREADSETNAME( name )  prctl( PR_SET_NAME, (name) )
-#endif
-#endif
-#ifndef PTHREADSETNAME
-#define PTHREADSETNAME( name )  { ;}
-#endif
-
-// Get rid of warnings about "#pragma mark"
-#ifdef __linux__
-#pragma GCC diagnostic ignored "-Wunknown-pragmas"
-#endif
-
 /*------------------------------------------------------------------------*\
   Signatures for function pointers
 \*------------------------------------------------------------------------*/
 
 
-/*------------------------------------------------------------------------*\
-  Internal globals
-\*------------------------------------------------------------------------*/
-extern _ickP2pLibContext_t *_ickLib;
+/*=========================================================================*\
+  Global symbols
+\*=========================================================================*/
+// none
 
 
 /*=========================================================================*\
   Internal prototypes
 \*=========================================================================*/
-void _ickLibDestruct( _ickP2pLibContext_t **icklibptr );
+// none
 
-#endif /* __ICKP2PINTERNAL_H */
+
+#endif /* __ICKP2PCOM_H */

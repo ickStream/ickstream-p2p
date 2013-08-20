@@ -49,7 +49,7 @@ Remarks         : -
 /*=========================================================================*\
   Includes required by definitions from this file
 \*=========================================================================*/
-#include <sys/socket.h>
+#include <netinet/in.h>
 
 
 /*=========================================================================*\
@@ -81,11 +81,11 @@ Remarks         : -
 /*=========================================================================*\
   Internal prototypes
 \*=========================================================================*/
-int _ickIpBind( int socket, in_addr_t addr, int port );
-int _ickIpAddMcast( int socket, in_addr_t ifaddr, in_addr_t maddr );
+int       _ickIpBind( int socket, in_addr_t addr, int port );
+int       _ickIpAddMcast( int socket, in_addr_t ifaddr, in_addr_t maddr );
 in_addr_t _ickIpGetIfAddr( const char *ifname );
-
-
+int       _ickIpGetFreePort( const char *ifname );
+int       _ickIpGetSocketPort( int s );
 
 
 #endif /* __ICKIPTOOLS_H */

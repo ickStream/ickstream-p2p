@@ -1,16 +1,16 @@
 /*$*********************************************************************\
 
-Source File     : ickErrors.c
+Source File     : ickP2pCom.c
 
-Description     : ickstream error descriptions
+Description     : implement ickp2p communication functions
 
 Comments        : -
 
-Called by       : User code
+Called by       : API wrapper functions
 
-Calls           : -
+Calls           : libwebsocket et all
 
-Date            : 11.08.2013
+Date            : 20.08.2013
 
 Updates         : -
 
@@ -46,9 +46,17 @@ Remarks         : -
  * EVEN if ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 \************************************************************************/
 
+
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <libwebsockets.h>
 
 #include "ickP2p.h"
+#include "ickP2pInternal.h"
+#include "ickIpTools.h"
+#include "logutils.h"
+#include "ickP2pCom.h"
 
 
 /*=========================================================================*\
@@ -68,38 +76,11 @@ Remarks         : -
 \*=========================================================================*/
 // none
 
-
 /*=========================================================================*\
-  Get string for error code
+  Private symbols
 \*=========================================================================*/
-const char *ickStrError( ickErrcode_t code )
-{
 
-/*------------------------------------------------------------------------*\
-    Select string according to code
-\*------------------------------------------------------------------------*/
-  switch( code ) {
-    case ICKERR_SUCCESS:          return "No error";
-    case ICKERR_GENERIC:          return "Generic error";
-    case ICKERR_NOTIMPLEMENTED:   return "Not implemented";
-    case ICKERR_INVALID:          return "Invalid parameter";
-    case ICKERR_UNINITIALIZED:    return "Not initialized";
-    case ICKERR_INITIALIZED:      return "Already initialized";
-    case ICKERR_WRONGSTATE:       return "Library in wrong state";
-    case ICKERR_NOMEM:            return "Out of memory";
-    case ICKERR_NOINTERFACE:      return "Bad interface";
-    case ICKERR_NOTHREAD:         return "Could not create thread";
-    case ICKERR_NOSOCKET:         return "Could not create socket";
-    case ICKERR_LWSERR:           return "Libwebsockets error";
 
-    default:                 break;
-  }
-
-/*------------------------------------------------------------------------*\
-    Unknown error code
-\*------------------------------------------------------------------------*/
-  return "<Undefined error code>";
-}
 
 
 /*=========================================================================*\
