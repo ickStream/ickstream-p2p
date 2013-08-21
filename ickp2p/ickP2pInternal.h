@@ -68,8 +68,12 @@ Remarks         : -
   Macro and type definitions
 \*=========================================================================*/
 
-// List of polling descriptors
-typedef struct {
+// A timer managed by ickp2p (from ickMainThread.c)
+struct _ickTimer;
+typedef struct _ickTimer ickTimer_t;
+
+// List of polling descriptors (from ickMainThread.c)
+typedef struct  {
   struct pollfd *fds;
   nfds_t         nfds;
   nfds_t         size;
@@ -98,9 +102,16 @@ typedef struct {
   struct _cb_list             *deviceCbList;
   int                          pollBreakPipe[2];
 
+  ickDiscovery_t              *discoveryHandlers;
+  pthread_mutex_t              discoveryHandlersMutex;
+  int                          rCounter;
+
   struct libwebsocket_context *lwsContext;
   int                          lwsPort;
   ickPolllist_t                lwsPolllist;
+
+  ickTimer_t                  *timers;
+  pthread_mutex_t              timersMutex;
 
   ickP2pEndCb_t                cbEnd;
 } _ickP2pLibContext_t;

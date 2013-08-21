@@ -62,9 +62,6 @@ Remarks         : -
   Macro and type definitions
 \*=========================================================================*/
 
-// A timer managed by ickp2p
-struct _ickTimer;
-typedef struct _ickTimer ickTimer_t;
 
 
 /*------------------------------------------------------------------------*\
@@ -89,15 +86,13 @@ typedef void (*ickTimerCb_t)( const ickTimer_t *timer, void *data, int tag );
 \*=========================================================================*/
 void         *_ickMainThread( void *arg );
 
-void          _ickTimerListLock( void );
-void          _ickTimerListUnlock( void );
-ickErrcode_t  _ickTimerAdd( long interval, int repeat, ickTimerCb_t callback, void *data, int tag );
-ickTimer_t   *_ickTimerFind( ickTimerCb_t callback, const void *data, int tag );
-ickErrcode_t  _ickTimerUpdate( ickTimer_t *timer, long interval, int repeat );
-ickErrcode_t  _ickTimerDelete( ickTimer_t *timer );
-void          _ickTimerDeleteAll( ickTimerCb_t callback, const void *data, int tag );
-
-
+void          _ickTimerListLock( _ickP2pLibContext_t *icklib );
+void          _ickTimerListUnlock( _ickP2pLibContext_t *icklib );
+ickErrcode_t  _ickTimerAdd( _ickP2pLibContext_t *icklib, long interval, int repeat, ickTimerCb_t callback, void *data, int tag );
+ickTimer_t   *_ickTimerFind( _ickP2pLibContext_t *icklib, ickTimerCb_t callback, const void *data, int tag );
+ickErrcode_t  _ickTimerUpdate( _ickP2pLibContext_t *icklib, ickTimer_t *timer, long interval, int repeat );
+ickErrcode_t  _ickTimerDelete( _ickP2pLibContext_t *icklib, ickTimer_t *timer );
+void          _ickTimerDeleteAll( _ickP2pLibContext_t *icklib, ickTimerCb_t callback, const void *data, int tag );
 
 
 #endif /* __ICKMAINTHREAD_H */

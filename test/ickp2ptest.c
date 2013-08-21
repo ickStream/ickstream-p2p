@@ -120,6 +120,8 @@ int main( int argc, char *argv[] )
   printf( "ickP2pGetState:      %d\n",     ickP2pGetState() );
   printf( "ickP2pGetBootId:     %ld\n",    ickP2pGetBootId() );
   printf( "ickP2pGetConfigId:   %ld\n",    ickP2pGetConfigId() );
+  printf( "ickP2pGetLwsPort:    %d\n",     ickP2pGetLwsPort() );
+
 
 /*------------------------------------------------------------------------*\
     Register callback for device registry

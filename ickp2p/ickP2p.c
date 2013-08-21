@@ -168,6 +168,13 @@ ickErrcode_t ickP2pInit( const char *deviceName, const char *deviceUuid, const c
   _ickLib->liveTime = liveTime;
 
 /*------------------------------------------------------------------------*\
+    Init mutex
+\*------------------------------------------------------------------------*/
+  pthread_mutex_init( &_ickLib->mutex, NULL );
+  pthread_mutex_init( &_ickLib->discoveryHandlersMutex, NULL );
+  pthread_mutex_init( &_ickLib->timersMutex, NULL );
+
+/*------------------------------------------------------------------------*\
     Get name and version of operating system
 \*------------------------------------------------------------------------*/
   if( !uname(&name) )
@@ -331,6 +338,8 @@ void _ickLibDestruct( _ickP2pLibContext_t **icklibptr )
 \*------------------------------------------------------------------------*/
   pthread_mutex_destroy( &(*icklibptr)->mutex );
   pthread_cond_destroy( &(*icklibptr)->condIsReady );
+  pthread_mutex_destroy( &(*icklibptr)->discoveryHandlersMutex );
+  pthread_mutex_destroy( &(*icklibptr)->timersMutex );
 
 /*------------------------------------------------------------------------*\
     Close help pipe for breaking polls
@@ -381,6 +390,15 @@ const char *ickP2pGetDeviceUuid( void )
 const char *ickP2pGetOsName( void )
 {
   return _ickLib ? _ickLib->osName : NULL;
+}
+
+
+/*=========================================================================*\
+  Get os name
+\*=========================================================================*/
+int ickP2pGetLwsPort( void )
+{
+  return _ickLib ? _ickLib->lwsPort : -1;
 }
 
 

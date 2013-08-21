@@ -109,6 +109,14 @@ typedef enum {
   ICKP2P_SERVICE_ANY               = 2*ICKP2P_SERVICE_MAX-1,
 } ickP2pServicetype_t;
 
+// Names used in upnp descriptions
+typedef struct {
+  const char *manufacturer;
+  const char *manufacturerUrl;
+  const char *modelDescriptor;
+  const char *modelName;
+} ickUpnpNames_t;
+
 
 struct _ickDiscovery;
 typedef struct _ickDiscovery ickDiscovery_t;
@@ -132,6 +140,14 @@ typedef void         (*ickP2pLogFacility_t)( const char *file, int line, int pri
 
 
 /*=========================================================================*\
+  Public global symbols
+\*=========================================================================*/
+
+// Names used in upnp descriptions. Might be set by application prior to ickP2pInit();
+extern ickUpnpNames_t ickUpnpNames;
+
+
+/*=========================================================================*\
   Public prototypes
 \*=========================================================================*/
 
@@ -148,13 +164,14 @@ const char       *ickP2pGetDeviceUuid( void );
 const char       *ickP2pGetUpnpFolder( void );
 ickP2pLibState_t  ickP2pGetState( void );
 int               ickP2pGetLiveTime( void );
+const char       *ickP2pGetOsName( void );
+int               ickP2pGetLwsPort( void );
 long              ickP2pGetBootId( void );
 long              ickP2pGetConfigId( void );
-const char       *ickP2pGetOsName( void );
 ickErrcode_t      ickP2pRegisterDiscoveryCallback( ickDiscoveryDeviceCb_t callback );
 ickErrcode_t      ickP2pRemoveDiscoveryCallback( ickDiscoveryDeviceCb_t callback );
 
-ickDiscovery_t   *ickP2pDiscoveryInit( const char *interface, int port, ickDiscoveryEndCb_t callback, ickErrcode_t *error );
+ickDiscovery_t   *ickP2pDiscoveryInit( const char *ifname, int port, ickDiscoveryEndCb_t callback, ickErrcode_t *error );
 ickErrcode_t      ickP2pDiscoveryEnd( ickDiscovery_t *dh );
 ickErrcode_t      ickP2pDiscoveryRegisterMessageCallback( ickDiscovery_t *dh, ickDiscoveryMessageCb_t callback );
 ickErrcode_t      ickDeviceRemoveMessageCallback( ickDiscovery_t *dh, ickDiscoveryMessageCb_t callback );
@@ -182,6 +199,8 @@ void            ickP2pSetLogFacility( ickP2pLogFacility_t facility );
 void            ickP2pSetLogLevel( int level );
 
 const char     *ickStrError( ickErrcode_t code );
+
+
 
 
 #endif /* __ICKP2P_H */

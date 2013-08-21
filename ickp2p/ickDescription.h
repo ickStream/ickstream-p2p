@@ -1,12 +1,12 @@
 /*$*********************************************************************\
 
-Header File     : ickSSDP.h
+Header File     : ickDescription.h
 
-Description     : Internal include file for upnp discovery protocol functions
+Description     : Internal include file for upnp layer 2 functions
 
 Comments        : -
 
-Date            : 15.08.2013
+Date            : 21.08.2013
 
 Updates         : -
 
@@ -42,28 +42,35 @@ Remarks         : -
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 \************************************************************************/
 
-#ifndef __ICKSSDP_H
-#define __ICKSSDP_H
+#ifndef __ICKDESCRIPTION_H
+#define __ICKDESCRIPTION_H
 
 
 /*=========================================================================*\
   Includes required by definitions from this file
 \*=========================================================================*/
-#include <sys/types.h>
-#include <sys/socket.h>
+// none
 
 
 /*=========================================================================*\
   Definition of constants
 \*=========================================================================*/
-#define ICKSSDP_DEFAULTLIVETIME 180
-#define ICKSSDP_SEARCHINTERVAL  59
-#define ICKSSDP_REPEATS         3
-#define ICKSSDP_ANNOUNCEDIVIDOR 3
-#define ICKSSDP_RNDDELAY        100
-#define ICKSSDP_MSEARCH_MX      1
-#define ICKSSDP_MCASTADDR       "239.255.255.250"
-#define ICKSSDP_MCASTPORT       1900
+
+//
+// Some HTTP headers
+//
+#define HTTP_200   "HTTP/1.0 200 OK\r\n" \
+                   "Server: libwebsockets\r\n" \
+                   "Content-Type: %s\r\n" \
+                   "Content-Length: %ld\r\n" \
+                   "\r\n"
+#define HTTP_400   "HTTP/1.0 400 Bad Request\r\n" \
+                   "Server: libwebsockets\r\n" \
+                   "\r\n"
+#define HTTP_404   "HTTP/1.0 404 Not Found\r\n" \
+                   "Server: libwebsockets\r\n" \
+                   "Content-Length: 0\r\n" \
+                   "\r\n"
 
 
 /*=========================================================================*\
@@ -71,74 +78,52 @@ Remarks         : -
 \*=========================================================================*/
 
 //
-// Types for a parsed SSDP request
+// Default values of ickUpnpNames
 //
-typedef enum {
-  SSDP_METHOD_UNDEFINED = 0,
-  SSDP_METHOD_MSEARCH,
-  SSDP_METHOD_NOTIFY,
-  SSDP_METHOD_REPLY,
-} ssdp_method_t;
-
-typedef enum {
-  SSDP_NTS_UNDEFINED = 0,
-  SSDP_NTS_ALIVE,
-  SSDP_NTS_UPDATE,
-  SSDP_NTS_BYEBYE
-} ssdp_nts_t;
+#define ICKDEVICE_MANUFACTURER           "ickStream"
+#define ICKDEVICE_MANUFACTURERURL        "http://ickstream.com"
+#define ICKDEVICE_MODELDESCRIPTION       "ickStreamDevice"
+#define ICKDEVICE_MODELNAME              "ickStreamDevice"
 
 //
-// SSDP message types
+// strings defining ickstream devices and services
 //
-typedef enum {
-  SSDPMSGTYPE_ALIVE,
-  SSDPMSGTYPE_BYEBYE,
-  SSDPMSGTYPE_MRESPONSE,
-  SSDPMSGTYPE_MSEARCH
-} ickSsdpMsgType_t;
+#define ICKDEVICE_STRING_ROOT            "Root"
+#define ICKSERVICE_STRING_PLAYER         "Player"
+#define ICKSERVICE_STRING_SERVER         "Server"
+#define ICKSERVICE_STRING_CONTROLLER     "Controller"
+#define ICKSERVICE_STRING_DEBUG          "Debug"
 
 //
-// Container for a parsed ssdp packet
+// Upnp strings defining ickstream devices and services
+// Note: Versions must match for all USNs
 //
-struct _ickSsdp_t {
-  char           *buffer;   // strong, will be modified during parsing
-  struct sockaddr addr;
-  ssdp_method_t   method;
-  ssdp_nts_t      nts;
-  const char     *server;   // weak
-  const char     *usn;      // weak
-  char           *uuid;     // strong
-  const char     *location; // weak
-  const char     *nt;       // weak
-  const char     *st;       // weak
-  long            bootid;
-  long            configid;
-  long            nextbootid;
-  int             livetime;
-  int             mx;
-};
-typedef struct _ickSsdp_t ickSsdp_t;
+#define ICKDEVICE_UPNP_MAJOR             1
+#define ICKDEVICE_UPNP_MINOR             0
+#define ICKDEVICE_TYPESTR_ROOT           "urn:schemas-ickstream-com:device:Root:1"
+#define ICKSERVICE_TYPESTR_PLAYER        "urn:schemas-ickstream-com:device:Player:1"
+#define ICKSERVICE_TYPESTR_SERVER        "urn:schemas-ickstream-com:device:Server:1"
+#define ICKSERVICE_TYPESTR_CONTROLLER    "urn:schemas-ickstream-com:device:Controller:1"
+#define ICKSERVICE_TYPESTR_DEBUG         "urn:schemas-ickstream-com:device:Debug:1"
 
 //
-// An ickstream device as discovered by the ssdp listener
+// ickstream protocol level
+// fixme: use USN version field for this
 //
-struct _upnp_device;
-typedef struct _upnp_device upnp_device_t;
-struct _upnp_device {
-  upnp_device_t       *prev;
-  upnp_device_t       *next;
-  ickDiscovery_t      *dh;         // weak
-  int                  livetime;
-  char                *uuid;       // strong
-  char                *location;   // strong
-  int                  ickVersion;
-  ickP2pServicetype_t  services;
-};
+typedef enum ickDiscovery_protocol_level {
+  ICKPROTOCOL_P2P_GENERIC             = 0,    // first protocol version or unknown
+  ICKPROTOCOL_P2P_INCLUDE_SERVICETYPE = 0x1,  // include target servicetype with messages
+  ICKPROTOCOL_P2P_INCLUDE_TARGETUUID  = 0x4,  // include target UUID with services (when supporting more than one UUID per websocket)
+  ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID  = 0x8,  // include source UUID with services (when supporting more than one UUID per websocket)
+  ICKPROTOCOL_P2P_CURRENT_SUPPORT     = 0x1,  // that's what we currently support: including the service type
+  ICKPROTOCOL_P2P_DEFAULT             = 0,    // that's what we curreently use as the default
+  ICKPROTOCOL_P2P_INVALID             = 0xe0   // mask to find illegal codes. Used to be backward compatible with previous implementations usually starting messages with "{" or "[". Should be deprecated until launch, then we can use 8 bits for protocol properties
+} ickDiscoveryProtocolLevel_t;
+
 
 /*------------------------------------------------------------------------*\
   Macros
 \*------------------------------------------------------------------------*/
-
 
 /*------------------------------------------------------------------------*\
   Signatures for function pointers
@@ -150,16 +135,12 @@ struct _upnp_device {
 \*=========================================================================*/
 // none
 
-
 /*=========================================================================*\
   Internal prototypes
 \*=========================================================================*/
-ickSsdp_t    *_ickSsdpParse( const char *buffer, size_t length, const struct sockaddr *addr );
-void          _ickSsdpFree( ickSsdp_t *ssdp );
-int           _ickSsdpExecute( ickDiscovery_t *dh, const ickSsdp_t *ssdp );
-ickErrcode_t  _ickSsdpNewDiscovery( const ickDiscovery_t *dh );
-void          _ickSsdpEndDiscovery( const ickDiscovery_t *dh );
-ickErrcode_t  _ickSsdpAnnounceServices( ickDiscovery_t *dh, ickP2pServicetype_t service, ickSsdpMsgType_t mtype );
+ickDiscovery_t *_ickDescrFindDicoveryHandlerByUrl( const _ickP2pLibContext_t *icklib, const char *uri );
+int             _ickDescrServeDeviceDescr( const ickDiscovery_t *dh, struct libwebsocket *wsi );
 
 
-#endif /* __ICKSSDP_H */
+
+#endif /* __ICKDESCRIPTION_H */

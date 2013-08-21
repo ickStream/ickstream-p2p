@@ -46,6 +46,7 @@ Remarks         : -
  * EVEN if ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 \************************************************************************/
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -93,9 +94,6 @@ struct _upnp_service {
 };
 
 
-ickDiscovery_t  *_ickDiscoveryHandlerList;
-pthread_mutex_t  _ickDiscoveryHandlerListMutex = PTHREAD_MUTEX_INITIALIZER;
-
 // #define LOCALHOST_ADDR "127.0.0.1"
 
 /*=========================================================================*\
@@ -108,15 +106,16 @@ static void _ickDiscoveryDestruct( ickDiscovery_t *dh );
 /*=========================================================================*\
   Create a new instance of a discovery handler
 \*=========================================================================*/
-ickDiscovery_t *ickP2pDiscoveryInit( const char *interface, int port, ickDiscoveryEndCb_t callback, ickErrcode_t *error )
+ickDiscovery_t *ickP2pDiscoveryInit( const char *ifname, int port, ickDiscoveryEndCb_t callback, ickErrcode_t *error )
 {
-  ickDiscovery_t *dh;
-  int             rc, opt;
-  in_addr_t       ifaddr;
-  char            buffer[64];
-  ickErrcode_t    irc;
+  _ickP2pLibContext_t *icklib = _ickLib;
+  ickDiscovery_t      *dh;
+  int                  rc, opt;
+  in_addr_t            ifaddr;
+  char                 buffer[64];
+  ickErrcode_t         irc;
   debug( "ickP2pDiscoveryInit: if=\"%s:%d\" cb=%p",
-         interface, port, callback );
+         ifname, port, callback );
 
 /*------------------------------------------------------------------------*\
     Need to be initialized
@@ -144,15 +143,16 @@ ickDiscovery_t *ickP2pDiscoveryInit( const char *interface, int port, ickDiscove
   pthread_mutex_init( &dh->deviceListMutex, NULL );
 
   // Some defaults
+  dh->icklib       = icklib;
   dh->socket       = -1;
   dh->port         = port;
-  dh->services     = ICKP2P_SERVICE_GENERIC;
-  dh->ttl          = _ickLib->liveTime/3;
+  dh->ickServices  = ICKP2P_SERVICE_GENERIC;
+  dh->ttl          = icklib->liveTime/3;
   if( dh->ttl<=0 )
     dh->ttl = 1;
 
   // Try to init/duplicate strings
-  dh->interface    = strdup( interface );
+  dh->interface    = strdup( ifname );
   if( !dh->interface ) {
     logerr( "ickP2pDiscoveryInit: out of memory." );
     _ickDiscoveryDestruct( dh );
@@ -175,26 +175,35 @@ ickDiscovery_t *ickP2pDiscoveryInit( const char *interface, int port, ickDiscove
 /*------------------------------------------------------------------------*\
     Get IP string from interface
 \*------------------------------------------------------------------------*/
-  ifaddr   = _ickIpGetIfAddr( interface );
+  ifaddr   = _ickIpGetIfAddr( ifname );
   if( ifaddr==INADDR_NONE ) {
     logwarn( "ickP2pDiscoveryInit: could not get IP address of interface \"%s\"",
-             interface );
+             ifname );
     _ickDiscoveryDestruct( dh );
     if( error )
       *error = ICKERR_NOINTERFACE;
     return NULL;
   }
   inet_ntop( AF_INET, &ifaddr, buffer, sizeof(buffer) );
-  dh->location = strdup( buffer );
-  if( !dh->location ) {
+  debug( "ickP2pDiscoveryInit: Using addr %s for interface \"%s\".",
+         buffer, ifname );
+
+/*------------------------------------------------------------------------*\
+    Construct root of location url
+\*------------------------------------------------------------------------*/
+  // fixme: for compatibility to old lib dont't use prefix on first handler
+  //if( !icklib->discoveryHandlers )
+  //  rc = asprintf( &dh->locationRoot, "http://%s:%d", buffer, icklib->lwsPort );
+  //else
+  rc = asprintf( &dh->locationRoot, "http://%s:%d/%d", buffer, icklib->lwsPort, icklib->rCounter++ );
+  if( rc<0 ) {
     logerr( "ickP2pDiscoveryInit: out of memory." );
     _ickDiscoveryDestruct( dh );
     if( error )
       *error = ICKERR_NOMEM;
     return NULL;
   }
-  debug( "ickP2pDiscoveryInit: Using addr %s for interface \"%s\".",
-         dh->location, interface );
+  debug( "ickP2pDiscoveryInit: Using location root \"%s\".", dh->locationRoot );
 
 /*------------------------------------------------------------------------*\
     Create and init SSDP listener socket
@@ -248,18 +257,12 @@ ickDiscovery_t *ickP2pDiscoveryInit( const char *interface, int port, ickDiscove
   // fixme: Need to add localhost??
 
 /*------------------------------------------------------------------------*\
-    Create and init websocket
-\*------------------------------------------------------------------------*/
-  // fixme - we use the discard service for a start
-  dh->wsPort = 9;
-
-/*------------------------------------------------------------------------*\
     Link to list of discovery handlers
 \*------------------------------------------------------------------------*/
-  pthread_mutex_lock( &_ickDiscoveryHandlerListMutex );
-  dh->next = _ickDiscoveryHandlerList;
-  _ickDiscoveryHandlerList = dh;
-  pthread_mutex_unlock( &_ickDiscoveryHandlerListMutex );
+  pthread_mutex_lock( &icklib->discoveryHandlersMutex );
+  dh->next = icklib->discoveryHandlers;
+  icklib->discoveryHandlers = dh;
+  pthread_mutex_unlock( &icklib->discoveryHandlersMutex );
 
 /*------------------------------------------------------------------------*\
     Start SSDP services for this discovery handler
@@ -290,7 +293,8 @@ ickDiscovery_t *ickP2pDiscoveryInit( const char *interface, int port, ickDiscove
 \*=========================================================================*/
 ickErrcode_t ickP2pDiscoveryEnd( ickDiscovery_t *dh )
 {
-  ickDiscovery_t *walk, *last;
+  _ickP2pLibContext_t *icklib = _ickLib;
+  ickDiscovery_t      *walk, *last;
 
   debug( "ickP2pDiscoveryEnd (%p): %s", dh, dh->interface );
 
@@ -310,8 +314,8 @@ ickErrcode_t ickP2pDiscoveryEnd( ickDiscovery_t *dh )
 /*------------------------------------------------------------------------*\
     Unlink from list of discovery handlers
 \*------------------------------------------------------------------------*/
-  pthread_mutex_lock( &_ickDiscoveryHandlerListMutex );
-  for( last=NULL,walk=_ickDiscoveryHandlerList;
+  pthread_mutex_lock( &icklib->discoveryHandlersMutex );
+  for( last=NULL,walk=icklib->discoveryHandlers;
        walk&&walk!=dh;
        last=walk,walk=walk->next );
   if( !walk ) {
@@ -322,8 +326,8 @@ ickErrcode_t ickP2pDiscoveryEnd( ickDiscovery_t *dh )
   if( last )
     last->next = walk->next;
   else
-    _ickDiscoveryHandlerList = walk->next;
-  pthread_mutex_unlock( &_ickDiscoveryHandlerListMutex );
+    icklib->discoveryHandlers = walk->next;
+  pthread_mutex_unlock( &icklib->discoveryHandlersMutex );
 
 /*------------------------------------------------------------------------*\
     Execute callback (if any)
@@ -355,7 +359,7 @@ static void _ickDiscoveryDestruct( ickDiscovery_t *dh )
     Free strings in descriptor
 \*------------------------------------------------------------------------*/
   Sfree( dh->interface );
-  Sfree( dh->location );
+  Sfree( dh->locationRoot );
 
 /*------------------------------------------------------------------------*\
     Close socket (if any)
@@ -470,12 +474,13 @@ ickErrcode_t ickDiscoveryRemoveService( ickDiscovery_t *dh, ickP2pServicetype_t 
 \*=========================================================================*/
 void _ickDiscoveryExecDeviceCallback( ickDiscovery_t *dh, const upnp_device_t *dev, ickP2pDeviceCommand_t change, ickP2pServicetype_t type )
 {
-  struct _cb_list *walk;
+  _ickP2pLibContext_t *icklib = dh->icklib;
+  struct _cb_list           *walk;
 
-  pthread_mutex_lock( &_ickLib->mutex );
-  for( walk=_ickLib->deviceCbList; walk; walk=walk->next )
+  pthread_mutex_lock( &icklib->mutex );
+  for( walk=icklib->deviceCbList; walk; walk=walk->next )
     walk->callback( dh, dev->uuid, change, type );
-  pthread_mutex_unlock( &_ickLib->mutex );
+  pthread_mutex_unlock( &icklib->mutex );
 }
 
 

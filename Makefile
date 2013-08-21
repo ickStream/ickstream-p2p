@@ -34,7 +34,7 @@ CFLAGS          = -Wall -rdynamic -DLWS_NO_FORK -DGIT_VERSION=$(GITVERSION) -D_G
 MKDEPFLAGS	= -Y
 
 # Source files to process
-ICKP2PSRCS      = ickP2p.c ickMainThread.c ickDiscovery.c ickSSDP.c ickP2pCom.c ickErrors.c ickIpTools.c logutils.c
+ICKP2PSRCS      = ickP2p.c ickMainThread.c ickDiscovery.c ickSSDP.c ickDescription.c ickP2pCom.c ickErrors.c ickIpTools.c logutils.c
 MINIUPNPSRCS    = miniupnp/miniupnpc/connecthostport.c miniupnp/miniupnpc/miniwget.c \
                   miniupnp/miniupnpc/minixml.c miniupnp/miniupnpc/receivedata.c
 MINISSDPDSRCS   = miniupnp/minissdpd/openssdpsocket.c miniupnp/minissdpd/upnputils.c                  

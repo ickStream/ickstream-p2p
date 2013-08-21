@@ -78,14 +78,14 @@ typedef struct _upnp_service upnp_service_t;
 //
 struct _ickDiscovery {
   ickDiscovery_t              *next;
-  int                          ttl;
+  _ickP2pLibContext_t         *icklib;
   pthread_mutex_t              mutex;
-  int                          socket;
+  ickDiscoveryEndCb_t          exitCallback;
 
   char                        *interface;      // strong
   int                          port;
-  char                        *location;       // strong
-  ickP2pServicetype_t          services;       // strong
+  int                          socket;
+  char                        *locationRoot;   // strong
 
   // List of remote devices seen by this interface
   upnp_device_t               *deviceList;
@@ -93,12 +93,8 @@ struct _ickDiscovery {
 
   // List of local services offered to the world
   ickP2pServicetype_t          ickServices;
+  int                          ttl;
 
-
-  int                          wsPort;
-//  struct libwebsocket         *wsi; // server side loopback connection.
-
-  ickDiscoveryEndCb_t          exitCallback;
 };
 
 
@@ -115,9 +111,7 @@ struct _ickDiscovery {
 /*=========================================================================*\
   Global symbols
 \*=========================================================================*/
-extern ickDiscovery_t  *_ickDiscoveryHandlerList;
-extern pthread_mutex_t  _ickDiscoveryHandlerListMutex;
-
+// none
 
 
 /*=========================================================================*\
