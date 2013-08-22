@@ -520,6 +520,16 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
   if( !device ) {
     debug ( "_ickDeviceUpdate (%s): adding new device (%s).", ssdp->usn, ssdp->location );
 
+/*
+    // Fixme: This is for backward compatibility
+    // add new devices only via root descriptor
+    if( stype!=ICKP2P_SERVICE_GENERIC ) {
+      _ickDiscoveryDeviceListUnlock( dh );
+      _ickTimerListUnlock( icklib );
+       return 0;
+    }
+*/
+
     // Allocate and initialize descriptor
     device = calloc( 1, sizeof(upnp_device_t) );
     if( !device ) {
@@ -528,14 +538,34 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
       _ickTimerListUnlock( icklib );
       return -1;
     }
+    pthread_mutex_init( &device->mutex, NULL );
     device->dh         = dh;
     device->services   = stype;
     device->livetime   = ssdp->livetime;
     device->uuid       = strdup( ssdp->uuid );
-    device->location   = strdup( ssdp->location );
     device->ickVersion = _ssdpGetVersion( ssdp->usn );
+
+    //fixme: Ver.1 devices only answer to root requests
+    if(device->ickVersion==1 ) {
+      char *ptr=strrchr(ssdp->location,'/');
+      if( ptr )
+        asprintf( &device->location, "%.*s/Root.xml", ptr-ssdp->location, ssdp->location );
+    }
+    if( !device->location )
+      device->location   = strdup( ssdp->location );
     if( !device->uuid || !device->location ) {
       logerr( "_ickDeviceUpdate: out of memory" );
+      _ickDeviceFree( device );
+      _ickDiscoveryDeviceListUnlock( dh );
+      _ickTimerListUnlock( icklib );
+      return -1;
+    }
+
+    // Start retrieval of unpn descriptor
+    irc = _ickDescrRetriveXml( device );
+    if( irc ) {
+      logerr( "_ickDeviceUpdate (%s): could not start xml retriever for update on \"%s\" (%s).",
+          device->uuid, device->location, ickStrError(irc) );
       _ickDeviceFree( device );
       _ickDiscoveryDeviceListUnlock( dh );
       _ickTimerListUnlock( icklib );
@@ -545,7 +575,8 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
     // Create expire timer
     irc = _ickTimerAdd( icklib, device->livetime*1000, 1, _ickDeviceExpireCb, device, 0 );
     if( irc ) {
-      logerr( "_ickDeviceUpdate: could not create expiration timer (%s)", ickStrError(irc) );
+      logerr( "_ickDeviceUpdate (%s): could not create expiration timer (%s)",
+          device->uuid, ickStrError(irc) );
       _ickDeviceFree( device );
       _ickDiscoveryDeviceListUnlock( dh );
       _ickTimerListUnlock( icklib );
@@ -581,8 +612,8 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
 
   // Check protocol version, should be same on one UUID
   if( device->ickVersion!=_ssdpGetVersion(ssdp->usn) )
-    logwarn( "_ickDeviceUpdate: version mismatch for USN \"%s\" (expected %d).",
-             ssdp->usn, device->ickVersion );
+    logwarn( "_ickDeviceUpdate (%s): version mismatch for USN \"%s\" (expected %d).",
+             device->uuid, ssdp->usn, device->ickVersion );
 
 /*
   // New location?
@@ -661,6 +692,7 @@ static int _ickDeviceRemove( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
     _ickTimerListUnlock( icklib );
     return 0;
   }
+  _ickDeviceLock( device );
 
 /*------------------------------------------------------------------------*\
     A service is terminated
@@ -688,12 +720,14 @@ static int _ickDeviceRemove( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
     else
       logerr( "_ickDeviceRemove: could not find expiration timer." );
 
-    // Free instance and release all locks
+    // Free instance
     _ickDeviceFree( device );
   }
+  else
+    _ickDeviceUnlock( device );
 
 /*------------------------------------------------------------------------*\
-    Release all locks
+    Release all remaining locks
 \*------------------------------------------------------------------------*/
   _ickDiscoveryDeviceListUnlock( dh );
   _ickTimerListUnlock( icklib );
@@ -702,6 +736,28 @@ static int _ickDeviceRemove( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
     That's all (code 2 indicates that a device or service was removed)
 \*------------------------------------------------------------------------*/
   return 2;
+}
+
+
+/*=========================================================================*\
+  Lock a device for access or modification
+\*=========================================================================*/
+void _ickDeviceLock( upnp_device_t *device )
+{
+  debug ( "_ickDeviceLock (%s): locking...", device->uuid );
+  pthread_mutex_lock( &device->mutex );
+  debug ( "_ickDeviceLock (%s): locked", device->uuid );
+}
+
+
+/*=========================================================================*\
+  Unlock a device
+\*=========================================================================*/
+void _ickDeviceUnlock( upnp_device_t *device )
+{
+  debug ( "_ickDeviceUnlock (%s): locking...", device->uuid );
+  pthread_mutex_lock( &device->mutex );
+  debug ( "_ickDeviceUnlock (%s): locked", device->uuid );
 }
 
 
@@ -739,11 +795,21 @@ static void _ickDeviceExpireCb( const ickTimer_t *timer, void *data, int tag )
 }
 
 
+
 /*=========================================================================*\
   Free memory for a device descriptor
 \*=========================================================================*/
 static void _ickDeviceFree( upnp_device_t *device )
 {
+
+/*------------------------------------------------------------------------*\
+    Delete mutex
+\*------------------------------------------------------------------------*/
+  pthread_mutex_destroy( &device->mutex );
+
+/*------------------------------------------------------------------------*\
+    Free memory
+\*------------------------------------------------------------------------*/
   Sfree( device->uuid );
   Sfree( device->location );
   Sfree( device );
@@ -1497,7 +1563,7 @@ static int _ssdpGetVersion( const char *dscr )
   version = strtol( ptr+1, &ptr, 10 );
   if( *ptr=='.' )
     logwarn( "_ssdpGetVersion: ignoring minor version (%s).", dscr );
-  else if( ptr )
+  else if( *ptr )
     logwarn( "_ssdpGetVersion: malformed descriptor (%s).", dscr );
 
 /*------------------------------------------------------------------------*\

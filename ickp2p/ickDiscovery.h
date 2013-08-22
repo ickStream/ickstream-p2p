@@ -68,8 +68,6 @@ Remarks         : -
 struct _upnp_device;
 typedef struct _upnp_device upnp_device_t;
 
-struct _upnp_service;
-typedef struct _upnp_service upnp_service_t;
 
 //
 // struct defining a discovery handler.

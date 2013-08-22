@@ -102,6 +102,15 @@ struct _ickTimer {
   ickTimerCb_t    callback;
 };
 
+//
+// Data per libwebsockets HTTP session
+//
+typedef struct {
+  char   *payload;
+  size_t  psize;
+  char   *nextptr;
+} _ickLwsHttpData_t;
+
 
 /*=========================================================================*\
   Private prototypes
@@ -139,7 +148,7 @@ static struct libwebsocket_protocols _lwsProtocols[] = {
   {
     "http-only",
     _lwsHttpCb,
-    0
+    sizeof( _ickLwsHttpData_t )
   },
 
 /*
@@ -193,12 +202,14 @@ void *_ickMainThread( void *arg )
   if( !buffer ) {
     logerr( "ickp2p main thread: out of memory" );
     icklib->error = ICKERR_NOMEM;
+    pthread_cond_signal( &icklib->condIsReady );
     return NULL;
   }
   if( _ickPolllistInit(&plist,ICKPOLLIST_INITSIZE,ICKPOLLIST_INCEMENT) ) {
     logerr( "ickp2p main thread: out of memory" );
     Sfree( buffer );
     icklib->error = ICKERR_NOMEM;
+    pthread_cond_signal( &icklib->condIsReady );
     return NULL;
   }
   if( _ickPolllistInit(&icklib->lwsPolllist,ICKPOLLIST_INITSIZE,ICKPOLLIST_INCEMENT) ) {
@@ -206,6 +217,7 @@ void *_ickMainThread( void *arg )
     Sfree( buffer );
     _ickPolllistFree( &plist );
     icklib->error = ICKERR_NOMEM;
+    pthread_cond_signal( &icklib->condIsReady );
     return NULL;
   }
 
@@ -218,6 +230,7 @@ void *_ickMainThread( void *arg )
     _ickPolllistFree( &plist );
     _ickPolllistFree( &icklib->lwsPolllist );
     icklib->error = ICKERR_LWSERR;
+    pthread_cond_signal( &icklib->condIsReady );
     return NULL;
   }
 
@@ -322,7 +335,6 @@ void *_ickMainThread( void *arg )
       break;
     }
 
-
 /*------------------------------------------------------------------------*\
     Do the polling...
 \*------------------------------------------------------------------------*/
@@ -398,6 +410,7 @@ void *_ickMainThread( void *arg )
 
       // Ignore loop back messages from ourself
       if( ssdp->uuid && !strcasecmp(ssdp->uuid,icklib->deviceUuid) ) {
+        debug( "ickp2p main thread (%s:%d): ignoring message from myself", walk->interface, walk->port );
         _ickSsdpFree( ssdp );
         continue;
       }
@@ -534,9 +547,13 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
                        void *in, size_t len )
 {
   _ickP2pLibContext_t  *icklib = libwebsocket_context_user( context );
+  _ickLwsHttpData_t    *psd = (_ickLwsHttpData_t*) user;
   const ickDiscovery_t *dh;
+  ickP2pServicetype_t   stype;
   int                   retval = 0;
   int                   fd, socket;
+  size_t                remain;
+  int                   sent;
   char                  clientName[160];
   char                  clientIp[128];
 
@@ -561,31 +578,35 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
       break;
 
 /*------------------------------------------------------------------------*\
-    Http connection was closed
-\*------------------------------------------------------------------------*/
-    case LWS_CALLBACK_CLOSED_HTTP:
-      socket = libwebsocket_get_socket_fd( wsi );
-      debug( "_lwsHttpCb %d: connection closed", socket);
-      break;
-
-/*------------------------------------------------------------------------*\
     Serve http content
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_HTTP:
       socket = libwebsocket_get_socket_fd( wsi );
-      debug( "_lwsHttpCb %d: requesting \"%s\"", socket, in );
+      debug( " requesting \"%s\"", socket, in );
+
+      // reset session specific user data
+      memset( psd, 0, sizeof(_ickLwsHttpData_t) );
 
       // Handle UPNP description requests
       pthread_mutex_lock( &icklib->discoveryHandlersMutex );
-      dh = _ickDescrFindDicoveryHandlerByUrl( icklib, in );
+      dh = _ickDescrFindDicoveryHandlerByUrl( icklib, in, &stype );
       if( dh ) {
         debug( "_lwsHttpCb: found matching discovery handler (if \"%s\")",
                dh->interface );
-        retval = _ickDescrServeDeviceDescr( dh, wsi );
+        psd->payload = _ickDescrGetDeviceDescr( dh, wsi, stype );
         pthread_mutex_unlock( &icklib->discoveryHandlersMutex );
+        if( !psd->payload )
+          return -1;
+        psd->psize   = strlen( psd->payload );
+        psd->nextptr = psd->payload;
+        debug( "_lwsHttpCb %d: sending upnp descriptor \"%s\"", socket, psd->payload );
+
+        // Enqueue a LWS_CALLBACK_HTTP_WRITEABLE callback for the real work
+        libwebsocket_callback_on_writable( context, wsi );
         break;
       }
-      pthread_mutex_unlock( &icklib->discoveryHandlersMutex );
+      else
+        pthread_mutex_unlock( &icklib->discoveryHandlersMutex );
 
       // We don't serve root or files if no folder is set
       if( !icklib->upnpFolder || !strcmp(in, "/") ) {
@@ -638,6 +659,34 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
       break;
 
 /*------------------------------------------------------------------------*\
+    Receiver is writable for payload chunk transmission
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_HTTP_WRITEABLE:
+      socket = libwebsocket_get_socket_fd( wsi );
+      remain = psd->psize - (psd->nextptr-psd->payload);
+      debug( "_lwsHttpCb %d: writable, %d bytes remaining", socket, remain );
+
+      // Try to send a chunk
+      sent = libwebsocket_write( wsi, (unsigned char*)psd->nextptr, remain, LWS_WRITE_HTTP );
+      if( sent<0 ) {
+        logerr( "_lwsHttpCb %d: lws write failed", socket );
+        retval = -1;
+        break;
+      }
+
+      // Everything transmitted?
+      if( sent==remain ) {
+        retval = 1;
+        break;
+      }
+
+      // Not ready: enqueue a new callback for leftover
+      debug( "_lwsHttpCb %d: truncated lws write (%d / %d / %d)", socket, len, remain, psd->psize );
+      psd->nextptr += sent;
+      libwebsocket_callback_on_writable( context, wsi );
+      break;
+
+/*------------------------------------------------------------------------*\
     File transfer is complete
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_HTTP_FILE_COMPLETION:
@@ -645,6 +694,15 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
       debug( "_lwsHttpCb %d: file complete", socket );
       // kill the connection after we sent one file
       retval = -1;
+      break;
+
+/*------------------------------------------------------------------------*\
+    Http connection was closed
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_CLOSED_HTTP:
+      socket = libwebsocket_get_socket_fd( wsi );
+      debug( "_lwsHttpCb %d: connection closed", socket);
+      Sfree( psd->payload );
       break;
 
 /*------------------------------------------------------------------------*\

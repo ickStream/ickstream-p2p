@@ -41,7 +41,7 @@ MINISSDPDSRCS   = miniupnp/minissdpd/openssdpsocket.c miniupnp/minissdpd/upnputi
 TESTSRC         = test/ickp2ptest.c
 TESTOBJ         = $(TESTSRC:.c=.o)
 
-LIBSRC          = $(addprefix ickp2p/,$(ICKP2PSRCS))
+LIBSRC          = $(addprefix ickp2p/,$(ICKP2PSRCS)) $(MINIUPNPSRCS)
 LIBOBJ          = $(LIBSRC:.c=.o)
 
 

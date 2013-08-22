@@ -49,8 +49,10 @@ Remarks         : -
 /*=========================================================================*\
   Includes required by definitions from this file
 \*=========================================================================*/
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include "ickDescription.h"
 
 
 /*=========================================================================*\
@@ -119,6 +121,7 @@ struct _ickSsdp_t {
 };
 typedef struct _ickSsdp_t ickSsdp_t;
 
+
 //
 // An ickstream device as discovered by the ssdp listener
 //
@@ -128,11 +131,19 @@ struct _upnp_device {
   upnp_device_t       *prev;
   upnp_device_t       *next;
   ickDiscovery_t      *dh;         // weak
+  pthread_mutex_t      mutex;
   int                  livetime;
   char                *uuid;       // strong
   char                *location;   // strong
   int                  ickVersion;
   ickP2pServicetype_t  services;
+  char                *xmldata;
+
+  // List of active xml retriever threads
+  ickXmlThread_t      *xmlThreads;
+  pthread_mutex_t      xmlThreadsMutex;
+
+
 };
 
 /*------------------------------------------------------------------------*\
@@ -160,6 +171,9 @@ int           _ickSsdpExecute( ickDiscovery_t *dh, const ickSsdp_t *ssdp );
 ickErrcode_t  _ickSsdpNewDiscovery( const ickDiscovery_t *dh );
 void          _ickSsdpEndDiscovery( const ickDiscovery_t *dh );
 ickErrcode_t  _ickSsdpAnnounceServices( ickDiscovery_t *dh, ickP2pServicetype_t service, ickSsdpMsgType_t mtype );
+void          _ickDeviceLock( upnp_device_t *device );
+void          _ickDeviceUnlock( upnp_device_t *device );
+
 
 
 #endif /* __ICKSSDP_H */

@@ -238,11 +238,19 @@ ickErrcode_t ickP2pInit( const char *deviceName, const char *deviceUuid, const c
   }
   if( !rc )
     pthread_mutex_unlock( &_ickLib->mutex );
+
+  // Something went terribly wrong. Can't free descriptor, since thread state is undefined.
   if( rc ) {
     logerr( "ickP2pInit: Unable to wait for main thread: %s", strerror(rc) );
-    irc = _ickLib->error;
     _ickLib->state = ICKLIB_TERMINATING;
     _ickLib = NULL;
+    return ICKERR_NOTHREAD;
+  }
+
+  // Handle main thread initialization errors
+  if( _ickLib->error ) {
+    irc = _ickLib->error;
+    _ickLibDestruct( &_ickLib );
     return irc ? irc : ICKERR_NOTHREAD;
   }
 
@@ -324,6 +332,8 @@ void _ickLibDestruct( _ickP2pLibContext_t **icklibptr )
     Sfree( walk );
     walk = next;
   }
+
+  // lwsPolllist's livecycle is handled by main thread
 
 /*------------------------------------------------------------------------*\
     Free strong string references

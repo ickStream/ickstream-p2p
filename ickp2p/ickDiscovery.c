@@ -79,22 +79,8 @@ Remarks         : -
 /*=========================================================================*\
   Private definitions and symbols
 \*=========================================================================*/
+// none
 
-
-// Services stored for answering to M-SEARCH
-// For ickStream, devices are registered like services, but if the service is "server" more than one service per device may have to be registered
-struct _upnp_service {
-  upnp_service_t  *prev;
-  upnp_service_t  *next;
-  int              adinterval;
-  char            *st;        // strong, service type
-  char            *usn;       // strong, unique identifier
-  char            *server;    // strong, server string
-  char            *location;  // strong, URL
-};
-
-
-// #define LOCALHOST_ADDR "127.0.0.1"
 
 /*=========================================================================*\
   Private prototypes
@@ -575,14 +561,14 @@ void _ickDiscoveryDeviceRemove( ickDiscovery_t *dh, upnp_device_t *dev )
 
 /*=========================================================================*\
   Find a device associated with a discovery handler
+    caller should lock the device list of the handler
     nt and usn are the SSDP header files identifying the device
 \*=========================================================================*/
 upnp_device_t *_ickDiscoveryDeviceFind( const ickDiscovery_t *dh, const char *uuid )
 {
   upnp_device_t *device;
 
-  debug ( "_ickDiscoveryDeviceFind (%s): UUID=\"%s\".",
-          dh->interface, uuid );
+  debug ( "_ickDiscoveryDeviceFind (%s): UUID=\"%s\".", dh->interface, uuid );
 
 /*------------------------------------------------------------------------*\
     Find matching device entry
