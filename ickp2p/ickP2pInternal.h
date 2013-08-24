@@ -80,6 +80,11 @@ typedef struct  {
   nfds_t         increment;
 } ickPolllist_t;
 
+// A wget instance (from ickWGet.c)
+struct _ickWGetContext;
+typedef struct _ickWGetContext ickWGetContext_t;
+
+
 // Elements in linked list of callbacks
 struct _cb_list {
   struct _cb_list        *next;
@@ -109,6 +114,9 @@ typedef struct {
   struct libwebsocket_context *lwsContext;
   int                          lwsPort;
   ickPolllist_t                lwsPolllist;
+
+  ickWGetContext_t            *wGetters;
+  pthread_mutex_t              wGettersMutex;
 
   ickTimer_t                  *timers;
   pthread_mutex_t              timersMutex;

@@ -52,7 +52,6 @@ Remarks         : -
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include "ickDescription.h"
 
 
 /*=========================================================================*\
@@ -138,11 +137,6 @@ struct _upnp_device {
   int                  ickVersion;
   ickP2pServicetype_t  services;
   char                *xmldata;
-
-  // List of active xml retriever threads
-  ickXmlThread_t      *xmlThreads;
-  pthread_mutex_t      xmlThreadsMutex;
-
 
 };
 

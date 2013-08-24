@@ -53,13 +53,13 @@ Remarks         : -
 #include <stdlib.h>
 #include <libwebsockets.h>
 
-#include "miniwget.h"
 #include "minixml.h"
 
 #include "ickP2p.h"
 #include "ickP2pInternal.h"
 #include "ickSSDP.h"
 #include "ickDiscovery.h"
+#include "ickWGet.h"
 #include "ickIpTools.h"
 #include "logutils.h"
 #include "ickDescription.h"
@@ -80,25 +80,13 @@ ickUpnpNames_t ickUpnpNames = {
 /*=========================================================================*\
   Private definitions
 \*=========================================================================*/
-
-//
-// A descriptor for xml retrieving threads
-//
-struct _ickXmlThread {
-  ickXmlThread_t        *next;
-  ickXmlThread_t        *prev;
-  pthread_mutex_t        mutex;
-  pthread_t              thread;
-  upnp_device_t         *device;
-  char                  *uuid;
-  char                  *uri;
-};
+// None
 
 
 /*=========================================================================*\
   Private prototypes
 \*=========================================================================*/
-static void *_xmlLoaderThread( void *arg );
+// none
 
 
 /*=========================================================================*\
@@ -292,205 +280,76 @@ char *_ickDescrGetDeviceDescr( const ickDiscovery_t *dh, struct libwebsocket *ws
 
 
 /*=========================================================================*\
-  Start retrieval of upnp descriptor for a device
-    The device list must be locked by the caller
-    returns 0 on success
+  Callback for the http client implementation
 \*=========================================================================*/
-ickErrcode_t _ickDescrRetriveXml( upnp_device_t *device )
+ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, int arg )
 {
-  ickXmlThread_t *xmlThread;
-  int             rc;
-  pthread_attr_t  attr;
-  debug( "_ickDescrRetriveXml (%s): uri=\"%s\"", device->uuid, device->location );
+  ickErrcode_t  irc = ICKERR_SUCCESS;
+  const char   *uri = _ickWGetUri( context );
 
-/*------------------------------------------------------------------------*\
-  Create thread descriptor
-\*------------------------------------------------------------------------*/
-  xmlThread = calloc( 1, sizeof(ickXmlThread_t) );
-  if( !xmlThread ) {
-    logerr( "_ickDescrRetriveXml: out of memory" );
-    return ICKERR_NOMEM;
-  }
-  xmlThread->device = device;
+  debug( "_ickWGetXmlCb (%s): action=%d", uri, action );
 
-/*------------------------------------------------------------------------*\
-  Duplicate strings
-\*------------------------------------------------------------------------*/
-  xmlThread->uuid = strdup( device->uuid );
-  xmlThread->uri  = strdup( device->location );
-  if( !xmlThread->uuid || !xmlThread->uri ) {
-    Sfree( xmlThread->uuid );
-    Sfree( xmlThread->uri );
-    Sfree( xmlThread );
-    logerr( "_ickDescrRetriveXml: out of memory" );
-    return ICKERR_NOMEM;
-  }
+  switch( action ) {
+    case ICKWGETACT_INIT:
+      debug( "_ickWGetXmlCb (%s): initialized.", uri );
+      break;
 
-/*------------------------------------------------------------------------*\
-  Init Mutex
-\*------------------------------------------------------------------------*/
-  pthread_mutex_init( &xmlThread->mutex, NULL );
+    case ICKWGETACT_DESTROY:
+      debug( "_ickWGetXmlCb (%s): destroyed.", uri );
+      break;
 
-/*------------------------------------------------------------------------*\
-  We will not ever join this thread
-\*------------------------------------------------------------------------*/
-  pthread_attr_init( &attr );
-  pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_DETACHED );
+    case ICKWGETACT_ERROR:
+      debug( "_ickWGetXmlCb (%s): error \"%s\".", uri, _ickWGetErrorString(context) );
+      break;
 
-/*------------------------------------------------------------------------*\
-  Start worker thread
-\*------------------------------------------------------------------------*/
-  rc = pthread_create( &xmlThread->thread, &attr, _xmlLoaderThread, xmlThread );
-  if( rc ) {
-    Sfree( xmlThread->uuid );
-    Sfree( xmlThread->uri );
-    Sfree( xmlThread );
-    logerr( "_ickDescrRetriveXml: Unable to start thread: %s", strerror(rc) );
-    return ICKERR_NOTHREAD;
-  }
+    case ICKWGETACT_COMPLETE:
+      debug( "_ickWGetXmlCb (%s): complete \"%.*s\".", uri, _ickWGetPayloadSize(context), _ickWGetPayload(context) );
 
-/*------------------------------------------------------------------------*\
-  Link to list of threads
-\*------------------------------------------------------------------------*/
-//  pthread_mutex_lock( &device->xmlThreadsMutex );
-  xmlThread->next = device->xmlThreads;
-  if( device->xmlThreads )
-    device->xmlThreads->prev = xmlThread;
-  device->xmlThreads = xmlThread;
-//  pthread_mutex_unlock( &device->xmlThreadsMutex );
-
-/*------------------------------------------------------------------------*\
-  That's all
-\*------------------------------------------------------------------------*/
-  return ICKERR_SUCCESS;
-}
-
-
-/*=========================================================================*\
-  Lock a xml thread descriptor for access or modification
-\*=========================================================================*/
-void _ickXmlThreadLock( ickXmlThread_t *descr )
-{
-  debug ( "_ickXmlThreadLock (%s): locking...", descr->uri );
-  pthread_mutex_lock( &descr->mutex );
-  debug ( "_ickXmlThreadLock (%s): locked", descr->uri );
-}
-
-/*=========================================================================*\
-  Unlock a xml thread descriptor
-\*=========================================================================*/
-void _ickXmlThreadUnlock( ickXmlThread_t *descr )
-{
-  debug ( "_ickXmlThreadUnlock (%s): locking...", descr->uri );
-  pthread_mutex_unlock( &descr->mutex );
-  debug ( "_ickXmlThreadUnlock (%s): locked", descr->uri );
-}
-
-
-/*=========================================================================*\
-  Worker thread for retrieving XML data
-    This is asynchronously operating on the device and executing the
-    user callbacks. It will lock the device list of the discovery handler
-    which will block the main thread! So callback execution is time critical.
-    We have to deal with devices and discovery handlers vanishing.
-\*=========================================================================*/
-static void *_xmlLoaderThread( void *arg )
-{
-  ickXmlThread_t *xmlThread = arg;
-  void          *xmlData;
-  int            xmlSize;
-
-  debug( "xml loader thread (%s): starting (%s)...", xmlThread->uuid, xmlThread->uri );
-  PTHREADSETNAME( "XmlLoader" );
-
-/*------------------------------------------------------------------------*\
-  Load data
-\*------------------------------------------------------------------------*/
-  xmlData = miniwget( xmlThread->uri, &xmlSize, 5 );
-  if( !xmlData ) {
-    logerr( "xml loader thread (%s): could not get xml data.", xmlThread->uuid );
-    goto terminate;
-  }
-  debug( "xml loader thread (%s): got descriptor \"%s\"", xmlThread->uuid, xmlData );
-
-/*------------------------------------------------------------------------*\
-  Try to find and lock the device
-\*------------------------------------------------------------------------*/
 
 /*------------------------------------------------------------------------*\
   Init xml parser
 \*------------------------------------------------------------------------*/
 #if 0
-  struct _ick_xmlparser_s device_parser;
-  device_parser.name = NULL;
-  device_parser.level = 0;
-  device_parser.writeme = 0;
-  device_parser.protocolLevel = ICKPROTOCOL_P2P_GENERIC;
+      struct _ick_xmlparser_s device_parser;
+      device_parser.name = NULL;
+      device_parser.level = 0;
+      device_parser.writeme = 0;
+      device_parser.protocolLevel = ICKPROTOCOL_P2P_GENERIC;
 
-  struct xmlparser parser;
-  /* xmlparser object */
-  parser.xmlstart = data;
-  parser.xmlsize = size;
-  parser.data = &device_parser;
-  parser.starteltfunc = _ick_parsexml_startelt;
-  parser.endeltfunc = _ick_parsexml_endelt;
-  parser.datafunc = _ick_parsexml_processelt;
-  parser.attfunc = 0;
-  parsexml(&parser);
+      struct xmlparser parser;
+      /* xmlparser object */
+      parser.xmlstart = data;
+      parser.xmlsize = size;
+      parser.data = &device_parser;
+      parser.starteltfunc = _ick_parsexml_startelt;
+      parser.endeltfunc = _ick_parsexml_endelt;
+      parser.datafunc = _ick_parsexml_processelt;
+      parser.attfunc = 0;
+      parsexml(&parser);
 
-  pthread_mutex_lock(&_device_mutex);
-  iDev = _ickDeviceGet(UUID);  // need to re-check
-  if (iDev) {
-    iDev->xmlData = data;
-    iDev->xmlSize = size;
-    if ((device_parser.writeme && device_parser.name) && (iDev->name == NULL)) {
-      iDev->name = device_parser.name;
-      _ick_execute_DeviceCallback(iDev, ICKDISCOVERY_ADD_DEVICE);
-      if (_discovery->exitCallback)
-        _discovery->exitCallback();
-    } else {
-      if (device_parser.name)
-        free(device_parser.name);
-    }
-    iDev->protocolLevel = device_parser.protocolLevel;
-  }
-  pthread_mutex_unlock(&_device_mutex);
+      pthread_mutex_lock(&_device_mutex);
+      iDev = _ickDeviceGet(UUID);  // need to re-check
+      if (iDev) {
+        iDev->xmlData = data;
+        iDev->xmlSize = size;
+        if ((device_parser.writeme && device_parser.name) && (iDev->name == NULL)) {
+          iDev->name = device_parser.name;
+          _ick_execute_DeviceCallback(iDev, ICKDISCOVERY_ADD_DEVICE);
+          if (_discovery->exitCallback)
+            _discovery->exitCallback();
+        } else {
+          if (device_parser.name)
+            free(device_parser.name);
+        }
+        iDev->protocolLevel = device_parser.protocolLevel;
+      }
+      pthread_mutex_unlock(&_device_mutex);
 #endif
+      break;
 
-/*------------------------------------------------------------------------*\
-  Unlink from list of threads, if device is still active
-\*------------------------------------------------------------------------*/
-terminate:
-  _ickXmlThreadLock( xmlThread );
-  if( xmlThread->device ) {
-    _ickDeviceLock( xmlThread->device );
-    pthread_mutex_lock ( &xmlThread->device->xmlThreadsMutex );
-    if( xmlThread->prev )
-      xmlThread->prev->next = xmlThread->next;
-    else
-      xmlThread->device->xmlThreads = xmlThread->next;
-    if( xmlThread->next )
-      xmlThread->next->prev = xmlThread->prev;
-    pthread_mutex_unlock ( &xmlThread->device->xmlThreadsMutex );
   }
-  _ickXmlThreadUnlock( xmlThread );
 
-/*------------------------------------------------------------------------*\
-  Destroy Mutex
-\*------------------------------------------------------------------------*/
-  pthread_mutex_destroy( &xmlThread->mutex );
-
-/*------------------------------------------------------------------------*\
-  Free strings and thread descriptor
-\*------------------------------------------------------------------------*/
-  Sfree( xmlThread->uuid );
-  Sfree( xmlThread->uri );
-  Sfree( xmlThread );
-
-/*------------------------------------------------------------------------*\
-    That's all
-\*------------------------------------------------------------------------*/
-  return NULL;
+  return irc;
 }
 
 

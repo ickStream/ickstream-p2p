@@ -86,6 +86,8 @@ typedef void (*ickTimerCb_t)( const ickTimer_t *timer, void *data, int tag );
 \*=========================================================================*/
 void         *_ickMainThread( void *arg );
 
+ickErrcode_t  _ickMainThreadAddWGet( ickWGetContext_t *ickWGet );
+
 void          _ickTimerListLock( _ickP2pLibContext_t *icklib );
 void          _ickTimerListUnlock( _ickP2pLibContext_t *icklib );
 ickErrcode_t  _ickTimerAdd( _ickP2pLibContext_t *icklib, long interval, int repeat, ickTimerCb_t callback, void *data, int tag );

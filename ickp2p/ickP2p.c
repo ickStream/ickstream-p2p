@@ -173,6 +173,7 @@ ickErrcode_t ickP2pInit( const char *deviceName, const char *deviceUuid, const c
   pthread_mutex_init( &_ickLib->mutex, NULL );
   pthread_mutex_init( &_ickLib->discoveryHandlersMutex, NULL );
   pthread_mutex_init( &_ickLib->timersMutex, NULL );
+  pthread_mutex_init( &_ickLib->wGettersMutex, NULL );
 
 /*------------------------------------------------------------------------*\
     Get name and version of operating system
@@ -350,6 +351,7 @@ void _ickLibDestruct( _ickP2pLibContext_t **icklibptr )
   pthread_cond_destroy( &(*icklibptr)->condIsReady );
   pthread_mutex_destroy( &(*icklibptr)->discoveryHandlersMutex );
   pthread_mutex_destroy( &(*icklibptr)->timersMutex );
+  pthread_mutex_destroy( &(*icklibptr)->wGettersMutex );
 
 /*------------------------------------------------------------------------*\
     Close help pipe for breaking polls

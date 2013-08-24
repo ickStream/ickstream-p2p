@@ -71,6 +71,7 @@ Remarks         : -
 #include "ickDescription.h"
 #include "ickP2pCom.h"
 #include "logutils.h"
+#include "ickWGet.h"
 #include "ickMainThread.h"
 
 
@@ -244,12 +245,13 @@ void *_ickMainThread( void *arg )
     Run while not terminating
 \*------------------------------------------------------------------------*/
   while( icklib->state<ICKLIB_TERMINATING ) {
-    struct sockaddr address;
-    socklen_t       addrlen = sizeof(address);
-    ickDiscovery_t *walk;
-    int             timeout;
-    int             retval;
-    int             i;
+    struct sockaddr   address;
+    socklen_t         addrlen = sizeof(address);
+    ickDiscovery_t   *dh;
+    ickWGetContext_t *wget, *wgetNext;
+    int               timeout;
+    int               retval;
+    int               i;
 
 /*------------------------------------------------------------------------*\
     Execute all pending timers
@@ -318,14 +320,31 @@ void *_ickMainThread( void *arg )
     Collect all SSDP sockets from discovery handlers
 \*------------------------------------------------------------------------*/
     pthread_mutex_lock( &icklib->discoveryHandlersMutex );
-    for( walk=icklib->discoveryHandlers; walk; walk=walk->next )
-      if( _ickPolllistAdd( &plist, walk->socket, POLLIN ) )
+    for( dh=icklib->discoveryHandlers; dh; dh=dh->next ) {
+      if( _ickPolllistAdd(&plist,dh->socket,POLLIN) )
         break;
+    }
     pthread_mutex_unlock( &icklib->discoveryHandlersMutex );
-    if( walk ) {
+    if( dh ) {
       logerr( "ickp2p main thread: out of memory." );
       break;
     }
+
+/*------------------------------------------------------------------------*\
+    Collect all http client instances from discovery handlers
+\*------------------------------------------------------------------------*/
+#if 0
+    pthread_mutex_lock( &icklib->wGettersMutex );
+    for( wget=icklib->wGetters; wget; wget=wget->next ) {
+      if( _ickPolllistAdd(&plist,_ickWGetSocket(dh),POLLIN) )
+        break;
+    }
+    pthread_mutex_unlock( &icklib->wGettersMutex );
+    if( wget ) {
+      logerr( "ickp2p main thread: out of memory." );
+      break;
+    }
+#endif
 
 /*------------------------------------------------------------------------*\
     Merge sockets managed by libwebsockets
@@ -365,7 +384,7 @@ void *_ickMainThread( void *arg )
       ssize_t len = read( plist.fds[0].fd, buffer, ICKDISCOVERY_HEADER_SIZE_MAX );
       if( len<0 )
         logerr( "ickp2p main thread (%s:%d): Unable to read poll break pipe: %s",
-                   walk->interface, walk->port, strerror(errno) );
+                   dh->interface, dh->port, strerror(errno) );
       else
         debug( "ickp2p main thread: received break pipe signal (%dx)", (int)len );
       if( retval==1 )
@@ -376,29 +395,29 @@ void *_ickMainThread( void *arg )
     Process incoming data from SSDP ports
 \*------------------------------------------------------------------------*/
     pthread_mutex_lock( &icklib->discoveryHandlersMutex );
-    for( walk=icklib->discoveryHandlers; walk; walk=walk->next ) {
+    for( dh=icklib->discoveryHandlers; dh; dh=dh->next ) {
       ssize_t len;
 
       // Is this socket readable?
-      if( _ickPolllistCheck(&plist,walk->socket,POLLIN)<=0 )
+      if( _ickPolllistCheck(&plist,dh->socket,POLLIN)<=0 )
         continue;
 
       // receive data
       memset( buffer, 0, ICKDISCOVERY_HEADER_SIZE_MAX );
-      len = recvfrom( walk->socket, buffer, ICKDISCOVERY_HEADER_SIZE_MAX, 0, &address, &addrlen );
+      len = recvfrom( dh->socket, buffer, ICKDISCOVERY_HEADER_SIZE_MAX, 0, &address, &addrlen );
       if( len<0 ) {
         logwarn( "ickp2p main thread (%s:%d): recvfrom failed (%s).",
-                   walk->interface, walk->port, strerror(errno) );
+                   dh->interface, dh->port, strerror(errno) );
         continue;
       }
       if( !len ) {  // ?? Not possible for udp
         debug( "ickp2p main thread (%s:%d): disconnected.",
-               walk->interface, walk->port );
+               dh->interface, dh->port );
         continue;
       }
 
       debug( "ickp2p main thread (%s:%d): received %ld bytes from %s:%d: \"%.*s\"",
-             walk->interface, walk->port, (long)len,
+             dh->interface, dh->port, (long)len,
              inet_ntoa(((const struct sockaddr_in *)&address)->sin_addr),
              ntohs(((const struct sockaddr_in *)&address)->sin_port),
              len, buffer );
@@ -410,15 +429,15 @@ void *_ickMainThread( void *arg )
 
       // Ignore loop back messages from ourself
       if( ssdp->uuid && !strcasecmp(ssdp->uuid,icklib->deviceUuid) ) {
-        debug( "ickp2p main thread (%s:%d): ignoring message from myself", walk->interface, walk->port );
+        debug( "ickp2p main thread (%s:%d): ignoring message from myself", dh->interface, dh->port );
         _ickSsdpFree( ssdp );
         continue;
       }
 
       // Process data (lock handler while doing so)
-      pthread_mutex_lock( &walk->mutex );
-      _ickSsdpExecute( walk, ssdp );
-      pthread_mutex_unlock( &walk->mutex );
+      pthread_mutex_lock( &dh->mutex );
+      _ickSsdpExecute( dh, ssdp );
+      pthread_mutex_unlock( &dh->mutex );
 
       // Free internal SSDP representation
       _ickSsdpFree( ssdp );
@@ -427,14 +446,46 @@ void *_ickMainThread( void *arg )
     pthread_mutex_unlock( &icklib->discoveryHandlersMutex );
 
 /*------------------------------------------------------------------------*\
+    Process http client sockets
+\*------------------------------------------------------------------------*/
+    pthread_mutex_lock( &icklib->wGettersMutex );
+    for( wget=icklib->wGetters; wget; wget=wgetNext ) {
+      wgetNext = wget->next;
+/*    int fd = _ickWGetSocket( wget );
+
+      i = _ickPolllistGetIndex( &plist, fd );
+      if( i<0 ) {
+        logwarn( "ickp2p main thread: wget socket %d not in plist", fd );
+        continue;
+      }
+      debug( "ickp2p main thread: servicing wget socket %d (event mask 0x%02x)",
+             plist.fds[i].fd, plist.fds[i].revents );
+      irc = _ickWGetServiceFd( wget, &plist.fds[i] );
+*/    // For the time beeing just check the state of the separate thread
+      if( _ickWGetServiceFd(wget,NULL) ) {
+        // unlink from list of getters
+        if( wget->next )
+          wget->next->prev = wget->prev;
+        if( wget->prev )
+          wget->prev->next = wget->next;
+        else
+          icklib->wGetters = wget->next;
+        // And Destroy
+        _ickWGetDestroy( wget );
+      }
+    }
+    pthread_mutex_unlock( &icklib->wGettersMutex );
+
+/*------------------------------------------------------------------------*\
     Service libwebsockets descriptors
 \*------------------------------------------------------------------------*/
     for( i=0; i<plist.nfds; i++ ) {
+      // Is this member of the lws set?
       if( _ickPolllistGetIndex(&icklib->lwsPolllist,plist.fds[i].fd)<0 )
         continue;
       debug( "ickp2p main thread: servicing lws socket %d (event mask 0x%02x)",
              plist.fds[i].fd, plist.fds[i].revents );
-      if( libwebsocket_service_fd(icklib->lwsContext, &plist.fds[i] )<0 ) {
+      if( libwebsocket_service_fd(icklib->lwsContext, &plist.fds[i])<0 ) {
         logerr( "ickp2p main thread: libwebsocket_service_fd returned an error." );
         break;
       }
@@ -582,7 +633,7 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_HTTP:
       socket = libwebsocket_get_socket_fd( wsi );
-      debug( " requesting \"%s\"", socket, in );
+      debug( "_lwsHttpCb %d: requesting \"%s\"", socket, in );
 
       // reset session specific user data
       memset( psd, 0, sizeof(_ickLwsHttpData_t) );
@@ -625,7 +676,7 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
 
         // Get full path
         sprintf( resource, "%s%s", icklib->upnpFolder, (char*)in );
-        debug( "_lwsHttpCb: resource path \"%s\"", resource );
+        debug( "_lwsHttpCb %d: resource path is \"%s\"", socket, resource );
 
         if( stat(resource,&sbuffer) ) {
           void *response = HTTP_404;
@@ -953,9 +1004,9 @@ static int _ickPolllistSet( ickPolllist_t *plist, int fd, int events )
   }
 
 /*------------------------------------------------------------------------*\
-    Set requested bists
+    Set requested bits
 \*------------------------------------------------------------------------*/
-  plist->fds[idx].revents |= events;
+  plist->fds[idx].events |= events;
 
 /*------------------------------------------------------------------------*\
     That's all
@@ -985,7 +1036,7 @@ static int _ickPolllistUnset( ickPolllist_t *plist, int fd, int events )
 /*------------------------------------------------------------------------*\
     Set requested bists
 \*------------------------------------------------------------------------*/
-  plist->fds[idx].revents &= ~events;
+  plist->fds[idx].events &= ~events;
 
 /*------------------------------------------------------------------------*\
     That's all

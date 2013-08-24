@@ -51,6 +51,8 @@ Remarks         : -
 \*=========================================================================*/
 #include "ickP2p.h"
 #include "ickDiscovery.h"
+#include "ickWGet.h"
+
 
 /*=========================================================================*\
   Definition of constants
@@ -120,9 +122,6 @@ typedef enum ickDiscovery_protocol_level {
   ICKPROTOCOL_P2P_INVALID             = 0xe0   // mask to find illegal codes. Used to be backward compatible with previous implementations usually starting messages with "{" or "[". Should be deprecated until launch, then we can use 8 bits for protocol properties
 } ickDiscoveryProtocolLevel_t;
 
-struct _ickXmlThread;
-typedef struct _ickXmlThread ickXmlThread_t;
-
 
 /*------------------------------------------------------------------------*\
   Macros
@@ -143,9 +142,8 @@ typedef struct _ickXmlThread ickXmlThread_t;
 \*=========================================================================*/
 ickDiscovery_t *_ickDescrFindDicoveryHandlerByUrl( const _ickP2pLibContext_t *icklib, const char *uri, ickP2pServicetype_t *stype );
 char           *_ickDescrGetDeviceDescr( const ickDiscovery_t *dh, struct libwebsocket *wsi, ickP2pServicetype_t stype );
-ickErrcode_t    _ickDescrRetriveXml( upnp_device_t *device );
-void            _ickXmlThreadLock( ickXmlThread_t *descr );
-void            _ickXmlThreadUnlock( ickXmlThread_t *descr );
+
+ickErrcode_t    _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, int arg );
 
 
 #endif /* __ICKDESCRIPTION_H */

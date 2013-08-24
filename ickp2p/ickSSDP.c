@@ -67,6 +67,7 @@ Remarks         : refactored from ickDiscoverRegistry
 #include "ickDiscovery.h"
 #include "ickDescription.h"
 #include "ickMainThread.h"
+#include "ickWGet.h"
 #include "ickSSDP.h"
 
 
@@ -479,6 +480,7 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
   _ickP2pLibContext_t *icklib = dh->icklib;
   upnp_device_t       *device;
   ickTimer_t          *timer;
+  ickWGetContext_t    *wget;
   const char          *peer;
   ickErrcode_t         irc;
   ickP2pServicetype_t  stype;
@@ -562,8 +564,8 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
     }
 
     // Start retrieval of unpn descriptor
-    irc = _ickDescrRetriveXml( device );
-    if( irc ) {
+    wget = _ickWGetInit( device->location, _ickWGetXmlCb, device, &irc );
+    if( !wget ) {
       logerr( "_ickDeviceUpdate (%s): could not start xml retriever for update on \"%s\" (%s).",
           device->uuid, device->location, ickStrError(irc) );
       _ickDeviceFree( device );
@@ -571,6 +573,14 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
       _ickTimerListUnlock( icklib );
       return -1;
     }
+
+    // Link to list of getters
+    pthread_mutex_lock( &icklib->wGettersMutex );
+    wget->next = icklib->wGetters;
+    if( wget->next )
+      wget->next->prev = wget;
+    icklib->wGetters = wget;
+    pthread_mutex_unlock( &icklib->wGettersMutex );
 
     // Create expire timer
     irc = _ickTimerAdd( icklib, device->livetime*1000, 1, _ickDeviceExpireCb, device, 0 );

@@ -34,7 +34,7 @@ CFLAGS          = -Wall -rdynamic -DLWS_NO_FORK -DGIT_VERSION=$(GITVERSION) -D_G
 MKDEPFLAGS	= -Y
 
 # Source files to process
-ICKP2PSRCS      = ickP2p.c ickMainThread.c ickDiscovery.c ickSSDP.c ickDescription.c ickP2pCom.c ickErrors.c ickIpTools.c logutils.c
+ICKP2PSRCS      = ickP2p.c ickMainThread.c ickDiscovery.c ickSSDP.c ickDescription.c ickP2pCom.c ickErrors.c ickWGet.c ickIpTools.c logutils.c
 MINIUPNPSRCS    = miniupnp/miniupnpc/connecthostport.c miniupnp/miniupnpc/miniwget.c \
                   miniupnp/miniupnpc/minixml.c miniupnp/miniupnpc/receivedata.c
 MINISSDPDSRCS   = miniupnp/minissdpd/openssdpsocket.c miniupnp/minissdpd/upnputils.c                  
@@ -123,21 +123,35 @@ ickp2p/ickP2p.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h
 ickp2p/ickP2p.o: ickp2p/ickMainThread.h ickp2p/ickDiscovery.h
 ickp2p/ickP2p.o: ickp2p/logutils.h
 ickp2p/ickMainThread.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h
-ickp2p/ickMainThread.o: ickp2p/ickDiscovery.h ickp2p/ickSSDP.h
-ickp2p/ickMainThread.o: ickp2p/ickP2pCom.h ickp2p/logutils.h
+ickp2p/ickMainThread.o: ickp2p/ickIpTools.h ickp2p/ickDiscovery.h
+ickp2p/ickMainThread.o: ickp2p/ickSSDP.h ickp2p/ickDescription.h
+ickp2p/ickMainThread.o: ickp2p/ickWGet.h ickp2p/ickP2pCom.h ickp2p/logutils.h
 ickp2p/ickMainThread.o: ickp2p/ickMainThread.h
 ickp2p/ickDiscovery.o: miniupnp/minissdpd/openssdpsocket.h ickp2p/ickP2p.h
 ickp2p/ickDiscovery.o: ickp2p/ickP2pInternal.h ickp2p/ickIpTools.h
 ickp2p/ickDiscovery.o: ickp2p/logutils.h ickp2p/ickSSDP.h
 ickp2p/ickDiscovery.o: ickp2p/ickDiscovery.h
 ickp2p/ickSSDP.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h ickp2p/logutils.h
-ickp2p/ickSSDP.o: ickp2p/ickDiscovery.h ickp2p/ickMainThread.h
-ickp2p/ickSSDP.o: ickp2p/ickSSDP.h
+ickp2p/ickSSDP.o: ickp2p/ickDiscovery.h ickp2p/ickDescription.h
+ickp2p/ickSSDP.o: ickp2p/ickWGet.h ickp2p/ickMainThread.h ickp2p/ickSSDP.h
+ickp2p/ickDescription.o: miniupnp/miniupnpc/minixml.h ickp2p/ickP2p.h
+ickp2p/ickDescription.o: ickp2p/ickP2pInternal.h ickp2p/ickSSDP.h
+ickp2p/ickDescription.o: ickp2p/ickDiscovery.h ickp2p/ickIpTools.h
+ickp2p/ickDescription.o: ickp2p/logutils.h ickp2p/ickDescription.h
+ickp2p/ickDescription.o: ickp2p/ickWGet.h
 ickp2p/ickP2pCom.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h
 ickp2p/ickP2pCom.o: ickp2p/ickIpTools.h ickp2p/logutils.h ickp2p/ickP2pCom.h
 ickp2p/ickErrors.o: ickp2p/ickP2p.h
 ickp2p/ickIpTools.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h
 ickp2p/ickIpTools.o: ickp2p/logutils.h ickp2p/ickIpTools.h
 ickp2p/logutils.o: ickp2p/logutils.h ickp2p/ickP2p.h
+miniupnp/miniupnpc/connecthostport.o: miniupnp/miniupnpc/connecthostport.h
+miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/miniupnpcstrings.h
+miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/miniwget.h
+miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/declspec.h
+miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/connecthostport.h
+miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/receivedata.h
+miniupnp/miniupnpc/minixml.o: miniupnp/miniupnpc/minixml.h
+miniupnp/miniupnpc/receivedata.o: miniupnp/miniupnpc/receivedata.h
 
 test/ickp2ptest.o: include/ickP2p.h
