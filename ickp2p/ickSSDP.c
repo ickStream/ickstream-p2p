@@ -564,7 +564,7 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
     }
 
     // Start retrieval of unpn descriptor
-    wget = _ickWGetInit( device->location, _ickWGetXmlCb, device, &irc );
+    wget = _ickWGetInit( icklib, device->location, _ickWGetXmlCb, device, &irc );
     if( !wget ) {
       logerr( "_ickDeviceUpdate (%s): could not start xml retriever for update on \"%s\" (%s).",
           device->uuid, device->location, ickStrError(irc) );

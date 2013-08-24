@@ -168,17 +168,6 @@ static struct libwebsocket_protocols _lwsProtocols[] = {
 };
 
 
-//
-//  Polling descriptors
-//
-
-
-//
-//  Timer repository
-//
-
-
-
 /*=========================================================================*\
   Ickstream main communication thread
 \*=========================================================================*/
@@ -186,6 +175,7 @@ void *_ickMainThread( void *arg )
 {
   _ickP2pLibContext_t *icklib = *(_ickP2pLibContext_t**)arg;
   ickPolllist_t        plist;
+  ickWGetContext_t    *wget, *wgetNext;
   char                *buffer;
 
   debug( "ickp2p main thread: starting..." );
@@ -248,7 +238,6 @@ void *_ickMainThread( void *arg )
     struct sockaddr   address;
     socklen_t         addrlen = sizeof(address);
     ickDiscovery_t   *dh;
-    ickWGetContext_t *wget, *wgetNext;
     int               timeout;
     int               retval;
     int               i;
@@ -371,25 +360,26 @@ void *_ickMainThread( void *arg )
       debug( "ickp2p main thread: timed out." );
       continue;
     }
-    if( icklib->state==ICKLIB_TERMINATING )
-      break;
     for( i=0; i<plist.nfds; i++ )
       debug( "ickp2p main thread: poll list element #%d - %d (revent mask 0x%02x)",
              i, plist.fds[i].fd, plist.fds[i].revents );
 
 /*------------------------------------------------------------------------*\
-    Was there a timer update?
+    Was there a break request?
 \*------------------------------------------------------------------------*/
     if( plist.fds[0].revents&POLLIN ) {
       ssize_t len = read( plist.fds[0].fd, buffer, ICKDISCOVERY_HEADER_SIZE_MAX );
       if( len<0 )
-        logerr( "ickp2p main thread (%s:%d): Unable to read poll break pipe: %s",
+        logerr( "ickp2p main thread (%s:%d): Unable to read break request pipe: %s",
                    dh->interface, dh->port, strerror(errno) );
       else
-        debug( "ickp2p main thread: received break pipe signal (%dx)", (int)len );
+        debug( "ickp2p main thread: received break requests (%dx: \"%.*s\")",
+               (int)len, (int)len, buffer );
       if( retval==1 )
         continue;
     }
+    if( icklib->state==ICKLIB_TERMINATING )
+      break;
 
 /*------------------------------------------------------------------------*\
     Process incoming data from SSDP ports
@@ -515,6 +505,16 @@ void *_ickMainThread( void *arg )
   _ickTimerListUnlock( icklib );
 
 /*------------------------------------------------------------------------*\
+    Destroy all open http clients
+\*------------------------------------------------------------------------*/
+    pthread_mutex_lock( &icklib->wGettersMutex );
+    for( wget=icklib->wGetters; wget; wget=wgetNext ) {
+      wgetNext = wget->next;
+      _ickWGetDestroy( wget );
+    }
+    pthread_mutex_unlock( &icklib->wGettersMutex );
+
+/*------------------------------------------------------------------------*\
     Execute callback, if requested
 \*------------------------------------------------------------------------*/
   if( icklib->cbEnd )
@@ -525,6 +525,25 @@ void *_ickMainThread( void *arg )
 \*------------------------------------------------------------------------*/
   _ickLibDestruct( (_ickP2pLibContext_t**)arg );
   return NULL;
+}
+
+
+/*=========================================================================*\
+  Create a libwebsocket instance
+\*=========================================================================*/
+void _ickMainThreadBreak( _ickP2pLibContext_t *icklib, char flag )
+{
+  debug( "_ickMainThreadBreak: sending break request '%c'", flag );
+
+/*------------------------------------------------------------------------*\
+    Try to send flag
+\*------------------------------------------------------------------------*/
+  if( _ickLib && write(_ickLib->pollBreakPipe[1],&flag,1)<0 )
+    logerr( "_ickMainThreadBreak: Unable to write to poll break pipe: %s", strerror(errno) );
+
+/*------------------------------------------------------------------------*\
+    That's it
+\*------------------------------------------------------------------------*/
 }
 
 
@@ -1320,9 +1339,7 @@ static void _ickTimerLink( _ickP2pLibContext_t *icklib, ickTimer_t *timer )
     icklib->timers = timer;
 
     // If root was changed write to help pipe to break main loop poll timer
-    debug( "_ickTimerLink: send break pipe signal" );
-    if( _ickLib && write(_ickLib->pollBreakPipe[1],"",1)<0 )
-      logerr( "_ickTimerLink: Unable to write to poll break pipe: %s", strerror(errno) );
+    _ickMainThreadBreak( icklib, 'T' );
   }
 
 /*------------------------------------------------------------------------*\

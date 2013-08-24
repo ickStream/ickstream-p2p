@@ -286,6 +286,7 @@ ickErrcode_t ickP2pEnd( ickP2pEndCb_t callback )
 \*------------------------------------------------------------------------*/
   _ickLib->cbEnd = callback;
   _ickLib->state = ICKLIB_TERMINATING;
+  _ickMainThreadBreak( _ickLib, 'X' );
 
 /*------------------------------------------------------------------------*\
     Wait for actual thread termination in synchronous mode
