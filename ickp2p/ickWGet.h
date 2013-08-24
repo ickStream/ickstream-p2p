@@ -118,9 +118,10 @@ struct _ickWGetContext {
 /*=========================================================================*\
   Internal prototypes
 \*=========================================================================*/
-ickWGetContext_t *_ickWGetInit( _ickP2pLibContext_t *icklib, const char *uri, ickWGetCb_t callback, void *user, ickErrcode_t *error );
+ickWGetContext_t *_ickWGetInit( _ickP2pLibContext_t *icklib, const char *uri, ickWGetCb_t callback, void *userData, ickErrcode_t *error );
 void              _ickWGetDestroy( ickWGetContext_t *context );
 ickErrcode_t      _ickWGetServiceFd( ickWGetContext_t *context, struct pollfd *pollfd );
+void             *_ickWGetUserData( const ickWGetContext_t *context );
 void             *_ickWGetPayload( const ickWGetContext_t *context );
 size_t            _ickWGetPayloadSize( const ickWGetContext_t *context );
 const char       *_ickWGetUri( const ickWGetContext_t *context );

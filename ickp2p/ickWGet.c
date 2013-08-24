@@ -233,6 +233,14 @@ static void _ickWGetUnlock( ickWGetContext_t *context )
 }
 
 
+/*=========================================================================*\
+  Get user data
+\*=========================================================================*/
+void *_ickWGetUserData( const ickWGetContext_t *context )
+{
+  return context->userData;
+}
+
 
 /*=========================================================================*\
   Get payload

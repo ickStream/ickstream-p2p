@@ -52,6 +52,7 @@ Remarks         : -
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include "ickDescription.h"
 
 
 /*=========================================================================*\
@@ -129,14 +130,15 @@ typedef struct _upnp_device upnp_device_t;
 struct _upnp_device {
   upnp_device_t       *prev;
   upnp_device_t       *next;
-  ickDiscovery_t      *dh;         // weak
+  ickDiscovery_t      *dh;            // weak
   pthread_mutex_t      mutex;
   int                  livetime;
-  char                *uuid;       // strong
-  char                *location;   // strong
-  int                  ickVersion;
+  char                *uuid;          // strong
+  char                *location;      // strong
+  int                  ickUpnpVersion;
   ickP2pServicetype_t  services;
-  char                *xmldata;
+  char                *friendlyName;  // strong
+  ickP2pLevel_t        ickP2pLevel;
 
 };
 

@@ -541,14 +541,14 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
       return -1;
     }
     pthread_mutex_init( &device->mutex, NULL );
-    device->dh         = dh;
-    device->services   = stype;
-    device->livetime   = ssdp->livetime;
-    device->uuid       = strdup( ssdp->uuid );
-    device->ickVersion = _ssdpGetVersion( ssdp->usn );
+    device->dh             = dh;
+    device->services       = stype;
+    device->livetime       = ssdp->livetime;
+    device->uuid           = strdup( ssdp->uuid );
+    device->ickUpnpVersion = _ssdpGetVersion( ssdp->usn );
 
     //fixme: Ver.1 devices only answer to root requests
-    if(device->ickVersion==1 ) {
+    if(device->ickUpnpVersion==1 ) {
       char *ptr=strrchr(ssdp->location,'/');
       if( ptr )
         asprintf( &device->location, "%.*s/Root.xml", ptr-ssdp->location, ssdp->location );
@@ -597,7 +597,8 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
     _ickDiscoveryDeviceAdd( dh, device );
 
     // Execute callbacks registered with discovery handler
-    _ickDiscoveryExecDeviceCallback( dh, device, ICKP2P_ADD, stype );
+    // this is done by the xml handler after the device is full initialzed
+    // _ickDiscoveryExecDeviceCallback( dh, device, ICKP2P_ADD, stype );
 
     // Release all locks and return code 1 (a device was added)
     _ickDiscoveryDeviceListUnlock( dh );
@@ -621,9 +622,9 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
     logerr( "_ickDeviceUpdate: could not find expiration timer." );
 
   // Check protocol version, should be same on one UUID
-  if( device->ickVersion!=_ssdpGetVersion(ssdp->usn) )
+  if( device->ickUpnpVersion!=_ssdpGetVersion(ssdp->usn) )
     logwarn( "_ickDeviceUpdate (%s): version mismatch for USN \"%s\" (expected %d).",
-             device->uuid, ssdp->usn, device->ickVersion );
+             device->uuid, ssdp->usn, device->ickUpnpVersion );
 
 /*
   // New location?
@@ -643,7 +644,7 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
 */
 
   // New service: Execute callbacks registered with discovery handler
-  if( stype & ~device->services ) {
+  if( (stype&~device->services) ) {
     device->services |= stype;
     _ickDiscoveryExecDeviceCallback( dh, device, ICKP2P_ADD, stype );
   }
@@ -668,6 +669,7 @@ static int _ickDeviceRemove( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
 {
   _ickP2pLibContext_t *icklib = dh->icklib;
   upnp_device_t       *device;
+  ickWGetContext_t    *wget, *wgetNext;
   ickTimer_t          *timer;
   ickP2pServicetype_t  stype;
 
@@ -729,6 +731,24 @@ static int _ickDeviceRemove( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
       _ickTimerDelete( icklib, timer );
     else
       logerr( "_ickDeviceRemove: could not find expiration timer." );
+
+    // Find and remove HTTP clients for this device
+    pthread_mutex_lock( &icklib->wGettersMutex );
+    for( wget=icklib->wGetters; wget; wget=wgetNext ) {
+      wgetNext = wget->next;
+      if( _ickWGetUserData(wget)==device ) {
+        // unlink from list of getters
+        if( wget->next )
+          wget->next->prev = wget->prev;
+        if( wget->prev )
+          wget->prev->next = wget->next;
+        else
+          icklib->wGetters = wget->next;
+        // And Destroy
+        _ickWGetDestroy( wget );
+      }
+    }
+    pthread_mutex_unlock( &icklib->wGettersMutex );
 
     // Free instance
     _ickDeviceFree( device );
@@ -822,6 +842,7 @@ static void _ickDeviceFree( upnp_device_t *device )
 \*------------------------------------------------------------------------*/
   Sfree( device->uuid );
   Sfree( device->location );
+  Sfree( device->friendlyName );
   Sfree( device );
 }
 

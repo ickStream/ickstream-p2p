@@ -461,14 +461,22 @@ ickErrcode_t ickDiscoveryRemoveService( ickDiscovery_t *dh, ickP2pServicetype_t 
 void _ickDiscoveryExecDeviceCallback( ickDiscovery_t *dh, const upnp_device_t *dev, ickP2pDeviceCommand_t change, ickP2pServicetype_t type )
 {
   _ickP2pLibContext_t *icklib = dh->icklib;
-  struct _cb_list           *walk;
+  struct _cb_list     *walk;
 
+/*------------------------------------------------------------------------*\
+   Use friendly name as indicator for LWS initialization
+\*------------------------------------------------------------------------*/
+  if( !dev->friendlyName )
+    return;
+
+/*------------------------------------------------------------------------*\
+   Lock list mutex and execute all registered callbacks
+\*------------------------------------------------------------------------*/
   pthread_mutex_lock( &icklib->mutex );
   for( walk=icklib->deviceCbList; walk; walk=walk->next )
     walk->callback( dh, dev->uuid, change, type );
   pthread_mutex_unlock( &icklib->mutex );
 }
-
 
 
 #pragma mark - Device list

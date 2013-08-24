@@ -80,12 +80,27 @@ ickUpnpNames_t ickUpnpNames = {
 /*=========================================================================*\
   Private definitions
 \*=========================================================================*/
-// None
+typedef struct {
+  int            level;
+  const char    *eltPtr;
+  int            eltLen;
+  int            deviceLevel;
+
+  // extracted data
+  char          *deviceName;            // strong
+  ickP2pLevel_t  protocolLevel;
+
+} ickXmlUserData_t;
 
 
 /*=========================================================================*\
   Private prototypes
 \*=========================================================================*/
+static void _ickParsexmlStartElt( void *data, const char *elt, int len );
+static void _ickParsexmlEndElt( void *data, const char *elt, int len );
+static void _ickParsexmlProcessData( void *data, const char *content, int len );
+static int  _strmcmp( const char *str, const char *ptr, size_t plen );
+
 // none
 
 
@@ -284,72 +299,231 @@ char *_ickDescrGetDeviceDescr( const ickDiscovery_t *dh, struct libwebsocket *ws
 \*=========================================================================*/
 ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, int arg )
 {
-  ickErrcode_t  irc = ICKERR_SUCCESS;
-  const char   *uri = _ickWGetUri( context );
+  ickErrcode_t      irc = ICKERR_SUCCESS;
+  const char       *uri = _ickWGetUri( context );
+  struct xmlparser  _xmlParser;
+  ickXmlUserData_t  _xmlUserData;
+  upnp_device_t    *device = _ickWGetUserData( context );
 
   debug( "_ickWGetXmlCb (%s): action=%d", uri, action );
 
+/*------------------------------------------------------------------------*\
+  What to do?
+\*------------------------------------------------------------------------*/
   switch( action ) {
+
+/*------------------------------------------------------------------------*\
+  HTTP client instance was initialized
+\*------------------------------------------------------------------------*/
     case ICKWGETACT_INIT:
       debug( "_ickWGetXmlCb (%s): initialized.", uri );
       break;
 
+/*------------------------------------------------------------------------*\
+  HTTP client instance is destroyed
+\*------------------------------------------------------------------------*/
     case ICKWGETACT_DESTROY:
       debug( "_ickWGetXmlCb (%s): destroyed.", uri );
       break;
 
+/*------------------------------------------------------------------------*\
+  Data could not be retrieved
+\*------------------------------------------------------------------------*/
     case ICKWGETACT_ERROR:
-      debug( "_ickWGetXmlCb (%s): error \"%s\".", uri, _ickWGetErrorString(context) );
+      debug( "_ickWGetXmlCb (%s): error \"%s\".", uri,
+             _ickWGetErrorString(context) );
       break;
 
-    case ICKWGETACT_COMPLETE:
-      debug( "_ickWGetXmlCb (%s): complete \"%.*s\".", uri, _ickWGetPayloadSize(context), _ickWGetPayload(context) );
-
-
 /*------------------------------------------------------------------------*\
-  Init xml parser
+  Data is complete
 \*------------------------------------------------------------------------*/
-#if 0
-      struct _ick_xmlparser_s device_parser;
-      device_parser.name = NULL;
-      device_parser.level = 0;
-      device_parser.writeme = 0;
-      device_parser.protocolLevel = ICKPROTOCOL_P2P_GENERIC;
+    case ICKWGETACT_COMPLETE:
+      debug( "_ickWGetXmlCb (%s): complete \"%.*s\".", uri,
+            _ickWGetPayloadSize(context), _ickWGetPayload(context) );
 
-      struct xmlparser parser;
-      /* xmlparser object */
-      parser.xmlstart = data;
-      parser.xmlsize = size;
-      parser.data = &device_parser;
-      parser.starteltfunc = _ick_parsexml_startelt;
-      parser.endeltfunc = _ick_parsexml_endelt;
-      parser.datafunc = _ick_parsexml_processelt;
-      parser.attfunc = 0;
-      parsexml(&parser);
+      // Init and execute xml parser
+      memset( &_xmlUserData, 0, sizeof(_xmlUserData) );
+      _xmlUserData.protocolLevel = ICKPROTOCOL_P2P_GENERIC;
+      _xmlParser.xmlstart        = _ickWGetPayload( context );
+      _xmlParser.xmlsize         = _ickWGetPayloadSize( context );
+      _xmlParser.data            = &_xmlUserData;
+      _xmlParser.starteltfunc    = _ickParsexmlStartElt;
+      _xmlParser.endeltfunc      = _ickParsexmlEndElt;
+      _xmlParser.datafunc        = _ickParsexmlProcessData;
+      _xmlParser.attfunc         = NULL;
+      parsexml( &_xmlParser );
 
-      pthread_mutex_lock(&_device_mutex);
-      iDev = _ickDeviceGet(UUID);  // need to re-check
-      if (iDev) {
-        iDev->xmlData = data;
-        iDev->xmlSize = size;
-        if ((device_parser.writeme && device_parser.name) && (iDev->name == NULL)) {
-          iDev->name = device_parser.name;
-          _ick_execute_DeviceCallback(iDev, ICKDISCOVERY_ADD_DEVICE);
-          if (_discovery->exitCallback)
-            _discovery->exitCallback();
-        } else {
-          if (device_parser.name)
-            free(device_parser.name);
-        }
-        iDev->protocolLevel = device_parser.protocolLevel;
+      // Interpret result
+      if( _xmlUserData.level )
+        logwarn( "_ickWGetXmlCb (%s): xml data unbalanced (end level %d)",
+                 uri, _xmlUserData.level );
+      if( !_xmlUserData.deviceName ) {
+        logwarn( "_ickWGetXmlCb (%s): found no device name (using UUID)", uri );
+        device->friendlyName = strdup( device->uuid );
+        if( !device->friendlyName )
+          logerr( "_ickWGetXmlCb (%s): out of memory", uri );
+        return ICKERR_NOMEM;
       }
-      pthread_mutex_unlock(&_device_mutex);
-#endif
+      if( !_xmlUserData.protocolLevel )
+        logwarn( "_ickWGetXmlCb (%s): found no protocol level", uri );
+
+      // Complete device description
+      device->friendlyName = _xmlUserData.deviceName;
+      device->ickP2pLevel  = _xmlUserData.protocolLevel;
+
+      // Signal device readiness to user code
+      _ickDiscoveryExecDeviceCallback( device->dh, device, ICKP2P_ADD, device->services );
+
       break;
 
   }
 
+/*------------------------------------------------------------------------*\
+  That's all, return
+\*------------------------------------------------------------------------*/
   return irc;
+}
+
+
+# pragma mark -- xml parser callbacks
+
+/*=========================================================================*\
+  XML parser callback: new element
+\*=========================================================================*/
+static void _ickParsexmlStartElt( void *data, const char *elt, int len )
+{
+  ickXmlUserData_t *xmlUserData = data;
+  debug( "_ickParsexmlStartElt (level %d): starting element \"%.*s\"",
+         xmlUserData->level+1, len, elt );
+
+/*------------------------------------------------------------------------*\
+  Increment level
+\*------------------------------------------------------------------------*/
+  xmlUserData->level++;
+
+/*------------------------------------------------------------------------*\
+  Buffer element name and length in user data
+\*------------------------------------------------------------------------*/
+  xmlUserData->eltPtr = elt;
+  xmlUserData->eltLen = len;
+
+/*------------------------------------------------------------------------*\
+  Are we entering the top level device bracket?
+\*------------------------------------------------------------------------*/
+  if( !_strmcmp("device",elt,len) ) {
+    if( !xmlUserData->deviceLevel ) {
+      debug( "_ickParsexmlStartElt: device top level is %d", xmlUserData->level );
+      xmlUserData->deviceLevel = xmlUserData->level;
+    }
+  }
+
+/*------------------------------------------------------------------------*\
+  That's it
+\*------------------------------------------------------------------------*/
+}
+
+
+/*=========================================================================*\
+  XML parser callback: element finished
+\*=========================================================================*/
+static void _ickParsexmlEndElt( void *data, const char *elt, int len )
+{
+  ickXmlUserData_t *xmlUserData = data;
+  debug( "_ickParsexmlStartElt (level %d): ending element \"%.*s\"",
+         xmlUserData->level, len, elt );
+
+/*------------------------------------------------------------------------*\
+  Are we leaving the top level device bracket?
+\*------------------------------------------------------------------------*/
+  if( !_strmcmp("device",elt,len) && xmlUserData->deviceLevel==xmlUserData->level )
+    xmlUserData->deviceLevel = 0;
+
+/*------------------------------------------------------------------------*\
+  Decrement level
+\*------------------------------------------------------------------------*/
+  xmlUserData->level--;
+
+/*------------------------------------------------------------------------*\
+  That's it
+\*------------------------------------------------------------------------*/
+}
+
+
+/*=========================================================================*\
+  XML parser callback: process element
+\*=========================================================================*/
+static void _ickParsexmlProcessData( void *data, const char *content, int len )
+{
+  ickXmlUserData_t *xmlUserData = data;
+  debug( "_ickParsexmlProcessData (level %d, element \"%.*s\"): \"%.*s\"",
+      xmlUserData->level, xmlUserData->eltLen, xmlUserData->eltPtr, len, content );
+
+/*------------------------------------------------------------------------*\
+  Ignore everything outside the top level device bracket
+\*------------------------------------------------------------------------*/
+  if( xmlUserData->level!=xmlUserData->deviceLevel+1 )
+    return;
+
+/*------------------------------------------------------------------------*\
+  Cross check device type
+\*------------------------------------------------------------------------*/
+  if( !_strmcmp("deviceType",xmlUserData->eltPtr,xmlUserData->eltLen) ) {
+    debug( "_ickParsexmlProcessData: found device type \"%.*s\"", len, content );
+    if( strncmp(ICKDEVICE_TYPESTR_PREFIX,content,strlen(ICKDEVICE_TYPESTR_PREFIX)) ) {
+      logwarn( "_ickParsexmlProcessData: this is no ickstream device (%.*s)",
+              len, (char*)content );
+      xmlUserData->deviceLevel = 0;
+    }
+    return;
+  }
+
+/*------------------------------------------------------------------------*\
+  Found device name
+\*------------------------------------------------------------------------*/
+  if( !_strmcmp("friendlyName",xmlUserData->eltPtr,xmlUserData->eltLen) ) {
+    debug( "_ickParsexmlProcessData: found friendly name \"%.*s\"", len, content );
+    if( xmlUserData->deviceName ) {
+      logwarn( "_ickParsexmlProcessData: found more then one friendly name (ignoring)" );
+      return;
+    }
+    xmlUserData->deviceName = strndup( content, len );
+    if( !xmlUserData->deviceName )
+      logerr( "_ickParsexmlProcessElt: out of memory" );
+    return;
+  }
+
+/*------------------------------------------------------------------------*\
+  Found ickstream protocol level
+\*------------------------------------------------------------------------*/
+  if( !_strmcmp("protocolLevel",xmlUserData->eltPtr,xmlUserData->eltLen)) {
+    debug( "_ickParsexmlProcessData: found protocol level \"%.*s\"", len, content );
+    if( xmlUserData->protocolLevel ) {
+      logwarn( "_ickParsexmlProcessData: found more then one protocol levels (ignoring)" );
+      return;
+    }
+    // should be terminated by non-digit, so it's safe to ignore len here
+    xmlUserData->protocolLevel = atoi( content );
+    return;
+  }
+
+/*------------------------------------------------------------------------*\
+  Ignore all other tags
+\*------------------------------------------------------------------------*/
+}
+
+
+/*=========================================================================*\
+  Compare a string to a memory region
+\*=========================================================================*/
+static int _strmcmp( const char *str, const char *ptr, size_t plen )
+{
+
+  // String length must match
+  if( strlen(str)!=plen )
+    return -1;
+
+  // compare memory region
+  return memcmp( str, ptr, plen );
 }
 
 

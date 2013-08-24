@@ -87,7 +87,6 @@ int main( int argc, char *argv[] )
   ickErrcode_t    irc;
   ickDiscovery_t *idh;
 
-
 /*------------------------------------------------------------------------*\
     Hello world and setting loglevel
 \*------------------------------------------------------------------------*/
@@ -105,7 +104,6 @@ int main( int argc, char *argv[] )
   sigaction( SIGINT, &act, NULL );
   sigaction( SIGTERM, &act, NULL );
 
-
 /*------------------------------------------------------------------------*\
     Init library
 \*------------------------------------------------------------------------*/
@@ -121,7 +119,6 @@ int main( int argc, char *argv[] )
   printf( "ickP2pGetBootId:     %ld\n",    ickP2pGetBootId() );
   printf( "ickP2pGetConfigId:   %ld\n",    ickP2pGetConfigId() );
   printf( "ickP2pGetLwsPort:    %d\n",     ickP2pGetLwsPort() );
-
 
 /*------------------------------------------------------------------------*\
     Register callback for device registry
@@ -141,7 +138,6 @@ int main( int argc, char *argv[] )
     printf( "ickP2pDiscoveryInit: %s\n", ickStrError(irc) );
     return -1;
   }
-
 
 /*------------------------------------------------------------------------*\
     Main loop: wait for termination
@@ -245,7 +241,6 @@ static void sigHandler( int sig, siginfo_t *siginfo, void *context )
     That's it.
 \*------------------------------------------------------------------------*/
 }
-
 
 
 /*=========================================================================*\
