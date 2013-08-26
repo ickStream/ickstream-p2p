@@ -52,6 +52,7 @@ Remarks         : -
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 #include "ickDescription.h"
 
 
@@ -79,7 +80,7 @@ typedef enum {
   SSDP_METHOD_UNDEFINED = 0,
   SSDP_METHOD_MSEARCH,
   SSDP_METHOD_NOTIFY,
-  SSDP_METHOD_REPLY,
+  SSDP_METHOD_REPLY
 } ssdp_method_t;
 
 typedef enum {
@@ -121,27 +122,6 @@ struct _ickSsdp_t {
 };
 typedef struct _ickSsdp_t ickSsdp_t;
 
-
-//
-// An ickstream device as discovered by the ssdp listener
-//
-struct _upnp_device;
-typedef struct _upnp_device upnp_device_t;
-struct _upnp_device {
-  upnp_device_t       *prev;
-  upnp_device_t       *next;
-  ickDiscovery_t      *dh;            // weak
-  pthread_mutex_t      mutex;
-  int                  livetime;
-  char                *uuid;          // strong
-  char                *location;      // strong
-  int                  ickUpnpVersion;
-  ickP2pServicetype_t  services;
-  char                *friendlyName;  // strong
-  ickP2pLevel_t        ickP2pLevel;
-
-};
-
 /*------------------------------------------------------------------------*\
   Macros
 \*------------------------------------------------------------------------*/
@@ -161,14 +141,13 @@ struct _upnp_device {
 /*=========================================================================*\
   Internal prototypes
 \*=========================================================================*/
+int           _ickSsdpCreateListener( in_addr_t ifaddr, int port );
 ickSsdp_t    *_ickSsdpParse( const char *buffer, size_t length, const struct sockaddr *addr );
 void          _ickSsdpFree( ickSsdp_t *ssdp );
-int           _ickSsdpExecute( ickDiscovery_t *dh, const ickSsdp_t *ssdp );
-ickErrcode_t  _ickSsdpNewDiscovery( const ickDiscovery_t *dh );
-void          _ickSsdpEndDiscovery( const ickDiscovery_t *dh );
-ickErrcode_t  _ickSsdpAnnounceServices( ickDiscovery_t *dh, ickP2pServicetype_t service, ickSsdpMsgType_t mtype );
-void          _ickDeviceLock( upnp_device_t *device );
-void          _ickDeviceUnlock( upnp_device_t *device );
+int           _ickSsdpExecute( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
+ickErrcode_t  _ickSsdpNewDiscovery( ickP2pContext_t *ictx );
+void          _ickSsdpEndDiscovery( ickP2pContext_t *ictx );
+ickErrcode_t  _ickSsdpAnnounceServices( ickP2pContext_t *ictx, ickP2pServicetype_t service, ickSsdpMsgType_t mtype );
 
 
 

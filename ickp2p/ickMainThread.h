@@ -85,18 +85,18 @@ typedef void (*ickTimerCb_t)( const ickTimer_t *timer, void *data, int tag );
   Internal prototypes
 \*=========================================================================*/
 void *_ickMainThread( void *arg );
-void  _ickMainThreadBreak( _ickP2pLibContext_t *icklib, char flag );
+void  _ickMainThreadBreak( ickP2pContext_t *ictx, char flag );
 
 
 ickErrcode_t  _ickMainThreadAddWGet( ickWGetContext_t *ickWGet );
 
-void          _ickTimerListLock( _ickP2pLibContext_t *icklib );
-void          _ickTimerListUnlock( _ickP2pLibContext_t *icklib );
-ickErrcode_t  _ickTimerAdd( _ickP2pLibContext_t *icklib, long interval, int repeat, ickTimerCb_t callback, void *data, int tag );
-ickTimer_t   *_ickTimerFind( _ickP2pLibContext_t *icklib, ickTimerCb_t callback, const void *data, int tag );
-ickErrcode_t  _ickTimerUpdate( _ickP2pLibContext_t *icklib, ickTimer_t *timer, long interval, int repeat );
-ickErrcode_t  _ickTimerDelete( _ickP2pLibContext_t *icklib, ickTimer_t *timer );
-void          _ickTimerDeleteAll( _ickP2pLibContext_t *icklib, ickTimerCb_t callback, const void *data, int tag );
+void          _ickTimerListLock( ickP2pContext_t *ictx );
+void          _ickTimerListUnlock( ickP2pContext_t *ictx );
+ickErrcode_t  _ickTimerAdd( ickP2pContext_t *ictx, long interval, int repeat, ickTimerCb_t callback, void *data, int tag );
+ickTimer_t   *_ickTimerFind( ickP2pContext_t *ictx, ickTimerCb_t callback, const void *data, int tag );
+ickErrcode_t  _ickTimerUpdate( ickP2pContext_t *ictx, ickTimer_t *timer, long interval, int repeat );
+ickErrcode_t  _ickTimerDelete( ickP2pContext_t *ictx, ickTimer_t *timer );
+void          _ickTimerDeleteAll( ickP2pContext_t *ictx, ickTimerCb_t callback, const void *data, int tag );
 
 
 #endif /* __ICKMAINTHREAD_H */

@@ -6,7 +6,7 @@ Description     : Internal include file for communication functions
 
 Comments        : -
 
-Date            : 20.08.2013
+Date            : 25.08.2013
 
 Updates         : -
 
@@ -61,6 +61,16 @@ Remarks         : -
   Macro and type definitions
 \*=========================================================================*/
 
+//
+// Data per libwebsockets P2p session
+//
+typedef struct {
+  ickP2pContext_t *ictx;         // weak
+  char            *uuid;       // strong
+  char            *host;       // strong
+  ickDevice_t     *device;     // weak
+} _ickLwsP2pData_t;
+
 
 /*------------------------------------------------------------------------*\
   Macros
@@ -80,7 +90,14 @@ Remarks         : -
 /*=========================================================================*\
   Internal prototypes
 \*=========================================================================*/
-// none
+ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_t *device );
+ickErrcode_t _ickWebSocketClose( struct libwebsocket_context *context, ickDevice_t *device );
+
+int    _lwsP2pCb( struct libwebsocket_context *context,
+                  struct libwebsocket *wsi,
+                  enum libwebsocket_callback_reasons reason, void *user,
+                  void *in, size_t len );
+
 
 
 #endif /* __ICKP2PCOM_H */

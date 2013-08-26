@@ -56,30 +56,31 @@ Remarks         : -
 #include <time.h>
 #include <sys/time.h>
 #include <sys/utsname.h>
+//#include <sys/socket.h>
+#include <arpa/inet.h>
 
 #include "ickP2p.h"
 #include "ickP2pInternal.h"
-#include "ickMainThread.h"
-#include "ickDiscovery.h"
 #include "logutils.h"
-
-
-/*=========================================================================*\
-  Global symbols
-\*=========================================================================*/
-_ickP2pLibContext_t *_ickLib;
+#include "ickIpTools.h"
+#include "ickSSDP.h"
+#include "ickWGet.h"
+#include "ickDevice.h"
+#include "ickMainThread.h"
 
 
 /*=========================================================================*\
   Private definitions and symbols
 \*=========================================================================*/
-static  pthread_t _ickThread;
-
+// none
 
 /*=========================================================================*\
   Private prototypes
 \*=========================================================================*/
 // none
+
+
+#pragma mark -- Global functions not bound to an inckStream context
 
 /*=========================================================================*\
   Get major and minor version
@@ -130,169 +131,230 @@ const char *ickP2pGitVersion( void )
 }
 
 
+
+#pragma mark -- Lifecycle of ickstream instances
+
 /*=========================================================================*\
   Initialize ickstream library
 \*=========================================================================*/
-ickErrcode_t ickP2pInit( const char *deviceName, const char *deviceUuid, const char *upnpFolder, int liveTime, long bootId, long configId )
+ickP2pContext_t *ickP2pInit( const char *deviceName, const char *deviceUuid,
+                             const char *upnpFolder, int liveTime,
+                             long bootId, long configId,
+                             const char *hostname, const char *ifname, int port,
+                             ickP2pDeviceCb_t deviceCb, ickP2pMessageCb_t messageCb,
+                             ickErrcode_t *error )
 {
-  int             rc;
-  ickErrcode_t    irc;
-  struct utsname  name;
-  struct timeval  now;
-  struct timespec abstime;
+  ickP2pContext_t *ictx;
+  int              rc;
+  ickErrcode_t     irc;
+  in_addr_t        ifaddr;
+  char             buffer[64];
+  struct utsname   utsname;
+  struct timeval   now;
+  struct timespec  abstime;
 
   debug( "ickP2pInit: \"%s\" (%s) lt=%d bid=%ld cid=%d folder=\"\%s\"",
          deviceName, deviceUuid, liveTime, bootId, configId, upnpFolder );
 
 /*------------------------------------------------------------------------*\
-    Check status
-\*------------------------------------------------------------------------*/
-  if( _ickLib ) {
-    logerr( "ickP2pInit: already initialized." );
-    return ICKERR_INITIALIZED;
-  }
-
-/*------------------------------------------------------------------------*\
-    Initialize random number generator
+    (Re-)initialize random number generator
 \*------------------------------------------------------------------------*/
   srandom( (unsigned int)time(NULL) );
 
 /*------------------------------------------------------------------------*\
-    Allocate and initialize context descriptor
+    Get IP string from interface
 \*------------------------------------------------------------------------*/
-  _ickLib = calloc( 1, sizeof(_ickP2pLibContext_t) );
-  if( !_ickLib ) {
-    logerr( "ickP2pInit: out of memory." );
-    return ICKERR_NOMEM;
+  ifaddr   = _ickIpGetIfAddr( ifname );
+  if( ifaddr==INADDR_NONE ) {
+    logwarn( "ickP2pInit: could not get IP address of interface \"%s\"",
+             ifname );
+    if( error )
+      *error = ICKERR_NOINTERFACE;
+    return NULL;
   }
-  _ickLib->liveTime = liveTime;
+  inet_ntop( AF_INET, &ifaddr, buffer, sizeof(buffer) );
+  debug( "ickP2pInit: Using addr %s for interface \"%s\".", buffer, ifname );
 
 /*------------------------------------------------------------------------*\
-    Init mutex
+    Allocate and initialize context descriptor
 \*------------------------------------------------------------------------*/
-  pthread_mutex_init( &_ickLib->mutex, NULL );
-  pthread_mutex_init( &_ickLib->discoveryHandlersMutex, NULL );
-  pthread_mutex_init( &_ickLib->timersMutex, NULL );
-  pthread_mutex_init( &_ickLib->wGettersMutex, NULL );
+  ictx = calloc( 1, sizeof(ickP2pContext_t) );
+  if( !ictx ) {
+    logerr( "ickP2pInit: out of memory." );
+    if( error )
+      *error = ICKERR_NOMEM;
+    return NULL;
+  }
+  ictx->upnpPort = port;
+  ictx->liveTime = liveTime;
+  ictx->deviceCb = deviceCb;
+  ictx->messageCb = messageCb;
+
+/*------------------------------------------------------------------------*\
+    Init mutexes
+\*------------------------------------------------------------------------*/
+  pthread_mutex_init( &ictx->mutex, NULL );
+  pthread_mutex_init( &ictx->timersMutex, NULL );
+  pthread_mutex_init( &ictx->wGettersMutex, NULL );
+  pthread_mutex_init( &ictx->deviceListMutex, NULL );
 
 /*------------------------------------------------------------------------*\
     Get name and version of operating system
 \*------------------------------------------------------------------------*/
-  if( !uname(&name) )
-    asprintf( &_ickLib->osName, "%s/%s", name.sysname, name.release );
+  if( !uname(&utsname) )
+    asprintf( &ictx->osName, "%s/%s", utsname.sysname, utsname.release );
   else {
-    logerr( "ickInitDiscovery: could not get uname (%s)", strerror(errno) );
-    _ickLib->osName = strdup( "Generic/1.0" );
+    logerr( "ickP2pInit: could not get uname (%s)", strerror(errno) );
+    ictx->osName = strdup( "Generic/1.0" );
   }
 
 /*------------------------------------------------------------------------*\
-    Store name and UUID and folder name
+    Get hostname
 \*------------------------------------------------------------------------*/
-  _ickLib->deviceName = strdup( deviceName );
-  _ickLib->deviceUuid = strdup( deviceUuid );
+  if( !hostname )
+    ictx->hostName = strdup( buffer );
+  else
+    ictx->hostName = strdup( hostname );
+
+/*------------------------------------------------------------------------*\
+    Try to duplicate strings
+\*------------------------------------------------------------------------*/
+  ictx->deviceName = strdup( deviceName );
+  ictx->deviceUuid = strdup( deviceUuid );
+  ictx->interface    = strdup( ifname );
   if( upnpFolder )
-    _ickLib->upnpFolder = strdup( upnpFolder );
-  if( !_ickLib->deviceName || !_ickLib->deviceName || !_ickLib->osName ||
-      (upnpFolder&&!_ickLib->upnpFolder)) {
+    ictx->upnpFolder = strdup( upnpFolder );
+  if( !ictx->deviceName || !ictx->deviceName || !ictx->osName || !ictx->interface ||
+      !ictx->hostName || (upnpFolder&&!ictx->upnpFolder)) {
     logerr( "ickP2pInit: out of memory." );
-    _ickLibDestruct( &_ickLib );
-    return ICKERR_NOMEM;
+    _ickLibDestruct( ictx );
+    if( error )
+      *error = ICKERR_NOMEM;
+    return NULL;
   }
 
 /*------------------------------------------------------------------------*\
     Initialize bootID and configID
 \*------------------------------------------------------------------------*/
-  _ickLib->upnpBootId   = (bootId>0)   ? bootId   : (long)time(NULL);
-  _ickLib->upnpConfigId = (configId>0) ? configId : (long)time(NULL);
+  ictx->upnpBootId   = (bootId>0)   ? bootId   : (long)time(NULL);
+  ictx->upnpConfigId = (configId>0) ? configId : (long)time(NULL);
+
+/*------------------------------------------------------------------------*\
+    Create and init SSDP listener socket
+\*------------------------------------------------------------------------*/
+  ictx->upnpSocket = _ickSsdpCreateListener( ifaddr, port );
+  if( ictx->upnpSocket<0 ){
+    logerr( "ickP2pInit: could not create socket (%s).", strerror(errno) );
+    _ickLibDestruct( ictx );
+    if( error )
+      *error = ICKERR_NOSOCKET;
+    return NULL;
+  }
 
 /*------------------------------------------------------------------------*\
     Create pipe for poll breaking
 \*------------------------------------------------------------------------*/
-  rc = pipe( _ickLib->pollBreakPipe );
+  rc = pipe( ictx->pollBreakPipe );
   if( rc ) {
     logerr( "ickP2pInit: Unable to start main thread: %s", strerror(errno) );
-    _ickLibDestruct( &_ickLib );
-    return ICKERR_NOTHREAD;
+    _ickLibDestruct( ictx );
+    if( error )
+      *error = ICKERR_NOTHREAD;
+    return NULL;
   }
 
 /*------------------------------------------------------------------------*\
     Create thread for ickstream communication mainloop
 \*------------------------------------------------------------------------*/
-  rc = pthread_create( &_ickThread, NULL, _ickMainThread, &_ickLib );
+  rc = pthread_create( &ictx->thread, NULL, _ickMainThread, &ictx );
   if( rc ) {
     logerr( "ickP2pInit: Unable to start main thread: %s", strerror(rc) );
-    _ickLibDestruct( &_ickLib );
-    return ICKERR_NOTHREAD;
+    _ickLibDestruct( ictx );
+    if( error )
+      *error = ICKERR_NOTHREAD;
+    return NULL;
   }
 
 /*------------------------------------------------------------------------*\
     Wait for max. 5 seconds till thread is up and running
 \*------------------------------------------------------------------------*/
-  pthread_mutex_lock( &_ickLib->mutex );
+  pthread_mutex_lock( &ictx->mutex );
   gettimeofday( &now, NULL );
   abstime.tv_sec  = now.tv_sec + 5;
   abstime.tv_nsec = now.tv_usec*1000UL;
-  while( _ickLib->state!=ICKLIB_RUNNING ) {
-    rc = pthread_cond_timedwait( &_ickLib->condIsReady, &_ickLib->mutex, &abstime );
+  while( ictx->state!=ICKLIB_RUNNING ) {
+    rc = pthread_cond_timedwait( &ictx->condIsReady, &ictx->mutex, &abstime );
     if( rc )
       break;
   }
   if( !rc )
-    pthread_mutex_unlock( &_ickLib->mutex );
+    pthread_mutex_unlock( &ictx->mutex );
 
   // Something went terribly wrong. Can't free descriptor, since thread state is undefined.
   if( rc ) {
     logerr( "ickP2pInit: Unable to wait for main thread: %s", strerror(rc) );
-    _ickLib->state = ICKLIB_TERMINATING;
-    _ickLib = NULL;
-    return ICKERR_NOTHREAD;
+    ictx->state = ICKLIB_TERMINATING;
+    ictx = NULL;
+    if( error )
+      *error = ICKERR_NOTHREAD;
+    return NULL;
   }
 
   // Handle main thread initialization errors
-  if( _ickLib->error ) {
-    irc = _ickLib->error;
-    _ickLibDestruct( &_ickLib );
-    return irc ? irc : ICKERR_NOTHREAD;
+  if( ictx->error ) {
+    irc = ictx->error;
+    _ickLibDestruct( ictx );
+    if( error )
+      *error = irc ? irc : ICKERR_NOTHREAD;
+    return NULL;
+  }
+
+  // fixme: Need to add localhost??
+
+/*------------------------------------------------------------------------*\
+    Start SSDP services
+\*------------------------------------------------------------------------*/
+  irc = _ickSsdpNewDiscovery( ictx );
+  if( irc ) {
+    logerr( "ickP2pInit: could not start SSDP (%s).",
+            ickStrError( irc ) );
+    // fixme
+    if( error )
+      *error = irc;
+    return NULL;
   }
 
 /*------------------------------------------------------------------------*\
-    Set status and return
+    That's it
 \*------------------------------------------------------------------------*/
-  debug( "ickLibInit: created context %p", _ickLib );
-
-  return ICKERR_SUCCESS;
+  debug( "ickLibInit: created context %p", ictx );
+  if( error )
+    *error = ICKERR_SUCCESS;
+  return ictx;
 }
 
 
 /*=========================================================================*\
   Shut down ickstream library
 \*=========================================================================*/
-ickErrcode_t ickP2pEnd( ickP2pEndCb_t callback )
+ickErrcode_t ickP2pEnd( ickP2pContext_t *ictx, ickP2pEndCb_t callback )
 {
   int rc;
 
-  debug( "ickP2pEnd: %s", callback?"asynchronous":"synchronous" );
-
-/*------------------------------------------------------------------------*\
-    Check status
-\*------------------------------------------------------------------------*/
-  if( !_ickLib ) {
-    logerr( "ickP2pEnd: not initialized." );
-    return ICKERR_UNINITIALIZED;
-  }
+  debug( "ickP2pEnd (%p): %s", ictx, callback?"asynchronous":"synchronous" );
 
 /*------------------------------------------------------------------------*\
     Store callback for asynchronous shutdown and request thread termination
 \*------------------------------------------------------------------------*/
-  _ickLib->cbEnd = callback;
-  _ickLib->state = ICKLIB_TERMINATING;
-  _ickMainThreadBreak( _ickLib, 'X' );
+  ictx->cbEnd = callback;
+  ictx->state = ICKLIB_TERMINATING;
+  _ickMainThreadBreak( ictx, 'X' );
 
 /*------------------------------------------------------------------------*\
     Wait for actual thread termination in synchronous mode
 \*------------------------------------------------------------------------*/
   if( !callback ) {
-    rc = pthread_join( _ickThread, NULL );
+    rc = pthread_join( ictx->thread, NULL );
     if( rc ) {
       logerr( "ickP2pEnd: Unable to join main thread: %s", strerror(rc) );
       return ICKERR_GENERIC;
@@ -307,137 +369,81 @@ ickErrcode_t ickP2pEnd( ickP2pEndCb_t callback )
 
 
 /*=========================================================================*\
+  Lock context decriptor
+\*=========================================================================*/
+void _ickLibLock( ickP2pContext_t *ictx )
+{
+  debug ( "_ickLibLock (%p): locking...", ictx );
+  pthread_mutex_lock( &ictx->mutex );
+  debug ( "_ickLibLock (%p): locked", ictx );
+}
+
+
+/*=========================================================================*\
+  Unlock context descriptor
+\*=========================================================================*/
+void _ickLibUnlock( ickP2pContext_t *ictx )
+{
+  debug ( "_ickLibUnlock (%p): unlocked", ictx );
+  pthread_mutex_unlock( &ictx->mutex );
+}
+
+
+/*=========================================================================*\
   Free library context
 \*=========================================================================*/
-void _ickLibDestruct( _ickP2pLibContext_t **icklibptr )
+void _ickLibDestruct( ickP2pContext_t *ictx )
 {
-  struct _cb_list *walk;
   int              i;
-  debug( "_ickLibDestruct: %p", *icklibptr );
+  debug( "_ickP2pDestruct: %p", ictx );
 
 /*------------------------------------------------------------------------*\
     Be defensive
 \*------------------------------------------------------------------------*/
-  if( !*icklibptr ) {
-    logwarn( "_ickLibDestruct: cannot free nil pointer" );
+  if( !ictx ) {
+    logwarn( "_ickP2pDestruct: cannot free nil pointer" );
     return;
   }
 
 /*------------------------------------------------------------------------*\
-    Clear list of callbacks
+    Close SSDP socket (if any)
 \*------------------------------------------------------------------------*/
-  // pthread_mutex_lock( &(*icklibptr)->mutex );
-  walk = (*icklibptr)->deviceCbList;
-  (*icklibptr)->deviceCbList = NULL;
-  while( walk ) {
-    struct _cb_list *next = walk->next;
-    Sfree( walk );
-    walk = next;
-  }
+  if( ictx->upnpSocket>=0 )
+    close( ictx->upnpSocket );
 
-  // lwsPolllist's livecycle is handled by main thread
+// lwsPolllist's livecycle is handled by main thread
 
 /*------------------------------------------------------------------------*\
     Free strong string references
 \*------------------------------------------------------------------------*/
-  Sfree( (*icklibptr)->osName );
-  Sfree( (*icklibptr)->deviceName );
-  Sfree( (*icklibptr)->deviceUuid );
-  Sfree( (*icklibptr)->upnpFolder );
+  Sfree( ictx->osName );
+  Sfree( ictx->deviceName );
+  Sfree( ictx->deviceUuid );
+  Sfree( ictx->upnpFolder );
+  Sfree( ictx->interface );
+  Sfree( ictx->locationRoot );
 
 /*------------------------------------------------------------------------*\
     Delete mutex and condition
 \*------------------------------------------------------------------------*/
-  pthread_mutex_destroy( &(*icklibptr)->mutex );
-  pthread_cond_destroy( &(*icklibptr)->condIsReady );
-  pthread_mutex_destroy( &(*icklibptr)->discoveryHandlersMutex );
-  pthread_mutex_destroy( &(*icklibptr)->timersMutex );
-  pthread_mutex_destroy( &(*icklibptr)->wGettersMutex );
+  pthread_mutex_destroy( &ictx->mutex );
+  pthread_cond_destroy( &ictx->condIsReady );
+  pthread_mutex_destroy( &ictx->timersMutex );
+  pthread_mutex_destroy( &ictx->wGettersMutex );
+  pthread_mutex_destroy( &ictx->deviceListMutex );
 
 /*------------------------------------------------------------------------*\
     Close help pipe for breaking polls
 \*------------------------------------------------------------------------*/
   for( i=0; i<2; i++ ) {
-    if( _ickLib->pollBreakPipe[i]>=0 )
-      close( _ickLib->pollBreakPipe[i] );
+    if( ictx->pollBreakPipe[i]>=0 )
+      close( ictx->pollBreakPipe[i] );
   }
 
 /*------------------------------------------------------------------------*\
     Free context descriptor
 \*------------------------------------------------------------------------*/
-  Sfree( *icklibptr );
-  *icklibptr = NULL;
-}
-
-
-/*=========================================================================*\
-  Get library state
-\*=========================================================================*/
-ickP2pLibState_t ickP2pGetState( void )
-{
-  return _ickLib ? _ickLib->state : ICKLIB_UNINITIALIZED;
-}
-
-
-/*=========================================================================*\
-  Get device name
-\*=========================================================================*/
-const char *ickP2pGetDeviceName( void )
-{
-  return _ickLib ? _ickLib->deviceName : NULL;
-}
-
-
-/*=========================================================================*\
-  Get device name
-\*=========================================================================*/
-const char *ickP2pGetDeviceUuid( void )
-{
-  return _ickLib ? _ickLib->deviceUuid : NULL;
-}
-
-
-/*=========================================================================*\
-  Get os name
-\*=========================================================================*/
-const char *ickP2pGetOsName( void )
-{
-  return _ickLib ? _ickLib->osName : NULL;
-}
-
-
-/*=========================================================================*\
-  Get os name
-\*=========================================================================*/
-int ickP2pGetLwsPort( void )
-{
-  return _ickLib ? _ickLib->lwsPort : -1;
-}
-
-
-/*=========================================================================*\
-  Get current boot ID
-\*=========================================================================*/
-long ickP2pGetBootId( void )
-{
-  return _ickLib ? _ickLib->upnpBootId : -1;
-}
-
-
-/*=========================================================================*\
-  Get current config ID
-\*=========================================================================*/
-long ickP2pGetConfigId( void )
-{
-  return _ickLib ? _ickLib->upnpConfigId : -1;
-}
-
-/*=========================================================================*\
-  Get livetime of announcements
-\*=========================================================================*/
-int ickP2pGetLiveTime( void )
-{
-  return _ickLib ? _ickLib->liveTime : -1;
+  Sfree( ictx );
 }
 
 
@@ -445,15 +451,15 @@ int ickP2pGetLiveTime( void )
   Suspend network IO
     This will also send upnp byebye messages
 \*=========================================================================*/
-ickErrcode_t ickP2pSuspend( ickP2pSuspendCb_t callback  )
+ickErrcode_t ickP2pSuspend( ickP2pContext_t *ictx, ickP2pSuspendCb_t callback  )
 {
-  debug( "ickP2pSuspend: %ld", ickP2pGetBootId() );
+  debug( "ickP2pSuspend (%p): bootid is %ld", ictx, ickP2pGetBootId(ictx) );
 
 /*------------------------------------------------------------------------*\
     Need to be running or at least resuming for this
 \*------------------------------------------------------------------------*/
-  if( ickP2pGetState()!=ICKLIB_RUNNING && ickP2pGetState()!=ICKLIB_RESUMING ) {
-    logwarn( "ickP2pSuspend: wrong state (%d)", ickP2pGetState() );
+  if( ictx->state!=ICKLIB_RUNNING && ictx->state!=ICKLIB_RESUMING ) {
+    logwarn( "ickP2pSuspend: wrong state (%d)", ictx->state );
     return ICKERR_WRONGSTATE;
   }
 
@@ -471,22 +477,22 @@ ickErrcode_t ickP2pSuspend( ickP2pSuspendCb_t callback  )
   resume network IO
     This will increase bootID and reannounce all upnp data
 \*=========================================================================*/
-ickErrcode_t ickP2pResume( void )
+ickErrcode_t ickP2pResume( ickP2pContext_t *ictx )
 {
 
 /*------------------------------------------------------------------------*\
     Need to be suspended for this
 \*------------------------------------------------------------------------*/
-  if( ickP2pGetState()!=ICKLIB_SUSPENDED ) {
-    logwarn( "ickP2pResume: wrong state (%d)", ickP2pGetState() );
+  if( ictx->state!=ICKLIB_SUSPENDED ) {
+    logwarn( "ickP2pResume: wrong state (%d)", ictx->state );
     return ICKERR_WRONGSTATE;
   }
 
 /*------------------------------------------------------------------------*\
     Increment boot counter
 \*------------------------------------------------------------------------*/
-  _ickLib->upnpBootId++;
-  debug( "ickP2pResume: %ld", ickP2pGetBootId() );
+  ictx->upnpBootId++;
+  debug( "ickP2pResume (%s): bootid is %ld", ickP2pGetBootId(ictx) );
 
   //fixme: readvertise configuration
   logerr( "ickP2pResume: not yet implemented" );
@@ -498,12 +504,14 @@ ickErrcode_t ickP2pResume( void )
 }
 
 
+#pragma mark -- Setters and getters
+
 /*=========================================================================*\
     Rename device
 \*=========================================================================*/
-ickErrcode_t ickP2pSetDeviceName( const char *deviceName )
+ickErrcode_t ickP2pSetName( ickP2pContext_t *ictx, const char *name )
 {
-  debug( "ickP2pSetDeviceName: \"%s\"", deviceName );
+  debug( "ickP2pSetName (%s): \"%s\"", ictx, name );
 
   // fixme
   return ICKERR_NOTIMPLEMENTED;
@@ -513,56 +521,373 @@ ickErrcode_t ickP2pSetDeviceName( const char *deviceName )
   //    _ick_notifications_send( ICK_SEND_CMD_NOTIFY_ADD, NULL );
 }
 
+/*=========================================================================*\
+  Get library state
+\*=========================================================================*/
+ickP2pLibState_t ickP2pGetState( const ickP2pContext_t *ictx )
+{
+  return ictx->state;
+}
 
 /*=========================================================================*\
-  Add a discovery callback
-    return 0 on success
+  Get os name
 \*=========================================================================*/
-ickErrcode_t ickP2pRegisterDiscoveryCallback( ickDiscoveryDeviceCb_t callback )
+const char *ickP2pGetOsName( const ickP2pContext_t *ictx )
 {
-  struct _cb_list *new;
+  return ictx->osName;
+
+}
+
+/*=========================================================================*\
+  Get device name
+\*=========================================================================*/
+const char *ickP2pGetName( const ickP2pContext_t *ictx )
+{
+  return ictx->deviceName;
+}
+
+
+/*=========================================================================*\
+  Get device name
+\*=========================================================================*/
+const char *ickP2pGetDeviceUuid( const ickP2pContext_t *ictx )
+{
+  return ictx->deviceUuid;
+}
+
+
+/*=========================================================================*\
+  Get web socket server port
+\*=========================================================================*/
+int ickP2pGetLwsPort( const ickP2pContext_t *ictx )
+{
+  return ictx->lwsPort;
+}
+
+
+/*=========================================================================*\
+  Get current boot ID
+\*=========================================================================*/
+long ickP2pGetBootId( const ickP2pContext_t *ictx )
+{
+  return ictx->upnpBootId;
+}
+
+
+/*=========================================================================*\
+  Get current config ID
+\*=========================================================================*/
+long ickP2pGetConfigId( const ickP2pContext_t *ictx )
+{
+  return ictx->upnpConfigId;
+}
+
+/*=========================================================================*\
+  Get livetime of announcements
+\*=========================================================================*/
+int ickP2pGetLiveTime( const ickP2pContext_t *ictx )
+{
+  return ictx->liveTime;
+}
+
+
+/*=========================================================================*\
+  Get hostname
+\*=========================================================================*/
+const char *ickP2pGetHostname( const ickP2pContext_t *ictx )
+{
+  return ictx->hostName;
+}
+
+
+/*=========================================================================*\
+  Get interface name
+\*=========================================================================*/
+const char *ickP2pGetIf( const ickP2pContext_t *ictx )
+{
+  return ictx->interface;
+}
+
+
+/*=========================================================================*\
+  Get listener port of a discovery handler
+\*=========================================================================*/
+int ickP2pGetUpnpPort( const ickP2pContext_t *ictx )
+{
+  return ictx->upnpPort;
+}
+
+
+#pragma mark - Managing offered services
+
+/*=========================================================================*\
+  Enable services on this device
+\*=========================================================================*/
+ickErrcode_t ickP2pAddService( ickP2pContext_t *ictx, ickP2pServicetype_t type )
+{
+  ickErrcode_t irc;
 
 /*------------------------------------------------------------------------*\
-    Need to be initialized
+    Mask out all services that are already registered
 \*------------------------------------------------------------------------*/
-  if( ickP2pGetState()==ICKLIB_UNINITIALIZED ) {
-    logwarn( "ickP2pRegisterDeviceCallback: not initialized." );
-    return ICKERR_UNINITIALIZED;
-  }
-
-/*------------------------------------------------------------------------*\
-    Avoid double subscitions
-\*------------------------------------------------------------------------*/
-  for( new=_ickLib->deviceCbList; new; new=new->next ) {
-    if( new->callback!=callback )
-      continue;
-    logwarn( "ickP2RegisterDeviceCallback: callback already registered" );
+  type &= ~(ictx->ickServices);
+  if( !type )
     return ICKERR_SUCCESS;
-  }
+  ictx->ickServices |= type;
 
 /*------------------------------------------------------------------------*\
-    Allocate and init new list element
+    Announce services via SSDP
 \*------------------------------------------------------------------------*/
-  new = calloc( 1, sizeof(struct _cb_list) );
-  if( !new ) {
-    logerr( "ickP2pRegisterDeviceCallback: out of memory" );
-    return ICKERR_NOMEM;
+  irc = _ickSsdpAnnounceServices( ictx, type, SSDPMSGTYPE_ALIVE );
+  if( !irc ) {
+    logerr( "ickP2pDiscoveryAddService: could not announce service (%s)",
+            ickStrError(irc) );
+    // return irc;
   }
-  new->callback = callback;
-
-/*------------------------------------------------------------------------*\
-    Add to linked list
-\*------------------------------------------------------------------------*/
-  pthread_mutex_lock( &_ickLib->mutex );
-  new->next = _ickLib->deviceCbList;
-  _ickLib->deviceCbList = new;
-  pthread_mutex_unlock( &_ickLib->mutex );
 
 /*------------------------------------------------------------------------*\
     That's all
 \*------------------------------------------------------------------------*/
-  return 0;
+  return ICKERR_SUCCESS;
 }
+
+
+/*=========================================================================*\
+  Disable services on this device
+\*=========================================================================*/
+ickErrcode_t ickP2pRemoveService( ickP2pContext_t *ictx, ickP2pServicetype_t type )
+{
+  ickErrcode_t irc;
+
+/*------------------------------------------------------------------------*\
+    Mask out all services that are not registered
+\*------------------------------------------------------------------------*/
+  type &= ictx->ickServices;
+  if( !type )
+    return ICKERR_SUCCESS;
+  ictx->ickServices &= ~type;
+
+/*------------------------------------------------------------------------*\
+    Announce service termination via SSDP
+\*------------------------------------------------------------------------*/
+  irc = _ickSsdpAnnounceServices( ictx, type, SSDPMSGTYPE_BYEBYE );
+  if( !irc ) {
+    logerr( "ickP2pDiscoveryRemoveService: could not announce service (%s)",
+            ickStrError(irc) );
+    // return irc;
+  }
+
+/*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
+  return ICKERR_SUCCESS;
+}
+
+
+#pragma mark - Device list
+
+/*=========================================================================*\
+  Lock device list
+\*=========================================================================*/
+void _ickLibDeviceListLock( ickP2pContext_t *ictx )
+{
+  debug ( "_ickLibDeviceListLock (%p): locking...", ictx );
+  pthread_mutex_lock( &ictx->deviceListMutex );
+  debug ( "_ickLibDeviceListLock (%p): locked", ictx );
+}
+
+
+/*=========================================================================*\
+  Unlock device list
+\*=========================================================================*/
+void _ickLibDeviceListUnlock( ickP2pContext_t *ictx )
+{
+  debug ( "_ickLibDeviceListUnlock (%p): unlocked", ictx );
+  pthread_mutex_unlock( &ictx->deviceListMutex );
+}
+
+
+/*=========================================================================*\
+  Add a device to a discovery handler
+    This will NOT execute callbacks or add expiration handlers
+    Caller should lock device list
+\*=========================================================================*/
+void _ickLibDeviceAdd( ickP2pContext_t *ictx, ickDevice_t *device )
+{
+  debug ( "_ickLibDeviceAdd (%p): adding new device \"%s\".",
+          ictx, device->uuid );
+
+/*------------------------------------------------------------------------*\
+     Don't add twice...
+\*------------------------------------------------------------------------*/
+  if( device->ictx ) {
+    debug ( "_ickLibDeviceAdd (%p): device \"%s\" is already member of %p.",
+            ictx, device->uuid, device->ictx );
+    return;
+  }
+
+/*------------------------------------------------------------------------*\
+     Link device to list
+\*------------------------------------------------------------------------*/
+  device->next = ictx->deviceList;
+  if( ictx->deviceList )
+    ictx->deviceList->prev=device;
+  ictx->deviceList = device;
+
+/*------------------------------------------------------------------------*\
+     Associate device with this context
+\*------------------------------------------------------------------------*/
+  device->ictx = ictx;
+
+/*------------------------------------------------------------------------*\
+     That's all
+\*------------------------------------------------------------------------*/
+  return;
+}
+
+
+/*=========================================================================*\
+  Remove a device from a discovery handler
+    This will NOT execute callbacks or delete expiration handlers
+    Caller should lock device list
+\*=========================================================================*/
+void _ickLibDeviceRemove( ickP2pContext_t *ictx, ickDevice_t *device )
+{
+  debug ( "_ickLibDeviceRemove (%p): removing device \"%s\" at \"%s\".",
+          ictx, device->uuid, device->location );
+
+/*------------------------------------------------------------------------*\
+     Be paranoid
+\*------------------------------------------------------------------------*/
+  if( !_ickLibDeviceFind(ictx,device->uuid) ) {
+    debug ( "_ickLibDeviceRemove (%p): device \"%s\" not in list.",
+            ictx, device->uuid );
+    return;
+  }
+
+/*------------------------------------------------------------------------*\
+    Unlink from device list
+\*------------------------------------------------------------------------*/
+  if( device->next )
+    device->next->prev = device->prev;
+  if( device->prev )
+    device->prev->next = device->next;
+  if( device==ictx->deviceList )
+    ictx->deviceList = device->next;
+
+/*------------------------------------------------------------------------*\
+    Device is not associated
+\*------------------------------------------------------------------------*/
+  device->ictx = NULL;
+
+/*------------------------------------------------------------------------*\
+    That's it
+\*------------------------------------------------------------------------*/
+}
+
+
+/*=========================================================================*\
+  Find a device associated with a discovery handler
+    caller should lock the device list of the handler
+    nt and usn are the SSDP header files identifying the device
+\*=========================================================================*/
+ickDevice_t *_ickLibDeviceFind( ickP2pContext_t *ictx, const char *uuid )
+{
+  ickDevice_t *device;
+  debug ( "_ickLibDeviceFind (%p): UUID=\"%s\".", ictx, uuid );
+
+/*------------------------------------------------------------------------*\
+    Find matching device entry
+\*------------------------------------------------------------------------*/
+  for( device=ictx->deviceList; device; device=device->next ) {
+    if( !strcmp(device->uuid,uuid) )
+      break;
+  }
+
+/*------------------------------------------------------------------------*\
+    Thats it
+\*------------------------------------------------------------------------*/
+  debug ( "_ickLibDeviceFind (%p): result=%p", ictx, device );
+  return device;
+}
+
+
+#pragma mark -- Other internal functions
+
+
+/*=========================================================================*\
+  Execute callbacks for a discovery handler
+\*=========================================================================*/
+void _ickLibExecDeviceCallback( ickP2pContext_t *ictx, const ickDevice_t *dev, ickP2pDeviceCommand_t change, ickP2pServicetype_t type )
+{
+  debug( "_ickLibExecDeviceCallback (%p): \"%s\" change=%d services=%d",
+         ictx, dev->uuid, change, type );
+
+/*------------------------------------------------------------------------*\
+   Use friendly name as indicator for LWS initialization
+\*------------------------------------------------------------------------*/
+  if( !dev->friendlyName )
+    return;
+
+/*------------------------------------------------------------------------*\
+   Execute callback (if any)
+\*------------------------------------------------------------------------*/
+  if( ictx->deviceCb )
+    ictx->deviceCb( ictx, dev->uuid, change, type );
+
+/*------------------------------------------------------------------------*\
+   That's all
+\*------------------------------------------------------------------------*/
+}
+
+
+/*=========================================================================*\
+  Lock list of active HTTP clients for access or modification
+\*=========================================================================*/
+void _ickLibWGettersLock( ickP2pContext_t *ictx )
+{
+  debug ( "_ickLibWGettersLock (%p): locking...", ictx );
+  pthread_mutex_lock( &ictx->wGettersMutex );
+  debug ( "_ickLibWGettersLock (%p): locked", ictx );
+}
+
+
+/*=========================================================================*\
+  unlock list of active HTTP clients for access or modification
+\*=========================================================================*/
+void _ickLibWGettersUnlock( ickP2pContext_t *ictx )
+{
+  debug ( "_ickLibWGettersUnlock (%p): unlocked", ictx );
+  pthread_mutex_unlock( &ictx->wGettersMutex );
+}
+
+
+/*=========================================================================*\
+  Add an active HTTP client
+\*=========================================================================*/
+void _ickLibWGettersAdd( ickP2pContext_t *ictx, ickWGetContext_t *wget )
+{
+  debug( "_ickLibWGettersAdd (%p): \"%s\"", ictx, _ickWGetUri(wget) );
+  wget->next = ictx->wGetters;
+  if( wget->next )
+    wget->next->prev = wget;
+  ictx->wGetters = wget;
+}
+
+/*=========================================================================*\
+  Remove a HTTP client
+\*=========================================================================*/
+void _ickLibWGettersRemove( ickP2pContext_t *ictx, ickWGetContext_t *wget )
+{
+  debug( "_ickLibWGettersRemove (%p): \"%s\"", ictx, _ickWGetUri(wget) );
+  if( wget->next )
+    wget->next->prev = wget->prev;
+  if( wget->prev )
+    wget->prev->next = wget->next;
+  else
+    ictx->wGetters = wget->next;
+}
+
 
 /*=========================================================================*\
                                     END OF FILE

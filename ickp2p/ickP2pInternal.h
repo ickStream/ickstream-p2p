@@ -80,37 +80,53 @@ typedef struct  {
   nfds_t         increment;
 } ickPolllist_t;
 
+
 // A wget instance (from ickWGet.c)
 struct _ickWGetContext;
 typedef struct _ickWGetContext ickWGetContext_t;
 
-
-// Elements in linked list of callbacks
-struct _cb_list {
-  struct _cb_list        *next;
-  ickDiscoveryDeviceCb_t  callback;
-};
+// An ickstream device (from ickDevice.c)
+struct _ickDevice;
+typedef struct _ickDevice ickDevice_t;
 
 
-typedef struct {
+struct _ickP2pContext {
   ickP2pLibState_t             state;
   ickErrcode_t                 error;
   pthread_mutex_t              mutex;
-  pthread_cond_t               condIsReady;
+
   char                        *osName;      // strong
   char                        *deviceName;  // strong
+  char                        *hostName;    // strong
+  ickP2pDeviceCb_t             deviceCb;
+  ickP2pMessageCb_t            messageCb;
+
+  // Main thread and timer
+  pthread_t                    thread;
+  pthread_cond_t               condIsReady;
+  int                          pollBreakPipe[2];
+  ickTimer_t                  *timers;
+  pthread_mutex_t              timersMutex;
+
+  // Upnp/Ssdp layer
   char                        *deviceUuid;  // strong
   char                        *upnpFolder;  // strong
   int                          liveTime;
   long                         upnpBootId;
   long                         upnpConfigId;
-  struct _cb_list             *deviceCbList;
-  int                          pollBreakPipe[2];
+  char                        *interface;      // strong
+  int                          upnpPort;
+  int                          upnpSocket;
+  char                        *locationRoot;   // strong
 
-  ickDiscovery_t              *discoveryHandlers;
-  pthread_mutex_t              discoveryHandlersMutex;
-  int                          rCounter;
+  // List of remote devices seen by this interface
+  ickDevice_t                 *deviceList;
+  pthread_mutex_t              deviceListMutex;
 
+  // List of local services offered to the world
+  ickP2pServicetype_t          ickServices;
+
+  // Web socket layer
   struct libwebsocket_context *lwsContext;
   int                          lwsPort;
   ickPolllist_t                lwsPolllist;
@@ -118,11 +134,9 @@ typedef struct {
   ickWGetContext_t            *wGetters;
   pthread_mutex_t              wGettersMutex;
 
-  ickTimer_t                  *timers;
-  pthread_mutex_t              timersMutex;
 
   ickP2pEndCb_t                cbEnd;
-} _ickP2pLibContext_t;
+};
 
 
 /*------------------------------------------------------------------------*\
@@ -156,12 +170,28 @@ typedef struct {
 /*------------------------------------------------------------------------*\
   Internal globals
 \*------------------------------------------------------------------------*/
-extern _ickP2pLibContext_t *_ickLib;
-
+// none
 
 /*=========================================================================*\
   Internal prototypes
 \*=========================================================================*/
-void _ickLibDestruct( _ickP2pLibContext_t **icklibptr );
+void _ickLibLock( ickP2pContext_t *ictx );
+void _ickLibUnlock( ickP2pContext_t *ictx );
+void _ickLibDestruct( ickP2pContext_t *ictx );
+
+void _ickLibDeviceListLock( ickP2pContext_t *ictx );
+void _ickLibDeviceListUnlock( ickP2pContext_t *ictx );
+void _ickLibDeviceAdd( ickP2pContext_t *ictx, ickDevice_t *device );
+void _ickLibDeviceRemove( ickP2pContext_t *ictx, ickDevice_t *device );
+ickDevice_t *_ickLibDeviceFind( ickP2pContext_t *ictx, const char *uuid );
+
+void _ickLibExecDeviceCallback( ickP2pContext_t *ictx, const ickDevice_t *dev, ickP2pDeviceCommand_t change, ickP2pServicetype_t type );
+
+void _ickLibWGettersLock( ickP2pContext_t *ictx );
+void _ickLibWGettersUnlock( ickP2pContext_t *ictx  );
+void _ickLibWGettersAdd( ickP2pContext_t *ictx , ickWGetContext_t *wget );
+void _ickLibWGettersRemove( ickP2pContext_t *ictx , ickWGetContext_t *wget );
+
+
 
 #endif /* __ICKP2PINTERNAL_H */

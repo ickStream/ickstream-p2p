@@ -1,12 +1,12 @@
 /*$*********************************************************************\
 
-Header File     : ickDiscoveryh
+Header File     : ickDevice.h
 
-Description     : Internal include file for upnp discovery functions
+Description     : Internal include file for device descriptor functions
 
 Comments        : -
 
-Date            : 14.08.2013
+Date            : 25.08.2013
 
 Updates         : -
 
@@ -42,18 +42,17 @@ Remarks         : -
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 \************************************************************************/
 
-#ifndef __ICKDISCOVERY_H
-#define __ICKDISCOVERY_H
+#ifndef __ICKDEVICE_H
+#define __ICKDEVICE_H
 
 
 /*=========================================================================*\
   Includes required by definitions from this file
 \*=========================================================================*/
-
 #include <pthread.h>
-
+#include <libwebsockets.h>
 #include "ickP2p.h"
-#include "ickP2pInternal.h"
+#include "ickDescription.h"
 
 
 /*=========================================================================*\
@@ -65,36 +64,48 @@ Remarks         : -
   Macro and type definitions
 \*=========================================================================*/
 
-struct _upnp_device;
-typedef struct _upnp_device upnp_device_t;
-
-
 //
-// struct defining a discovery handler.
-// consolidated to contain connection information.
-// holds socket for server side loopback connection
+// Descriptor for ickstream messages
 //
-struct _ickDiscovery {
-  ickDiscovery_t              *next;
-  _ickP2pLibContext_t         *icklib;
-  pthread_mutex_t              mutex;
-  ickDiscoveryEndCb_t          exitCallback;
-
-  char                        *interface;      // strong
-  int                          port;
-  int                          socket;
-  char                        *locationRoot;   // strong
-
-  // List of remote devices seen by this interface
-  upnp_device_t               *deviceList;
-  pthread_mutex_t              deviceListMutex;
-
-  // List of local services offered to the world
-  ickP2pServicetype_t          ickServices;
-  int                          ttl;
-
+struct _ickMessage;
+typedef struct _ickMessage ickMessage_t;
+struct _ickMessage {
+  ickMessage_t *next;
+  ickMessage_t *prev;
+  void         *payload;
+  size_t        size;
 };
 
+//
+// Type of device creation
+//
+typedef enum {
+  ICKDEVICE_LOOPBACK,
+  ICKDEVICE_SSDP,
+  ICKDEVICE_WS
+} ickDeviceType_t;
+
+//
+// An ickstream device
+//
+struct _ickDevice;
+typedef struct _ickDevice ickDevice_t;
+struct _ickDevice {
+  ickDevice_t         *prev;
+  ickDevice_t         *next;
+  ickP2pContext_t     *ictx;            // weak
+  pthread_mutex_t      mutex;
+  ickDeviceType_t      type;
+  int                  livetime;
+  char                *uuid;          // strong
+  char                *location;      // strong
+  int                  ickUpnpVersion;
+  ickP2pServicetype_t  services;
+  char                *friendlyName;  // strong
+  ickP2pLevel_t        ickP2pLevel;
+  ickMessage_t        *outQueue;
+  struct libwebsocket *wsi;
+};
 
 /*------------------------------------------------------------------------*\
   Macros
@@ -113,16 +124,17 @@ struct _ickDiscovery {
 
 
 /*=========================================================================*\
-  Private prototypes
+  Internal prototypes
 \*=========================================================================*/
-void _ickDiscoveryExecDeviceCallback( ickDiscovery_t *dh, const upnp_device_t *dev, ickP2pDeviceCommand_t change, ickP2pServicetype_t type );
+ickDevice_t  *_ickDeviceNew( const char *uuid, ickDeviceType_t type );
+void          _ickDeviceFree( ickDevice_t *device );
+void          _ickDeviceLock( ickDevice_t *device );
+void          _ickDeviceUnlock( ickDevice_t *device );
+ickErrcode_t  _ickDeviceSetLocation( ickDevice_t *device, const char *location );
+ickErrcode_t  _ickDeviceSetName( ickDevice_t *device, const char *name );
+ickErrcode_t  _ickDeviceAddMessage( ickDevice_t *device, void *container, size_t size );
+ickMessage_t *_ickDeviceOutQueue( ickDevice_t *device );
+int           _ickDevicePendingMessages( ickDevice_t *device );
+size_t        _ickDevicePendingBytes( ickDevice_t *device );
 
-// Manage device list of a discovery handler
-void           _ickDiscoveryDeviceListLock( ickDiscovery_t *dh );
-void           _ickDiscoveryDeviceListUnlock( ickDiscovery_t *dh );
-void           _ickDiscoveryDeviceAdd( ickDiscovery_t *dh, upnp_device_t *dev );
-void           _ickDiscoveryDeviceRemove( ickDiscovery_t *dh, upnp_device_t *dev );
-upnp_device_t *_ickDiscoveryDeviceFind( const ickDiscovery_t *dh, const char *uuid );
-
-
-#endif /* __ICKDISCOVERY_H */
+#endif /* __ICKSSDP_H */

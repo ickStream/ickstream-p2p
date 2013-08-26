@@ -90,7 +90,7 @@ static void *_ickWGetThread( void *arg );
   Create a client context
     return NULL on error
 \*=========================================================================*/
-ickWGetContext_t *_ickWGetInit( _ickP2pLibContext_t *icklib, const char *uri, ickWGetCb_t callback, void *user, ickErrcode_t *error )
+ickWGetContext_t *_ickWGetInit( ickP2pContext_t *ictx, const char *uri, ickWGetCb_t callback, void *user, ickErrcode_t *error )
 {
   ickWGetContext_t *context;
   int               rc;
@@ -107,7 +107,7 @@ ickWGetContext_t *_ickWGetInit( _ickP2pLibContext_t *icklib, const char *uri, ic
       *error = ICKERR_NOMEM;
     return NULL;
   }
-  context->icklib   = icklib;
+  context->ictx     = ictx;
   context->userData = user;
   context->callback = callback;
   context->state    = ICKWGETSTATE_RUNNING;
@@ -344,7 +344,7 @@ static void *_ickWGetThread( void *arg )
 /*------------------------------------------------------------------------*\
     Signal main thread to start main loop prior to timeout
 \*------------------------------------------------------------------------*/
-  _ickMainThreadBreak( context->icklib, 'W' );
+  _ickMainThreadBreak( context->ictx, 'W' );
 
 /*------------------------------------------------------------------------*\
     That's all

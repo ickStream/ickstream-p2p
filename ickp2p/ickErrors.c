@@ -90,6 +90,10 @@ const char *ickStrError( ickErrcode_t code )
     case ICKERR_NOINTERFACE:      return "Bad interface";
     case ICKERR_NOTHREAD:         return "Could not create thread";
     case ICKERR_NOSOCKET:         return "Could not create socket";
+    case ICKERR_NODEVICE:         return "Unknown device";
+    case ICKERR_BADURI:           return "Bad URI";
+    case ICKERR_NOTCONNECTED:     return "Not connected";
+    case ICKERR_ISCONNECTED:      return "Already connected";
     case ICKERR_LWSERR:           return "Libwebsockets error";
 
     default:                 break;

@@ -76,6 +76,10 @@ typedef enum {
   ICKERR_NOTHREAD,
   ICKERR_NOINTERFACE,
   ICKERR_NOSOCKET,
+  ICKERR_NODEVICE,
+  ICKERR_BADURI,
+  ICKERR_NOTCONNECTED,
+  ICKERR_ISCONNECTED,
   ICKERR_LWSERR,
   ICKERR_MAX
 } ickErrcode_t;
@@ -94,7 +98,8 @@ typedef enum {
 typedef enum {
   ICKP2P_ADD,
   ICKP2P_REMOVE,
-  ICKP2P_EXPIRED
+  ICKP2P_EXPIRED,
+  ICKP2P_TERMINATE
 } ickP2pDeviceCommand_t;
 
 // Service types
@@ -118,8 +123,8 @@ typedef struct {
 } ickUpnpNames_t;
 
 
-struct _ickDiscovery;
-typedef struct _ickDiscovery ickDiscovery_t;
+struct _ickP2pContext;
+typedef struct _ickP2pContext ickP2pContext_t;
 
 
 /*------------------------------------------------------------------------*\
@@ -131,11 +136,10 @@ typedef struct _ickDiscovery ickDiscovery_t;
 /*------------------------------------------------------------------------*\
   Signatures for function pointers
 \*------------------------------------------------------------------------*/
-typedef void         (*ickP2pEndCb_t)( void );
+typedef void         (*ickP2pEndCb_t)( ickP2pContext_t *ictx );
 typedef ickErrcode_t (*ickP2pSuspendCb_t)( void );
-typedef ickErrcode_t (*ickDiscoveryEndCb_t)( ickDiscovery_t *dh );
-typedef void         (*ickDiscoveryDeviceCb_t)( ickDiscovery_t *dh, const char *uuid, ickP2pDeviceCommand_t change, ickP2pServicetype_t type );
-typedef ickErrcode_t (*ickDiscoveryMessageCb_t)( ickDiscovery_t *dh, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetService, const char* message );
+typedef void         (*ickP2pDeviceCb_t)( ickP2pContext_t *ictx, const char *uuid, ickP2pDeviceCommand_t change, ickP2pServicetype_t type );
+typedef ickErrcode_t (*ickP2pMessageCb_t)( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetService, const char* message, size_t mSize );
 typedef void         (*ickP2pLogFacility_t)( const char *file, int line, int prio, const char * format, ... );
 
 
@@ -153,54 +157,42 @@ extern ickUpnpNames_t ickUpnpNames;
 
 const char       *ickP2pGetVersion( int *major, int *minor );
 const char       *ickP2pGitVersion( void );
+void              ickP2pSetLogFacility( ickP2pLogFacility_t facility );
+void              ickP2pSetLogLevel( int level );
+const char       *ickStrError( ickErrcode_t code );
 
-ickErrcode_t      ickP2pInit( const char *deviceName, const char *deviceUuid, const char *upnpFolder, int liveTime, long bootId, long configId );
-ickErrcode_t      ickP2pEnd( ickP2pEndCb_t callback );
-ickErrcode_t      ickP2pSuspend( ickP2pSuspendCb_t callback  );
-ickErrcode_t      ickP2pResume( void );
-ickErrcode_t      ickP2pSetDeviceName( const char *deviceName );
-const char       *ickP2pGetDeviceName( void );
-const char       *ickP2pGetDeviceUuid( void );
-const char       *ickP2pGetUpnpFolder( void );
-ickP2pLibState_t  ickP2pGetState( void );
-int               ickP2pGetLiveTime( void );
-const char       *ickP2pGetOsName( void );
-int               ickP2pGetLwsPort( void );
-long              ickP2pGetBootId( void );
-long              ickP2pGetConfigId( void );
-ickErrcode_t      ickP2pRegisterDiscoveryCallback( ickDiscoveryDeviceCb_t callback );
-ickErrcode_t      ickP2pRemoveDiscoveryCallback( ickDiscoveryDeviceCb_t callback );
+ickP2pContext_t     *ickP2pInit( const char *deviceName, const char *deviceUuid, const char *upnpFolder, int liveTime, long bootId, long configId, const char *hostname, const char *ifname, int port, ickP2pDeviceCb_t deviceCb, ickP2pMessageCb_t messageCb, ickErrcode_t *error );
+ickErrcode_t         ickP2pEnd( ickP2pContext_t *ictx, ickP2pEndCb_t callback );
+ickErrcode_t         ickP2pSuspend( ickP2pContext_t *ictx, ickP2pSuspendCb_t callback  );
+ickErrcode_t         ickP2pResume( ickP2pContext_t *ictx );
+const char          *ickP2pGetOsName( const ickP2pContext_t *ictx );
+ickErrcode_t         ickP2pSetName( ickP2pContext_t *ictx, const char *name );
+const char          *ickP2pGetName( const ickP2pContext_t *ictx );
+const char          *ickP2pGetDeviceUuid( const ickP2pContext_t *ictx );
+const char          *ickP2pGetUpnpFolder( const ickP2pContext_t *ictx );
+ickP2pLibState_t     ickP2pGetState( const ickP2pContext_t *ictx );
+int                  ickP2pGetLiveTime( const ickP2pContext_t *ictx );
+const char          *ickP2pGetHostname( const ickP2pContext_t *ictx );
+const char          *ickP2pGetIf( const ickP2pContext_t *ictx );
+int                  ickP2pGetLwsPort( const ickP2pContext_t *ictx );
+int                  ickP2pGetUpnpPort( const ickP2pContext_t *ictx );
+long                 ickP2pGetBootId( const ickP2pContext_t *ictx );
+long                 ickP2pGetConfigId( const ickP2pContext_t *ictx );
+ickErrcode_t         ickP2pDiscoveryAddService( ickP2pContext_t *ictx, ickP2pServicetype_t type );
+ickErrcode_t         ickDiscoveryRemoveService( ickP2pContext_t *ictx, ickP2pServicetype_t type );
 
-ickDiscovery_t   *ickP2pDiscoveryInit( const char *ifname, int port, ickDiscoveryEndCb_t callback, ickErrcode_t *error );
-ickErrcode_t      ickP2pDiscoveryEnd( ickDiscovery_t *dh );
-ickErrcode_t      ickP2pDiscoveryRegisterMessageCallback( ickDiscovery_t *dh, ickDiscoveryMessageCb_t callback );
-ickErrcode_t      ickDeviceRemoveMessageCallback( ickDiscovery_t *dh, ickDiscoveryMessageCb_t callback );
-ickErrcode_t      ickP2pDiscoveryAddService( ickDiscovery_t *dh, ickP2pServicetype_t type );
-ickErrcode_t      ickDiscoveryRemoveService( ickDiscovery_t *dh, ickP2pServicetype_t type );
-const char       *ickP2pDiscoveryGetIf( const ickDiscovery_t *dh );
-int               ickP2pDiscoveryGetPort( const ickDiscovery_t *dh );
+ickP2pServicetype_t  ickP2pGetDeviceType( const ickP2pContext_t *ictx, const char *uuid );
+char                *ickP2pGetDeviceName( const ickP2pContext_t *ictx, const char *uuid );
+char                *ickP2pGetDeviceURL( const ickP2pContext_t *ictx, const char *uuid );
+int                  ickP2pGetDevicePort( const ickP2pContext_t *ictx, const char *uuid );
 
-ickP2pServicetype_t ickP2pDiscoveryGetDeviceType( const ickDiscovery_t *dh, const char *uuid );
-char             *ickP2pDiscoveryGetDeviceName( const ickDiscovery_t *dh, const char *uuid );
-char             *ickP2pDiscoveryGetDeviceURL( const ickDiscovery_t *dh, const char *uuid );
-int               ickP2pDiscoveryGetDevicePort( const ickDiscovery_t *dh, const char *uuid );
+ickErrcode_t         ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid, ickP2pServicetype_t targetServices, ickP2pServicetype_t sourceService, const char *payload, size_t pSize );
 
-ickErrcode_t      ickP2pSendMsg( const ickDiscovery_t *dh, const char *uuid, ickP2pServicetype_t targetServices, ickP2pServicetype_t sourceService, const char *message );
-int               ickP2pGetSendQueueLength( const ickDiscovery_t *dh );
-
-ickErrcode_t      ickP2pDiscoverySetDebugging( int on );
-char             *ickP2pGetLocalDebugInfoForDevice( const ickDiscovery_t *dh, const char *uuid );
-char             *ickP2pGetLocalDebugInfo( const ickDiscovery_t *dh );
-char             *ickP2pGetRemoteDebugInfoForDevice( const ickDiscovery_t *dh, const char *remoteUuid, const char uuid );
-char             *ickP2pGetRemoteDebugInfo( const ickDiscovery_t *dh, const char *remoteUuid );
-
-
-void            ickP2pSetLogFacility( ickP2pLogFacility_t facility );
-void            ickP2pSetLogLevel( int level );
-
-const char     *ickStrError( ickErrcode_t code );
-
-
+ickErrcode_t         ickP2pDiscoverySetDebugging( ickP2pContext_t *ictx, int on );
+char                *ickP2pGetLocalDebugInfoForDevice( ickP2pContext_t *ictx, const char *uuid );
+char                *ickP2pGetLocalDebugInfo( ickP2pContext_t *ictx );
+char                *ickP2pGetRemoteDebugInfoForDevice( const ickP2pContext_t *ictx, const char *remoteUuid, const char uuid );
+char                *ickP2pGetRemoteDebugInfo( const ickP2pContext_t *ictx, const char *remoteUuid );
 
 
 #endif /* __ICKP2P_H */

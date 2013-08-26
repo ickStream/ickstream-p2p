@@ -54,6 +54,8 @@ Remarks         : refactored from ickDiscoverRegistry
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <errno.h>
 #include <sys/socket.h>
@@ -61,10 +63,12 @@ Remarks         : refactored from ickDiscoverRegistry
 #include <arpa/inet.h>
 
 
+
 #include "ickP2p.h"
 #include "ickP2pInternal.h"
 #include "logutils.h"
-#include "ickDiscovery.h"
+#include "ickIpTools.h"
+#include "ickDevice.h"
 #include "ickDescription.h"
 #include "ickMainThread.h"
 #include "ickWGet.h"
@@ -108,22 +112,91 @@ typedef struct {
 /*=========================================================================*\
   Private prototypes
 \*=========================================================================*/
-static int   _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp );
-static int   _ickDeviceRemove( ickDiscovery_t *dh, const ickSsdp_t *ssdp );
+static int   _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
+static int   _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
 static void  _ickDeviceExpireCb( const ickTimer_t *timer, void *data, int tag );
-static void  _ickDeviceFree( upnp_device_t *device );
 
 static void         _ickSsdpAnnounceCb( const ickTimer_t *timer, void *data, int tag );
 static void         _ickSsdpSearchCb( const ickTimer_t *timer, void *data, int tag );
 
-static int          _ssdpProcessMSearch( const ickDiscovery_t *dh, const ickSsdp_t *ssdp );
-static ickErrcode_t _ssdpSendInitialDiscoveryMsg( const ickDiscovery_t *dh, const struct sockaddr *addr );
-static ickErrcode_t _ssdpSendDiscoveryMsg( const ickDiscovery_t *dh, const struct sockaddr *addr, ickSsdpMsgType_t type, ssdpMsgLevel_t level, ickP2pServicetype_t service, int repeat );
+static int          _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
+static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx, const struct sockaddr *addr );
+static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx, const struct sockaddr *addr, ickSsdpMsgType_t type, ssdpMsgLevel_t level, ickP2pServicetype_t service, int repeat );
 static void         _ickSsdpNotifyCb( const ickTimer_t *timer, void *data, int tag );
 
-static ickP2pServicetype_t _ssdpGetIckService( const char *usn );
 static int                 _ssdpGetVersion( const char *dscr );
 static int                 _ssdpVercmp( const char *user, const char *adv );
+
+
+
+
+
+/*=========================================================================*\
+  Create an SSDP listener
+  returns listener port or -1 on error
+\*=========================================================================*/
+int _ickSsdpCreateListener( in_addr_t ifaddr, int port )
+{
+  int sd;
+  int rc;
+  int opt;
+
+/*------------------------------------------------------------------------*\
+    Try to create socket
+\*------------------------------------------------------------------------*/
+  sd = socket( PF_INET, SOCK_DGRAM, 0 );
+  if( sd<0 ){
+    logerr( "_ickSsdpCreateListener: could not create socket (%s).", strerror(errno) );
+    return -1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Set non blocking
+\*------------------------------------------------------------------------*/
+  rc = fcntl( sd, F_GETFL );
+  if( rc>=0 )
+    rc = fcntl( sd, F_SETFL, rc|O_NONBLOCK );
+  if( rc<0 )
+    logwarn( "_ickSsdpCreateListener: could not set O_NONBLOCK on socket (%s).",
+        strerror(errno) );
+
+/*------------------------------------------------------------------------*\
+    Reuse address (multiple processes will receive MCASTS)
+\*------------------------------------------------------------------------*/
+  opt = 1;
+  rc = setsockopt( sd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt) );
+  if( rc<0 )
+    logwarn( "_ickSsdpCreateListener: could not set SO_REUSEADDR on socket (%s).",
+        strerror(errno) );
+
+/*------------------------------------------------------------------------*\
+    Bind socket to requested port
+\*------------------------------------------------------------------------*/
+  rc = _ickIpBind( sd, INADDR_ANY, port );
+  if( rc<0 ) {
+    close( sd );
+    logerr( "_ickSsdpCreateListener: could not bind socket to port %d (%s).",
+             port, strerror(rc) );
+    return -1;
+  }
+
+/*------------------------------------------------------------------------*\
+  Add socket to multicast group on target interface
+\*------------------------------------------------------------------------*/
+  rc = _ickIpAddMcast( sd, ifaddr, inet_addr(ICKSSDP_MCASTADDR) );
+  if( rc<0 ) {
+    close( sd );
+    logerr( "ickP2pInit: could not add mcast membership for socket (%s).",
+             strerror(rc) );
+    return -1;
+  }
+
+/*------------------------------------------------------------------------*\
+  That's all
+\*------------------------------------------------------------------------*/
+  return sd;
+}
+
 
 #pragma mark - SSDP parsing
 
@@ -416,7 +489,7 @@ void _ickSsdpFree( ickSsdp_t *ssdp )
     1 : a device was added
     2 : a device was removed
 \*=========================================================================*/
-int _ickSsdpExecute( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
+int _ickSsdpExecute( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 {
   int retval = 0;
   const char *peer;
@@ -432,29 +505,29 @@ int _ickSsdpExecute( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
   switch( ssdp->method ) {
 
     case SSDP_METHOD_REPLY:
-      retval = _ickDeviceAlive( dh, ssdp );
+      retval = _ickDeviceAlive( ictx, ssdp );
       break;
 
     case SSDP_METHOD_NOTIFY:
       if( ssdp->nts==SSDP_NTS_ALIVE )
-        retval = _ickDeviceAlive( dh, ssdp );
+        retval = _ickDeviceAlive( ictx, ssdp );
       else if( ssdp->nts==SSDP_NTS_UPDATE )
         retval = 0;                             // fixme: should check new boot id and remove devices if not equal
       else if( ssdp->nts==SSDP_NTS_BYEBYE )
-        retval = _ickDeviceRemove( dh, ssdp );
+        retval = _ickDeviceRemove( ictx, ssdp );
       else {
         logwarn( "_ickSsdpExecute (%s): Missing NTS header for NOTIFY", peer );
         return -1;
       }
       break;
 
-      case SSDP_METHOD_MSEARCH:
-        retval = _ssdpProcessMSearch( dh, ssdp );
-        break;
+    case SSDP_METHOD_MSEARCH:
+      retval = _ssdpProcessMSearch( ictx, ssdp );
+      break;
 
-      default:
-        logerr( "_ickSsdpExecute (%s): Undefined method", peer );
-        return -1;
+    default:
+      logerr( "_ickSsdpExecute (%s): Undefined method", peer );
+      return -1;
   }
 
 /*------------------------------------------------------------------------*\
@@ -475,10 +548,9 @@ int _ickSsdpExecute( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
     0 : device was updated
     1 : device was added
 \*=========================================================================*/
-static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
+static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 {
-  _ickP2pLibContext_t *icklib = dh->icklib;
-  upnp_device_t       *device;
+  ickDevice_t         *device;
   ickTimer_t          *timer;
   ickWGetContext_t    *wget;
   const char          *peer;
@@ -505,20 +577,22 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
 /*------------------------------------------------------------------------*\
     Ignore non ickstream services...
 \*------------------------------------------------------------------------*/
-  stype = _ssdpGetIckService( ssdp->usn );
-  if( stype==ICKP2P_SERVICE_NONE )
+  stype = _ickDescrFindServiceByUsn( ssdp->usn );
+  if( stype==ICKP2P_SERVICE_NONE ) {
+    debug( "_ickDeviceUpdate (%s): No ickstream device or service (%s).", peer, ssdp->usn );
     return 0;
+  }
 
 /*------------------------------------------------------------------------*\
     Lock device list and inhibit notifications sender
 \*------------------------------------------------------------------------*/
-  _ickDiscoveryDeviceListLock( dh );
-  _ickTimerListLock( icklib );
+  _ickLibDeviceListLock( ictx );
+  _ickTimerListLock( ictx );
 
 /*------------------------------------------------------------------------*\
    New device?
 \*------------------------------------------------------------------------*/
-  device = _ickDiscoveryDeviceFind( dh, ssdp->uuid );
+  device = _ickLibDeviceFind( ictx, ssdp->uuid );
   if( !device ) {
     debug ( "_ickDeviceUpdate (%s): adding new device (%s).", ssdp->usn, ssdp->location );
 
@@ -533,76 +607,70 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
 */
 
     // Allocate and initialize descriptor
-    device = calloc( 1, sizeof(upnp_device_t) );
+    device = _ickDeviceNew( ssdp->uuid, ICKDEVICE_SSDP );
     if( !device ) {
       logerr( "_ickDeviceUpdate: out of memory" );
-      _ickDiscoveryDeviceListUnlock( dh );
-      _ickTimerListUnlock( icklib );
+      _ickLibDeviceListUnlock( ictx );
+      _ickTimerListUnlock( ictx );
       return -1;
     }
-    pthread_mutex_init( &device->mutex, NULL );
-    device->dh             = dh;
     device->services       = stype;
     device->livetime       = ssdp->livetime;
-    device->uuid           = strdup( ssdp->uuid );
     device->ickUpnpVersion = _ssdpGetVersion( ssdp->usn );
 
     //fixme: Ver.1 devices only answer to root requests
-    if(device->ickUpnpVersion==1 ) {
+    if( device->ickUpnpVersion==1 ) {
       char *ptr=strrchr(ssdp->location,'/');
       if( ptr )
         asprintf( &device->location, "%.*s/Root.xml", ptr-ssdp->location, ssdp->location );
     }
     if( !device->location )
       device->location   = strdup( ssdp->location );
-    if( !device->uuid || !device->location ) {
+    if( !device->location ) {
       logerr( "_ickDeviceUpdate: out of memory" );
       _ickDeviceFree( device );
-      _ickDiscoveryDeviceListUnlock( dh );
-      _ickTimerListUnlock( icklib );
+      _ickLibDeviceListUnlock( ictx );
+      _ickTimerListUnlock( ictx );
       return -1;
     }
 
     // Start retrieval of unpn descriptor
-    wget = _ickWGetInit( icklib, device->location, _ickWGetXmlCb, device, &irc );
+    wget = _ickWGetInit( ictx, device->location, _ickWGetXmlCb, device, &irc );
     if( !wget ) {
-      logerr( "_ickDeviceUpdate (%s): could not start xml retriever for update on \"%s\" (%s).",
+      logerr( "_ickDeviceUpdate (%s): could not start xml retriever for SSDP update on \"%s\" (%s).",
           device->uuid, device->location, ickStrError(irc) );
       _ickDeviceFree( device );
-      _ickDiscoveryDeviceListUnlock( dh );
-      _ickTimerListUnlock( icklib );
+      _ickLibDeviceListUnlock( ictx );
+      _ickTimerListUnlock( ictx );
       return -1;
     }
 
     // Link to list of getters
-    pthread_mutex_lock( &icklib->wGettersMutex );
-    wget->next = icklib->wGetters;
-    if( wget->next )
-      wget->next->prev = wget;
-    icklib->wGetters = wget;
-    pthread_mutex_unlock( &icklib->wGettersMutex );
+    _ickLibWGettersLock( ictx );
+    _ickLibWGettersAdd( ictx, wget );
+    _ickLibWGettersUnlock( ictx );
 
     // Create expire timer
-    irc = _ickTimerAdd( icklib, device->livetime*1000, 1, _ickDeviceExpireCb, device, 0 );
+    irc = _ickTimerAdd( ictx, device->livetime*1000, 1, _ickDeviceExpireCb, device, 0 );
     if( irc ) {
       logerr( "_ickDeviceUpdate (%s): could not create expiration timer (%s)",
           device->uuid, ickStrError(irc) );
       _ickDeviceFree( device );
-      _ickDiscoveryDeviceListUnlock( dh );
-      _ickTimerListUnlock( icklib );
+      _ickLibDeviceListUnlock( ictx );
+      _ickTimerListUnlock( ictx );
       return -1;
     }
 
     //Link device to discovery handler
-    _ickDiscoveryDeviceAdd( dh, device );
+    _ickLibDeviceAdd( ictx, device );
 
     // Execute callbacks registered with discovery handler
     // this is done by the xml handler after the device is full initialzed
     // _ickDiscoveryExecDeviceCallback( dh, device, ICKP2P_ADD, stype );
 
     // Release all locks and return code 1 (a device was added)
-    _ickDiscoveryDeviceListUnlock( dh );
-    _ickTimerListUnlock( icklib );
+    _ickLibDeviceListUnlock( ictx );
+    _ickTimerListUnlock( ictx );
     return 1;
   }
 
@@ -615,16 +683,31 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
   device->livetime = ssdp->livetime;
 
   // Find and modify expiration handler for this device
-  timer = _ickTimerFind( icklib, _ickDeviceExpireCb, device, 0 );
+  timer = _ickTimerFind( ictx, _ickDeviceExpireCb, device, 0 );
   if( timer )
-    _ickTimerUpdate( icklib, timer, device->livetime*1000, 1 );
-  else
-    logerr( "_ickDeviceUpdate: could not find expiration timer." );
+    _ickTimerUpdate( ictx, timer, device->livetime*1000, 1 );
+  else {
+    if( device->type==ICKDEVICE_SSDP )
+      logerr( "_ickDeviceUpdate: could not find expiration timer." );
+    irc = _ickTimerAdd( ictx, device->livetime*1000, 1, _ickDeviceExpireCb, device, 0 );
+    if( irc ) {
+      logerr( "_ickDeviceUpdate (%s): could not create expiration timer (%s)",
+          device->uuid, ickStrError(irc) );
+      _ickDeviceFree( device );
+      _ickLibDeviceListUnlock( ictx );
+      _ickTimerListUnlock( ictx );
+      return -1;
+    }
+  }
 
   // Check protocol version, should be same on one UUID
-  if( device->ickUpnpVersion!=_ssdpGetVersion(ssdp->usn) )
-    logwarn( "_ickDeviceUpdate (%s): version mismatch for USN \"%s\" (expected %d).",
-             device->uuid, ssdp->usn, device->ickUpnpVersion );
+  if( device->ickUpnpVersion!=_ssdpGetVersion(ssdp->usn) ) {
+    if( device->type==ICKDEVICE_SSDP )
+      logwarn( "_ickDeviceUpdate (%s): version mismatch for USN \"%s\" (expected %d).",
+               device->uuid, ssdp->usn, device->ickUpnpVersion );
+    else
+      device->ickUpnpVersion =_ssdpGetVersion( ssdp->usn );
+  }
 
 /*
   // New location?
@@ -646,12 +729,12 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
   // New service: Execute callbacks registered with discovery handler
   if( (stype&~device->services) ) {
     device->services |= stype;
-    _ickDiscoveryExecDeviceCallback( dh, device, ICKP2P_ADD, stype );
+    _ickLibExecDeviceCallback( ictx, device, ICKP2P_ADD, stype );
   }
 
   // Release all locks and return code 0 (no device added)
-  _ickDiscoveryDeviceListUnlock( dh );
-  _ickTimerListUnlock( icklib );
+  _ickLibDeviceListUnlock( ictx );
+  _ickTimerListUnlock( ictx );
   return 0;
 }
 
@@ -665,10 +748,9 @@ static int _ickDeviceAlive( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
     0 : no device removed
     2 : device was removed
 \*=========================================================================*/
-static int _ickDeviceRemove( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
+static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 {
-  _ickP2pLibContext_t *icklib = dh->icklib;
-  upnp_device_t       *device;
+  ickDevice_t         *device;
   ickWGetContext_t    *wget, *wgetNext;
   ickTimer_t          *timer;
   ickP2pServicetype_t  stype;
@@ -684,24 +766,24 @@ static int _ickDeviceRemove( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
 /*------------------------------------------------------------------------*\
     Ignore non ickstream services...
 \*------------------------------------------------------------------------*/
-  stype = _ssdpGetIckService( ssdp->usn );
+  stype = _ickDescrFindServiceByUsn( ssdp->usn );
   if( stype==ICKP2P_SERVICE_NONE )
     return 0;
 
 /*------------------------------------------------------------------------*\
     Lock device list and inhibit timer handling.
 \*------------------------------------------------------------------------*/
-  _ickDiscoveryDeviceListLock( dh );
-  _ickTimerListLock( icklib );
+  _ickLibDeviceListLock( ictx );
+  _ickTimerListLock( ictx );
 
 /*------------------------------------------------------------------------*\
     Find matching device entry
 \*------------------------------------------------------------------------*/
-  device = _ickDiscoveryDeviceFind( dh, ssdp->uuid );
+  device = _ickLibDeviceFind( ictx, ssdp->uuid );
   if( !device ) {
     loginfo( "_ickDeviceRemove (%s): no instance found.", ssdp->usn );
-    _ickDiscoveryDeviceListUnlock( dh );
-    _ickTimerListUnlock( icklib );
+    _ickLibDeviceListUnlock( ictx );
+    _ickTimerListUnlock( ictx );
     return 0;
   }
   _ickDeviceLock( device );
@@ -711,7 +793,7 @@ static int _ickDeviceRemove( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
 \*------------------------------------------------------------------------*/
   if( (device->services&stype) || stype!=ICKP2P_SERVICE_GENERIC ) {
     device->services &= ~stype;
-    _ickDiscoveryExecDeviceCallback( dh, device, ICKP2P_REMOVE, stype );
+    _ickLibExecDeviceCallback( ictx, device, ICKP2P_REMOVE, stype );
   }
 
 /*------------------------------------------------------------------------*\
@@ -720,35 +802,29 @@ static int _ickDeviceRemove( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
   if( stype==ICKP2P_SERVICE_GENERIC ) {
 
     // Execute callback with all registered services
-    _ickDiscoveryExecDeviceCallback( dh, device, ICKP2P_REMOVE, device->services );
+    _ickLibExecDeviceCallback( ictx, device, ICKP2P_REMOVE, device->services );
 
     // Unlink from device list
-    _ickDiscoveryDeviceRemove( dh, device );
+    _ickLibDeviceRemove( ictx, device );
 
     // Find and remove expiration handler for this device
-    timer = _ickTimerFind( icklib, _ickDeviceExpireCb, device, 0 );
+    timer = _ickTimerFind( ictx, _ickDeviceExpireCb, device, 0 );
     if( timer )
-      _ickTimerDelete( icklib, timer );
+      _ickTimerDelete( ictx, timer );
     else
       logerr( "_ickDeviceRemove: could not find expiration timer." );
 
     // Find and remove HTTP clients for this device
-    pthread_mutex_lock( &icklib->wGettersMutex );
-    for( wget=icklib->wGetters; wget; wget=wgetNext ) {
+    _ickLibWGettersLock( ictx );
+    for( wget=ictx->wGetters; wget; wget=wgetNext ) {
       wgetNext = wget->next;
       if( _ickWGetUserData(wget)==device ) {
-        // unlink from list of getters
-        if( wget->next )
-          wget->next->prev = wget->prev;
-        if( wget->prev )
-          wget->prev->next = wget->next;
-        else
-          icklib->wGetters = wget->next;
-        // And Destroy
+        // unlink from list of getters and destroy
+        _ickLibWGettersRemove( ictx, wget );
         _ickWGetDestroy( wget );
       }
     }
-    pthread_mutex_unlock( &icklib->wGettersMutex );
+    _ickLibWGettersUnlock( ictx );
 
     // Free instance
     _ickDeviceFree( device );
@@ -759,8 +835,8 @@ static int _ickDeviceRemove( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
 /*------------------------------------------------------------------------*\
     Release all remaining locks
 \*------------------------------------------------------------------------*/
-  _ickDiscoveryDeviceListUnlock( dh );
-  _ickTimerListUnlock( icklib );
+  _ickLibDeviceListUnlock( ictx );
+  _ickTimerListUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
     That's all (code 2 indicates that a device or service was removed)
@@ -770,135 +846,89 @@ static int _ickDeviceRemove( ickDiscovery_t *dh, const ickSsdp_t *ssdp )
 
 
 /*=========================================================================*\
-  Lock a device for access or modification
-\*=========================================================================*/
-void _ickDeviceLock( upnp_device_t *device )
-{
-  debug ( "_ickDeviceLock (%s): locking...", device->uuid );
-  pthread_mutex_lock( &device->mutex );
-  debug ( "_ickDeviceLock (%s): locked", device->uuid );
-}
-
-
-/*=========================================================================*\
-  Unlock a device
-\*=========================================================================*/
-void _ickDeviceUnlock( upnp_device_t *device )
-{
-  debug ( "_ickDeviceUnlock (%s): locking...", device->uuid );
-  pthread_mutex_lock( &device->mutex );
-  debug ( "_ickDeviceUnlock (%s): locked", device->uuid );
-}
-
-
-/*=========================================================================*\
   A device or service has expired: remove from a discovery context
     timer list is already locked
 \*=========================================================================*/
 static void _ickDeviceExpireCb( const ickTimer_t *timer, void *data, int tag )
 {
-  upnp_device_t  *device = data;
-  ickDiscovery_t *dh     = device->dh;
+  ickDevice_t *device = data;
 
   debug( "_ickDeviceExpireCb: %s", device->uuid );
 
 /*------------------------------------------------------------------------*\
     Lock device list
 \*------------------------------------------------------------------------*/
-  _ickDiscoveryDeviceListLock( dh );
+  _ickLibDeviceListLock( device->ictx );
 
 /*------------------------------------------------------------------------*\
     Execute callback with all registered services
 \*------------------------------------------------------------------------*/
-  _ickDiscoveryExecDeviceCallback( dh, device, ICKP2P_EXPIRED, device->services );
+  _ickLibExecDeviceCallback( device->ictx, device, ICKP2P_EXPIRED, device->services );
 
 /*------------------------------------------------------------------------*\
     Unlink from device list and free instance
 \*------------------------------------------------------------------------*/
-  _ickDiscoveryDeviceRemove( dh, device );
+  _ickLibDeviceRemove( device->ictx, device );
   _ickDeviceFree( device );
 
 /*------------------------------------------------------------------------*\
     Release device list locks
 \*------------------------------------------------------------------------*/
-  _ickDiscoveryDeviceListUnlock( dh );
+  _ickLibDeviceListUnlock( device->ictx );
 }
 
 
-
-/*=========================================================================*\
-  Free memory for a device descriptor
-\*=========================================================================*/
-static void _ickDeviceFree( upnp_device_t *device )
-{
-
-/*------------------------------------------------------------------------*\
-    Delete mutex
-\*------------------------------------------------------------------------*/
-  pthread_mutex_destroy( &device->mutex );
-
-/*------------------------------------------------------------------------*\
-    Free memory
-\*------------------------------------------------------------------------*/
-  Sfree( device->uuid );
-  Sfree( device->location );
-  Sfree( device->friendlyName );
-  Sfree( device );
-}
-
-
-#pragma mark - Managament of local devices and services
+#pragma mark - Management of local devices and services
 
 
 /*=========================================================================*\
   A new discovery was started
 \*=========================================================================*/
-ickErrcode_t _ickSsdpNewDiscovery( const ickDiscovery_t *dh )
+ickErrcode_t _ickSsdpNewDiscovery( ickP2pContext_t *ictx )
 {
-  _ickP2pLibContext_t *icklib = dh->icklib;
-  ickErrcode_t         irc;
+  ickErrcode_t irc;
 
 /*------------------------------------------------------------------------*\
     Lock timer list for queuing messages
 \*------------------------------------------------------------------------*/
-  _ickTimerListLock( icklib );
+  _ickTimerListLock( ictx );
 
 /*------------------------------------------------------------------------*\
     Schedule initial advertisements
 \*------------------------------------------------------------------------*/
-  irc = _ssdpSendInitialDiscoveryMsg( dh, NULL );
+  irc = _ssdpSendInitialDiscoveryMsg( ictx, NULL );
   if( irc ) {
-    _ickTimerListUnlock( icklib );
+    _ickTimerListUnlock( ictx );
     return irc;
   }
 
 /*------------------------------------------------------------------------*\
     Request advertisements from all reachable upnp devices
 \*------------------------------------------------------------------------*/
-  irc = _ssdpSendDiscoveryMsg( dh, NULL, SSDPMSGTYPE_MSEARCH, SSDPMSGLEVEL_GLOBAL,
+  irc = _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_MSEARCH, SSDPMSGLEVEL_GLOBAL,
                                ICKP2P_SERVICE_NONE, ICKSSDP_REPEATS );
   if( irc ) {
-    _ickTimerListUnlock( icklib );
+    _ickTimerListUnlock( ictx );
     return irc;
   }
 
 /*------------------------------------------------------------------------*\
     Setup announcement timer
 \*------------------------------------------------------------------------*/
-  long interval = ickP2pGetLiveTime()/ICKSSDP_ANNOUNCEDIVIDOR;
+  long interval = ictx->liveTime/ICKSSDP_ANNOUNCEDIVIDOR;
   if( interval<=0 )
     interval = ICKSSDP_DEFAULTLIVETIME/ICKSSDP_ANNOUNCEDIVIDOR;
-  _ickTimerAdd( icklib, interval*1000, 0, _ickSsdpAnnounceCb, (void*)dh, 0 );
+  _ickTimerAdd( ictx, interval*1000, 0, _ickSsdpAnnounceCb, (void*)ictx, 0 );
 
 /*------------------------------------------------------------------------*\
     Setup periodic search timer
 \*------------------------------------------------------------------------*/
-  _ickTimerAdd( icklib, ICKSSDP_SEARCHINTERVAL*1000, 0, _ickSsdpSearchCb, (void*)dh, 0 );
+  _ickTimerAdd( ictx, ICKSSDP_SEARCHINTERVAL*1000, 0, _ickSsdpSearchCb, (void*)ictx, 0 );
 
 /*------------------------------------------------------------------------*\
     Unlock timer list, that's all
 \*------------------------------------------------------------------------*/
-  _ickTimerListUnlock( icklib );
+  _ickTimerListUnlock( ictx );
   return ICKERR_SUCCESS;
 }
 
@@ -906,55 +936,65 @@ ickErrcode_t _ickSsdpNewDiscovery( const ickDiscovery_t *dh )
 /*=========================================================================*\
   A discovery is shut down
 \*=========================================================================*/
-void _ickSsdpEndDiscovery( const ickDiscovery_t *dh )
+void _ickSsdpEndDiscovery( ickP2pContext_t *ictx )
 {
-  _ickP2pLibContext_t *icklib = dh->icklib;
 
 /*------------------------------------------------------------------------*\
     Lock timer list for queuing messages
 \*------------------------------------------------------------------------*/
-  _ickTimerListLock( icklib );
+  _ickTimerListLock( ictx );
 
 /*------------------------------------------------------------------------*\
     Delete all timers related to this discovery handler
 \*------------------------------------------------------------------------*/
-  _ickTimerDeleteAll( icklib, _ickSsdpAnnounceCb, dh, 0 );
+  _ickTimerDeleteAll( ictx, _ickSsdpAnnounceCb, ictx, 0 );
 
 /*------------------------------------------------------------------------*\
     Immediately announce all devices and services as terminated
 \*------------------------------------------------------------------------*/
-  _ssdpSendDiscoveryMsg( dh, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_ROOT,
+  _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_ROOT,
                          ICKP2P_SERVICE_NONE, 0 );
-  _ssdpSendDiscoveryMsg( dh, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_UUID,
+  _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_UUID,
                          ICKP2P_SERVICE_NONE, 0 );
-  _ssdpSendDiscoveryMsg( dh, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
+  _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
                          ICKP2P_SERVICE_GENERIC, 0 );
-  if( dh->ickServices&ICKP2P_SERVICE_PLAYER )
-    _ssdpSendDiscoveryMsg( dh, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
+  if( ictx->ickServices&ICKP2P_SERVICE_PLAYER )
+    _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
                            ICKP2P_SERVICE_PLAYER, 0 );
-  if( dh->ickServices&ICKP2P_SERVICE_CONTROLLER )
-    _ssdpSendDiscoveryMsg( dh, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
+  if( ictx->ickServices&ICKP2P_SERVICE_CONTROLLER )
+    _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
                            ICKP2P_SERVICE_CONTROLLER, 0 );
-  if( dh->ickServices&ICKP2P_SERVICE_SERVER_GENERIC )
-    _ssdpSendDiscoveryMsg( dh, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
+  if( ictx->ickServices&ICKP2P_SERVICE_SERVER_GENERIC )
+    _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
                            ICKP2P_SERVICE_SERVER_GENERIC, 0 );
-  if( dh->ickServices&ICKP2P_SERVICE_DEBUG )
-    _ssdpSendDiscoveryMsg( dh, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
+  if( ictx->ickServices&ICKP2P_SERVICE_DEBUG )
+    _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
                            ICKP2P_SERVICE_DEBUG, 0 );
 
 /*------------------------------------------------------------------------*\
-    Unlock timer list, that's all
+    Terminate all known device
 \*------------------------------------------------------------------------*/
-  _ickTimerListUnlock( icklib );
+  _ickLibDeviceListLock( ictx );
+  while( ictx->deviceList ) {
+    ickDevice_t *device = ictx->deviceList;
+    _ickLibExecDeviceCallback( ictx, device, ICKP2P_TERMINATE, device->services );
+    _ickLibDeviceRemove( ictx, device );
+    _ickDeviceFree( device );
+  }
+  _ickLibDeviceListUnlock( ictx );
+
+/*------------------------------------------------------------------------*\
+    Unlock timer list, that's it
+\*------------------------------------------------------------------------*/
+  _ickTimerListUnlock( ictx );
 }
 
 
 /*=========================================================================*\
   Services were registerd or terminated
 \*=========================================================================*/
-ickErrcode_t _ickSsdpAnnounceServices( ickDiscovery_t *dh, ickP2pServicetype_t services, ickSsdpMsgType_t mtype )
+ickErrcode_t _ickSsdpAnnounceServices( ickP2pContext_t *ictx, ickP2pServicetype_t services, ickSsdpMsgType_t mtype )
 {
-  _ickP2pLibContext_t *icklib = dh->icklib;
 
 /*------------------------------------------------------------------------*\
     Be defensive
@@ -967,28 +1007,28 @@ ickErrcode_t _ickSsdpAnnounceServices( ickDiscovery_t *dh, ickP2pServicetype_t s
 /*------------------------------------------------------------------------*\
     Lock timer list for queuing messages
 \*------------------------------------------------------------------------*/
-  _ickTimerListLock( icklib );
+  _ickTimerListLock( ictx );
 
 /*------------------------------------------------------------------------*\
     Announce all new or terminated services
 \*------------------------------------------------------------------------*/
   if( services&ICKP2P_SERVICE_PLAYER )
-    _ssdpSendDiscoveryMsg( dh, NULL, mtype, SSDPMSGLEVEL_SERVICE,
+    _ssdpSendDiscoveryMsg( ictx, NULL, mtype, SSDPMSGLEVEL_SERVICE,
                            ICKP2P_SERVICE_PLAYER, ICKSSDP_REPEATS );
   if( services&ICKP2P_SERVICE_CONTROLLER )
-    _ssdpSendDiscoveryMsg( dh, NULL, mtype, SSDPMSGLEVEL_SERVICE,
+    _ssdpSendDiscoveryMsg( ictx, NULL, mtype, SSDPMSGLEVEL_SERVICE,
                            ICKP2P_SERVICE_CONTROLLER, ICKSSDP_REPEATS );
   if( services&ICKP2P_SERVICE_SERVER_GENERIC )
-    _ssdpSendDiscoveryMsg( dh, NULL, mtype, SSDPMSGLEVEL_SERVICE,
+    _ssdpSendDiscoveryMsg( ictx, NULL, mtype, SSDPMSGLEVEL_SERVICE,
                            ICKP2P_SERVICE_SERVER_GENERIC, ICKSSDP_REPEATS );
   if( services&ICKP2P_SERVICE_DEBUG )
-    _ssdpSendDiscoveryMsg( dh, NULL, mtype, SSDPMSGLEVEL_SERVICE,
+    _ssdpSendDiscoveryMsg( ictx, NULL, mtype, SSDPMSGLEVEL_SERVICE,
                            ICKP2P_SERVICE_DEBUG, ICKSSDP_REPEATS );
 
 /*------------------------------------------------------------------------*\
     Unlock timer list, that's all
 \*------------------------------------------------------------------------*/
-  _ickTimerListUnlock( icklib );
+  _ickTimerListUnlock( ictx );
   return ICKERR_SUCCESS;
 }
 
@@ -999,15 +1039,15 @@ ickErrcode_t _ickSsdpAnnounceServices( ickDiscovery_t *dh, ickP2pServicetype_t s
 \*=========================================================================*/
 static void _ickSsdpAnnounceCb( const ickTimer_t *timer, void *data, int tag )
 {
-  const ickDiscovery_t *dh = data;
-  ickErrcode_t          irc;
+  ickP2pContext_t *ictx = data;
+  ickErrcode_t     irc;
 
-  debug( "_ickSsdpAnnounceCb: sending periodic annoucements..." );
+  debug( "_ickSsdpAnnounceCb: sending periodic announcements..." );
 
 /*------------------------------------------------------------------------*\
     Schedule initial advertisements
 \*------------------------------------------------------------------------*/
-  irc = _ssdpSendInitialDiscoveryMsg( dh, NULL );
+  irc = _ssdpSendInitialDiscoveryMsg( ictx, NULL );
   if( irc ) {
     logerr( "_ickSsdpAnnounceCb: could not send alive announcements (%s).",
         ickStrError(irc) );
@@ -1025,15 +1065,15 @@ static void _ickSsdpAnnounceCb( const ickTimer_t *timer, void *data, int tag )
 \*=========================================================================*/
 static void _ickSsdpSearchCb( const ickTimer_t *timer, void *data, int tag )
 {
-  const ickDiscovery_t *dh = data;
-  ickErrcode_t          irc;
+  ickP2pContext_t *ictx = data;
+  ickErrcode_t     irc;
 
   debug( "_ickSsdpSearchCb: executing periodic M-Search..." );
 
 /*------------------------------------------------------------------------*\
     Schedule an M-Search for ickstream root devices
 \*------------------------------------------------------------------------*/
-  irc = _ssdpSendDiscoveryMsg( dh, NULL, SSDPMSGTYPE_MSEARCH, SSDPMSGLEVEL_SERVICE,
+  irc = _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_MSEARCH, SSDPMSGLEVEL_SERVICE,
                                ICKP2P_SERVICE_GENERIC, 1 /*ICKSSDP_REPEATS*/ );
   if( irc ) {
     logerr( "_ickSsdpSearchCb: could not send alive announcements (%s).",
@@ -1056,9 +1096,8 @@ static void _ickSsdpSearchCb( const ickTimer_t *timer, void *data, int tag )
     dh   - the discovery handler to be used
   returns -1 on error, 0 on success
 \*=========================================================================*/
-static int _ssdpProcessMSearch( const ickDiscovery_t *dh, const ickSsdp_t *ssdp )
+static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 {
-  _ickP2pLibContext_t *icklib = dh->icklib;
   int                  retcode = 0;
 
   debug( "_ssdpProcessMSearch: from %s:%d ST:%s",
@@ -1076,20 +1115,20 @@ static int _ssdpProcessMSearch( const ickDiscovery_t *dh, const ickSsdp_t *ssdp 
 /*------------------------------------------------------------------------*\
     Lock timer list for queuing messages
 \*------------------------------------------------------------------------*/
-  _ickTimerListLock( icklib );
+  _ickTimerListLock( ictx );
 
 /*------------------------------------------------------------------------*\
     Search for all devices and services
 \*------------------------------------------------------------------------*/
   if( !strcmp(ssdp->st,"ssdp:all") ) {
-    _ssdpSendInitialDiscoveryMsg( dh, &ssdp->addr );
+    _ssdpSendInitialDiscoveryMsg( ictx, &ssdp->addr );
   }
 
 /*------------------------------------------------------------------------*\
     Search for root device
 \*------------------------------------------------------------------------*/
   else if( strcmp(ssdp->st,"upnp:rootdevice") ) {
-    _ssdpSendDiscoveryMsg( dh, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_ROOT,
+    _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_ROOT,
                           ICKP2P_SERVICE_NONE, ICKSSDP_REPEATS );
   }
 
@@ -1097,8 +1136,8 @@ static int _ssdpProcessMSearch( const ickDiscovery_t *dh, const ickSsdp_t *ssdp 
     Search for a device with specific UUID
 \*------------------------------------------------------------------------*/
   else if( strncmp(ssdp->st,"uuid:",5) ) {
-    if( !strcasecmp(ssdp->st+5,ickP2pGetDeviceUuid()) ) {
-      _ssdpSendDiscoveryMsg( dh, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_UUID,
+    if( !strcasecmp(ssdp->st+5,ictx->deviceUuid) ) {
+      _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_UUID,
                              ICKP2P_SERVICE_NONE, ICKSSDP_REPEATS );
     }
   }
@@ -1109,26 +1148,26 @@ static int _ssdpProcessMSearch( const ickDiscovery_t *dh, const ickSsdp_t *ssdp 
   else {
 
     if( !_ssdpVercmp(ssdp->st,ICKDEVICE_TYPESTR_ROOT) )
-      _ssdpSendDiscoveryMsg( dh, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
+      _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
                              ICKP2P_SERVICE_GENERIC, ICKSSDP_REPEATS );
-    if( (dh->ickServices&ICKP2P_SERVICE_PLAYER) && !_ssdpVercmp(ssdp->st,ICKSERVICE_TYPESTR_PLAYER) )
-      _ssdpSendDiscoveryMsg( dh, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
+    if( (ictx->ickServices&ICKP2P_SERVICE_PLAYER) && !_ssdpVercmp(ssdp->st,ICKSERVICE_TYPESTR_PLAYER) )
+      _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
                              ICKP2P_SERVICE_PLAYER, ICKSSDP_REPEATS );
-    if( (dh->ickServices&ICKP2P_SERVICE_CONTROLLER) && !_ssdpVercmp(ssdp->st,ICKSERVICE_TYPESTR_CONTROLLER) )
-      _ssdpSendDiscoveryMsg( dh, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
+    if( (ictx->ickServices&ICKP2P_SERVICE_CONTROLLER) && !_ssdpVercmp(ssdp->st,ICKSERVICE_TYPESTR_CONTROLLER) )
+      _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
                              ICKP2P_SERVICE_CONTROLLER, ICKSSDP_REPEATS );
-    if( (dh->ickServices&ICKP2P_SERVICE_SERVER_GENERIC) && !_ssdpVercmp(ssdp->st,ICKSERVICE_TYPESTR_SERVER) )
-      _ssdpSendDiscoveryMsg( dh, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
+    if( (ictx->ickServices&ICKP2P_SERVICE_SERVER_GENERIC) && !_ssdpVercmp(ssdp->st,ICKSERVICE_TYPESTR_SERVER) )
+      _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
                              ICKP2P_SERVICE_SERVER_GENERIC, ICKSSDP_REPEATS );
-    if( (dh->ickServices&ICKP2P_SERVICE_DEBUG) && !_ssdpVercmp(ssdp->st,ICKSERVICE_TYPESTR_DEBUG) )
-      _ssdpSendDiscoveryMsg( dh, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
+    if( (ictx->ickServices&ICKP2P_SERVICE_DEBUG) && !_ssdpVercmp(ssdp->st,ICKSERVICE_TYPESTR_DEBUG) )
+      _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
                              ICKP2P_SERVICE_DEBUG, ICKSSDP_REPEATS );
   }
 
 /*------------------------------------------------------------------------*\
     Unlock timer list, that's all
 \*------------------------------------------------------------------------*/
-  _ickTimerListUnlock( icklib );
+  _ickTimerListUnlock( ictx );
   return retcode;
 }
 
@@ -1141,7 +1180,7 @@ static int _ssdpProcessMSearch( const ickDiscovery_t *dh, const ickSsdp_t *ssdp 
     addr    - NULL for mcast, else unicast target (for M-Search responses)
     Caller should lock timer list (which is already the case in timer callbacks)
 \*=========================================================================*/
-static ickErrcode_t _ssdpSendInitialDiscoveryMsg( const ickDiscovery_t *dh,
+static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
                                                   const struct sockaddr *addr )
 {
   ickErrcode_t irc;
@@ -1149,7 +1188,7 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( const ickDiscovery_t *dh,
 /*------------------------------------------------------------------------*\
     Advertise UPNP root
 \*------------------------------------------------------------------------*/
-  irc = _ssdpSendDiscoveryMsg( dh, addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_ROOT,
+  irc = _ssdpSendDiscoveryMsg( ictx, addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_ROOT,
                                ICKP2P_SERVICE_NONE, ICKSSDP_REPEATS );
   if( irc )
     return irc;
@@ -1157,7 +1196,7 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( const ickDiscovery_t *dh,
 /*------------------------------------------------------------------------*\
     Advertise UUID
 \*------------------------------------------------------------------------*/
-  irc = _ssdpSendDiscoveryMsg( dh, addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_UUID,
+  irc = _ssdpSendDiscoveryMsg( ictx, addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_UUID,
                                ICKP2P_SERVICE_NONE, ICKSSDP_REPEATS );
   if( irc )
     return irc;
@@ -1165,7 +1204,7 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( const ickDiscovery_t *dh,
 /*------------------------------------------------------------------------*\
     Advertise ickstream root device
 \*------------------------------------------------------------------------*/
-  irc = _ssdpSendDiscoveryMsg( dh, addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
+  irc = _ssdpSendDiscoveryMsg( ictx, addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
                                ICKP2P_SERVICE_GENERIC, ICKSSDP_REPEATS );
   if( irc )
     return irc;
@@ -1173,29 +1212,29 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( const ickDiscovery_t *dh,
 /*------------------------------------------------------------------------*\
     Advertise ickstream services
 \*------------------------------------------------------------------------*/
-  if( dh->ickServices&ICKP2P_SERVICE_PLAYER ) {
-    irc = _ssdpSendDiscoveryMsg( dh, addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
+  if( ictx->ickServices&ICKP2P_SERVICE_PLAYER ) {
+    irc = _ssdpSendDiscoveryMsg( ictx, addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
                                 ICKP2P_SERVICE_PLAYER, ICKSSDP_REPEATS );
     if( irc )
       return irc;
   }
 
-  if( dh->ickServices&ICKP2P_SERVICE_CONTROLLER ) {
-    irc = _ssdpSendDiscoveryMsg( dh, addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
+  if( ictx->ickServices&ICKP2P_SERVICE_CONTROLLER ) {
+    irc = _ssdpSendDiscoveryMsg( ictx, addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
                                  ICKP2P_SERVICE_CONTROLLER, ICKSSDP_REPEATS );
     if( irc )
       return irc;
   }
 
-  if( dh->ickServices&ICKP2P_SERVICE_SERVER_GENERIC ) {
-    irc = _ssdpSendDiscoveryMsg( dh, addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
+  if( ictx->ickServices&ICKP2P_SERVICE_SERVER_GENERIC ) {
+    irc = _ssdpSendDiscoveryMsg( ictx, addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
                            ICKP2P_SERVICE_SERVER_GENERIC, ICKSSDP_REPEATS );
     if( irc )
       return irc;
   }
 
-  if( dh->ickServices&ICKP2P_SERVICE_DEBUG ) {
-    irc = _ssdpSendDiscoveryMsg( dh, addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
+  if( ictx->ickServices&ICKP2P_SERVICE_DEBUG ) {
+    irc = _ssdpSendDiscoveryMsg( ictx, addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
                                  ICKP2P_SERVICE_DEBUG, ICKSSDP_REPEATS );
     if( irc )
       return irc;
@@ -1210,7 +1249,7 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( const ickDiscovery_t *dh,
 
 /*=========================================================================*\
   Queue an outgoing discovery message
-    dh      - the discovery handler (interface) to use
+    ictx    - the ickstream context to use
     addr    - NULL for mcast, else unicast target (for M-Search responses)
     type    - the message type (alive,byebye,M-Search,Response)
     level   - the message type (global,root,uuid,service)
@@ -1221,14 +1260,13 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( const ickDiscovery_t *dh,
     returns -1 on error, 0 on success
     Caller should lock timer list (which is already the case in timer callbacks)
 \*=========================================================================*/
-static ickErrcode_t _ssdpSendDiscoveryMsg( const ickDiscovery_t *dh,
+static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
                                            const struct sockaddr *addr,
                                            ickSsdpMsgType_t type,
                                            ssdpMsgLevel_t level,
                                            ickP2pServicetype_t service,
                                            int repeat )
 {
-  _ickP2pLibContext_t *icklib = dh->icklib;
   upnp_notification_t *note;
   struct sockaddr_in   sockname;
   socklen_t            addr_len = sizeof( struct sockaddr_in );
@@ -1275,13 +1313,13 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( const ickDiscovery_t *dh,
     case SSDPMSGLEVEL_ROOT:
       sstr = ICKDEVICE_STRING_ROOT;
       nst = strdup( "upnp:rootdevice" );
-      asprintf( &usn, "uuid:%s::upnp:rootdevice", ickP2pGetDeviceUuid() );
+      asprintf( &usn, "uuid:%s::upnp:rootdevice", ictx->deviceUuid );
       break;
 
     case SSDPMSGLEVEL_UUID:
       sstr = ICKDEVICE_STRING_ROOT;
-      asprintf( &nst, "uuid:%s", ickP2pGetDeviceUuid() );
-      asprintf( &usn, "uuid:%s", ickP2pGetDeviceUuid() );
+      asprintf( &nst, "uuid:%s", ictx->deviceUuid );
+      asprintf( &usn, "uuid:%s", ictx->deviceUuid );
       break;
 
     case SSDPMSGLEVEL_SERVICE:
@@ -1310,7 +1348,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( const ickDiscovery_t *dh,
           logerr( "_ssdpSendDiscoveryMsg: bad service type (%d)", service );
           return ICKERR_INVALID;
       }
-      asprintf( &usn, "uuid:%s::%s", ickP2pGetDeviceUuid(), nst );
+      asprintf( &usn, "uuid:%s::%s", ictx->deviceUuid, nst );
       nst = strdup( nst );
       break;
 
@@ -1344,10 +1382,10 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( const ickDiscovery_t *dh,
         "BOOTID.UPNP.ORG: %ld\r\n"
         "CONFIGID.UPNP.ORG: %ld\r\n"
         "\r\n",
-        ICKSSDP_MCASTADDR, dh->port, ickP2pGetLiveTime(),
-        dh->locationRoot, sstr,
-        nst, ickP2pGetOsName(), usn,
-        ickP2pGetBootId(), ickP2pGetConfigId() );
+        ICKSSDP_MCASTADDR, ictx->upnpPort, ictx->liveTime,
+        ictx->locationRoot, sstr,
+        nst, ictx->osName, usn,
+        ictx->upnpBootId, ictx->upnpConfigId );
       break;
 
     // See "UPnP Device Architecture 1.1": chapter 1.2.3
@@ -1361,8 +1399,8 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( const ickDiscovery_t *dh,
         "BOOTID.UPNP.ORG: %ld\r\n"
         "CONFIGID.UPNP.ORG: %ld\r\n"
         "\r\n",
-        ICKSSDP_MCASTADDR, dh->port, nst, usn,
-        ickP2pGetBootId(), ickP2pGetConfigId() );
+        ICKSSDP_MCASTADDR, ictx->upnpPort, nst, usn,
+        ictx->upnpBootId, ictx->upnpConfigId );
       break;
 
       // See "UPnP Device Architecture 1.1": chapter 1.3.2
@@ -1375,8 +1413,8 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( const ickDiscovery_t *dh,
           "ST: %s\r\n"
           "USER-AGENT: %s\r\n"
           "\r\n",
-          ICKSSDP_MCASTADDR, dh->port, ICKSSDP_MSEARCH_MX,
-          nst, ickP2pGetOsName() );
+          ICKSSDP_MCASTADDR, ictx->upnpPort, ICKSSDP_MSEARCH_MX,
+          nst, ictx->osName );
         break;
 
     // See "UPnP Device Architecture 1.1": chapter 1.3.3
@@ -1400,10 +1438,10 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( const ickDiscovery_t *dh,
         "BOOTID.UPNP.ORG: %ld\r\n"
         "CONFIGID.UPNP.ORG: %ld\r\n"
         "\r\n",
-        ickP2pGetLiveTime(), timestr,
-        dh->locationRoot, sstr,
-        ickP2pGetOsName(), nst, usn,
-        ickP2pGetBootId(), ickP2pGetConfigId() );
+        ictx->liveTime, timestr,
+        ictx->locationRoot, sstr,
+        ictx->osName, nst, usn,
+        ictx->upnpBootId, ictx->upnpConfigId );
       break;
 
     default:
@@ -1429,7 +1467,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( const ickDiscovery_t *dh,
            (long)len, addrstr, message );
 
     // Try to send packet via discovery socket
-    n = sendto( dh->socket, message, len, 0, addr, addr_len );
+    n = sendto( ictx->upnpSocket, message, len, 0, addr, addr_len );
 
     // Any error ?
     if( n<0 ) {
@@ -1464,7 +1502,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( const ickDiscovery_t *dh,
     return ICKERR_NOMEM;
   }
   note->message  = message;
-  note->socket   = dh->socket;
+  note->socket   = ictx->upnpSocket;
   note->refCntr  = repeat>0 ? repeat : 1;
   note->socknamelen = addr_len;
   memcpy( &note->sockname, addr, addr_len );
@@ -1475,9 +1513,9 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( const ickDiscovery_t *dh,
   delay = 0;
   while( repeat-- ) {
     delay += random() % ICKSSDP_RNDDELAY;
-    irc = _ickTimerAdd( icklib, delay, 1, _ickSsdpNotifyCb, note, 0 );
+    irc = _ickTimerAdd( ictx, delay, 1, _ickSsdpNotifyCb, note, 0 );
     if( irc ) {
-      _ickTimerDeleteAll( icklib, _ickSsdpNotifyCb, note, 0 );
+      _ickTimerDeleteAll( ictx, _ickSsdpNotifyCb, note, 0 );
       Sfree( note->message );
       Sfree( note );
       return irc;
@@ -1539,38 +1577,6 @@ static void _ickSsdpNotifyCb( const ickTimer_t *timer, void *data, int tag )
 
 
 #pragma mark -- Tools
-
-
-/*=========================================================================*\
-    Check what ickstream service was announced
-      // fixme: do version comparison
-\*=========================================================================*/
-static ickP2pServicetype_t _ssdpGetIckService( const char *usn )
-{
-
-/*------------------------------------------------------------------------*\
-    The SSDP root device announcement defines no services
-\*------------------------------------------------------------------------*/
-  if( strstr(usn, ICKDEVICE_TYPESTR_ROOT) )
-    return ICKP2P_SERVICE_GENERIC;
-
-/*------------------------------------------------------------------------*\
-    Check for known services
-\*------------------------------------------------------------------------*/
-  if( strstr(usn, ICKSERVICE_TYPESTR_PLAYER) )
-    return ICKP2P_SERVICE_PLAYER;
-  if( strstr(usn, ICKSERVICE_TYPESTR_SERVER) )
-    return ICKP2P_SERVICE_SERVER_GENERIC;
-  if( strstr(usn, ICKSERVICE_TYPESTR_CONTROLLER) )
-    return ICKP2P_SERVICE_CONTROLLER;
-  if( strstr(usn, ICKSERVICE_TYPESTR_CONTROLLER) )
-    return ICKP2P_SERVICE_DEBUG;
-
-/*------------------------------------------------------------------------*\
-    No compatible ickstream service found
-\*------------------------------------------------------------------------*/
-  return ICKP2P_SERVICE_NONE;
-}
 
 
 /*=========================================================================*\

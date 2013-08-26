@@ -51,6 +51,7 @@ Remarks         : -
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <uuid/uuid.h>
 
 #include "ickP2p.h"
 
@@ -67,6 +68,7 @@ Remarks         : -
 #define LOGLEVEL    7
 #define DEVICENAME  "ickp2plibtester"
 #define UUID        "3fe109ad-aa4c-4b0e-a089-3e30f5fc1afe"
+#define IFNAME      "wlan0"
 
 static volatile int stop_signal;
 
@@ -75,7 +77,7 @@ static volatile int stop_signal;
   Private prototypes
 \*=========================================================================*/
 static void sigHandler( int sig, siginfo_t *siginfo, void *context );
-static void ickDeviceCb( ickDiscovery_t *dh, const char *uuid, ickP2pDeviceCommand_t change, ickP2pServicetype_t type );
+static void ickDeviceCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDeviceCommand_t change, ickP2pServicetype_t type );
 
 
 
@@ -84,8 +86,11 @@ static void ickDeviceCb( ickDiscovery_t *dh, const char *uuid, ickP2pDeviceComma
 \*=========================================================================*/
 int main( int argc, char *argv[] )
 {
-  ickErrcode_t    irc;
-  ickDiscovery_t *idh;
+  ickErrcode_t     irc;
+  ickP2pContext_t *ictx;
+  uuid_t           uuid;
+  char             uuidStr[37];
+
 
 /*------------------------------------------------------------------------*\
     Hello world and setting loglevel
@@ -93,6 +98,12 @@ int main( int argc, char *argv[] )
   printf( "%s: starting (pid %d)...\n", argv[0], (int)getpid() );
   printf( "ickP2pSetLogLevel: %d\n", LOGLEVEL );
   ickP2pSetLogLevel( LOGLEVEL );
+
+/*------------------------------------------------------------------------*\
+    Use random uuid
+\*------------------------------------------------------------------------*/
+  uuid_generate( uuid );
+  uuid_unparse( uuid, uuidStr );
 
 /*------------------------------------------------------------------------*\
     OK, from here on we catch some terminating signals and ignore others
@@ -107,37 +118,20 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Init library
 \*------------------------------------------------------------------------*/
-  irc = ickP2pInit( DEVICENAME, UUID, "./httpFolder", 100, -1, -1 );
-  if( irc ) {
+  ictx = ickP2pInit( DEVICENAME, uuidStr, "./httpFolder", 100, -1, -1, NULL, IFNAME, 1900, ickDeviceCb, NULL, &irc  );
+  if( !ictx ) {
     fprintf( stderr, "ickP2pInit: %s\n", ickStrError(irc) );
     return -1;
   }
-  printf( "ickP2pGetOsName:     \"%s\"\n", ickP2pGetOsName() );
-  printf( "ickP2pGetDeviceName: \"%s\"\n", ickP2pGetDeviceName() );
-  printf( "ickP2pGetDeviceUuid: \"%s\"\n", ickP2pGetDeviceUuid() );
-  printf( "ickP2pGetState:      %d\n",     ickP2pGetState() );
-  printf( "ickP2pGetBootId:     %ld\n",    ickP2pGetBootId() );
-  printf( "ickP2pGetConfigId:   %ld\n",    ickP2pGetConfigId() );
-  printf( "ickP2pGetLwsPort:    %d\n",     ickP2pGetLwsPort() );
-
-/*------------------------------------------------------------------------*\
-    Register callback for device registry
-\*------------------------------------------------------------------------*/
-  irc = ickP2pRegisterDiscoveryCallback( ickDeviceCb );
-  if( irc ) {
-    fprintf( stderr, "ickP2pDiscoveryRegisterDeviceCallback: %s\n", ickStrError(irc) );
-    return -1;
-  }
-
-/*------------------------------------------------------------------------*\
-    Create discovery handler
-\*------------------------------------------------------------------------*/
-  idh = ickP2pDiscoveryInit( "wlan0", 1900, NULL, &irc );
-  if( !idh ) {
-    ickP2pEnd( NULL );
-    printf( "ickP2pDiscoveryInit: %s\n", ickStrError(irc) );
-    return -1;
-  }
+  printf( "ickP2pGetOsName:     \"%s\"\n", ickP2pGetOsName(ictx) );
+  printf( "ickP2pGetDeviceName: \"%s\"\n", ickP2pGetName(ictx) );
+  printf( "ickP2pGetDeviceUuid: \"%s\"\n", ickP2pGetDeviceUuid(ictx) );
+  printf( "ickP2pGetState:      %d\n",     ickP2pGetState(ictx) );
+  printf( "ickP2pGetBootId:     %ld\n",    ickP2pGetBootId(ictx) );
+  printf( "ickP2pGetConfigId:   %ld\n",    ickP2pGetConfigId(ictx) );
+  printf( "ickP2pGetUpnpPort:   %d\n",     ickP2pGetUpnpPort(ictx) );
+  printf( "ickP2pGetLwsPort:    %d\n",     ickP2pGetLwsPort(ictx) );
+  printf( "ickP2pGetHostname:   %s\n",     ickP2pGetHostname(ictx) );
 
 /*------------------------------------------------------------------------*\
     Main loop: wait for termination
@@ -147,18 +141,9 @@ int main( int argc, char *argv[] )
   }
 
 /*------------------------------------------------------------------------*\
-    Terminate discovery handler
-\*------------------------------------------------------------------------*/
-  irc = ickP2pDiscoveryEnd( idh );
-  if( irc ) {
-    printf( "ickP2pDiscoveryEnd: %s\n", ickStrError(irc) );
-    return -1;
-  }
-
-/*------------------------------------------------------------------------*\
     Terminate library
 \*------------------------------------------------------------------------*/
-  irc = ickP2pEnd( NULL );
+  irc = ickP2pEnd( ictx, NULL );
   if( irc ) {
     printf( "ickP2pEnd: %s\n", ickStrError(irc) );
     return -1;
@@ -175,7 +160,7 @@ int main( int argc, char *argv[] )
 /*=========================================================================*\
     Caled when devices or services are found or terminated
 \*=========================================================================*/
-static void ickDeviceCb( ickDiscovery_t *dh, const char *uuid, ickP2pDeviceCommand_t change, ickP2pServicetype_t type )
+static void ickDeviceCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDeviceCommand_t change, ickP2pServicetype_t type )
 {
   char *cstr = "???";
   char  tstr[128];
@@ -189,6 +174,9 @@ static void ickDeviceCb( ickDiscovery_t *dh, const char *uuid, ickP2pDeviceComma
       break;
     case ICKP2P_EXPIRED:
       cstr = "expiring";
+      break;
+    case ICKP2P_TERMINATE:
+      cstr = "terminating";
       break;
   }
 
@@ -207,7 +195,7 @@ static void ickDeviceCb( ickDiscovery_t *dh, const char *uuid, ickP2pDeviceComma
       strcat( tstr, " debugging" );
   }
 
-  printf( "%s: %s -- %s %s\n", ickP2pDiscoveryGetIf(dh), uuid, cstr, tstr );
+  printf( "%s: %s -- %s %s\n", ickP2pGetIf(ictx), uuid, cstr, tstr );
 }
 
 

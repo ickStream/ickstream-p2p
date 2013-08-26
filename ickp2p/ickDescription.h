@@ -50,7 +50,6 @@ Remarks         : -
   Includes required by definitions from this file
 \*=========================================================================*/
 #include "ickP2p.h"
-#include "ickDiscovery.h"
 #include "ickWGet.h"
 
 
@@ -78,6 +77,8 @@ Remarks         : -
 /*=========================================================================*\
   Macro and type definitions
 \*=========================================================================*/
+
+#define ICKP2P_WS_PROTOCOLNAME "ickstream-p2p-message-protocol"
 
 //
 // Default values of ickUpnpNames
@@ -110,17 +111,20 @@ Remarks         : -
 #define ICKSERVICE_TYPESTR_DEBUG         "urn:schemas-ickstream-com:device:Debug:1"
 
 //
-// ickstream protocol level
-// this is used to negotiate on websocket level, don't confuse with upnp device/service level
+// ickstream preamble elements
+// this is used to negotiate the protocol on websocket level, don't confuse with upnp device/service level
 //
 typedef enum {
-  ICKPROTOCOL_P2P_GENERIC             = 0,    // first protocol version or unknown
-  ICKPROTOCOL_P2P_INCLUDE_SERVICETYPE = 0x1,  // include target servicetype with messages
-  ICKPROTOCOL_P2P_INCLUDE_TARGETUUID  = 0x4,  // include target UUID with services (when supporting more than one UUID per websocket)
-  ICKPROTOCOL_P2P_INCLUDE_SOURCEUUID  = 0x8,  // include source UUID with services (when supporting more than one UUID per websocket)
-  ICKPROTOCOL_P2P_CURRENT_SUPPORT     = 0x1,  // that's what we currently support: including the service type
-  ICKPROTOCOL_P2P_DEFAULT             = 0,    // that's what we currently use as the default
-  ICKPROTOCOL_P2P_INVALID             = 0xe0   // mask to find illegal codes. Used to be backward compatible with previous implementations usually starting messages with "{" or "[". Should be deprecated until launch, then we can use 8 bits for protocol properties
+  ICKP2PLEVEL_GENERIC         = 0,     // first protocol version or unknown
+  ICKP2PLEVEL_TARGETSERVICES  = 0x01,  // include target service type with messages
+  ICKP2PLEVEL_SOURCESERVICE   = 0x02,  // include source service in message
+/* Not needed since each device has a unique UUID. Use source service instead
+  ICKP2PLEVEL_TARGETUUID      = 0x04,  // include target UUID with services (when supporting more than one UUID per websocket)
+  ICKP2PLEVEL_SOURCEUUID      = 0x08,  // include source UUID with services (when supporting more than one UUID per websocket)
+*/
+  ICKP2PLEVEL_SUPPORTED       = 0x03,  // that's what we currently support: including the service types
+  ICKP2PLEVEL_DEFAULT         = 0,     // that's what we currently use as the default
+  ICKP2PLEVEL_INVALID         = 0xf0   // mask to find illegal codes. Used to be backward compatible with previous implementations usually starting messages with "{" or "[". Should be deprecated until launch, then we can use 8 bits for protocol properties
 } ickP2pLevel_t;
 
 
@@ -138,13 +142,15 @@ typedef enum {
 \*=========================================================================*/
 // none
 
+
 /*=========================================================================*\
   Internal prototypes
 \*=========================================================================*/
-ickDiscovery_t *_ickDescrFindDicoveryHandlerByUrl( const _ickP2pLibContext_t *icklib, const char *uri, ickP2pServicetype_t *stype );
-char           *_ickDescrGetDeviceDescr( const ickDiscovery_t *dh, struct libwebsocket *wsi, ickP2pServicetype_t stype );
+ickP2pServicetype_t  _ickDescrFindServiceByUsn( const char *usn );
+ickP2pServicetype_t  _ickDescrFindServiceByUrl( const ickP2pContext_t *ictx, const char *uri );
+char                *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket *wsi, ickP2pServicetype_t stype );
 
-ickErrcode_t    _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, int arg );
+ickErrcode_t         _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, int arg );
 
 
 #endif /* __ICKDESCRIPTION_H */

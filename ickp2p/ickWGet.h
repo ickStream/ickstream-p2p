@@ -103,7 +103,7 @@ struct _ickWGetContext {
   char                *payload;   // strong
   size_t               psize;
   char                *errorStr;  // strong
-  _ickP2pLibContext_t *icklib;    // fixme: hack to signal main loop
+  ickP2pContext_t     *ictx;      // fixme: hack to signal main loop
   pthread_t            thread;    // fixme: not necessary
   pthread_mutex_t      mutex;
 };
@@ -118,7 +118,7 @@ struct _ickWGetContext {
 /*=========================================================================*\
   Internal prototypes
 \*=========================================================================*/
-ickWGetContext_t *_ickWGetInit( _ickP2pLibContext_t *icklib, const char *uri, ickWGetCb_t callback, void *userData, ickErrcode_t *error );
+ickWGetContext_t *_ickWGetInit( ickP2pContext_t *ictx, const char *uri, ickWGetCb_t callback, void *userData, ickErrcode_t *error );
 void              _ickWGetDestroy( ickWGetContext_t *context );
 ickErrcode_t      _ickWGetServiceFd( ickWGetContext_t *context, struct pollfd *pollfd );
 void             *_ickWGetUserData( const ickWGetContext_t *context );

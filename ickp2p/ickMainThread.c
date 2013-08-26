@@ -65,12 +65,12 @@ Remarks         : -
 
 #include "ickP2p.h"
 #include "ickP2pInternal.h"
+#include "logutils.h"
 #include "ickIpTools.h"
-#include "ickDiscovery.h"
+#include "ickDevice.h"
 #include "ickSSDP.h"
 #include "ickDescription.h"
 #include "ickP2pCom.h"
-#include "logutils.h"
 #include "ickWGet.h"
 #include "ickMainThread.h"
 
@@ -128,13 +128,13 @@ static int  _ickPolllistUnset( ickPolllist_t *plist, int fd, int events );
 static int  _ickPolllistCheck( const ickPolllist_t *plist, int fd, int events );
 static int  _ickPolllistGetIndex( const ickPolllist_t *plist, int fd );
 
-static struct libwebsocket_context *_ickCreateLwsContext( _ickP2pLibContext_t *icklib, const char *ifname, int *port );
+static struct libwebsocket_context *_ickCreateLwsContext( ickP2pContext_t *ictx, const char *ifname, int *port );
 static int  _lwsHttpCb( struct libwebsocket_context *context,
                         struct libwebsocket *wsi,
                         enum libwebsocket_callback_reasons reason, void *user,
                         void *in, size_t len );
-static void _ickTimerLink( _ickP2pLibContext_t *icklib, ickTimer_t *timer );
-static int  _ickTimerUnlink( _ickP2pLibContext_t *icklib, ickTimer_t *timer );
+static void _ickTimerLink( ickP2pContext_t *ictx, ickTimer_t *timer );
+static int  _ickTimerUnlink( ickP2pContext_t *ictx, ickTimer_t *timer );
 
 
 /*=========================================================================*\
@@ -152,14 +152,12 @@ static struct libwebsocket_protocols _lwsProtocols[] = {
     sizeof( _ickLwsHttpData_t )
   },
 
-/*
   // the icktream protocol
   {
-    "ickstream-p2p-message-protocol",
-    _ick_callback_p2p_server,
-    sizeof( struct __p2p_server_session_data )
+    ICKP2P_WS_PROTOCOLNAME,
+    _lwsP2pCb,
+    sizeof( _ickLwsP2pData_t )
   },
-*/
 
   // End of list
   {
@@ -173,7 +171,8 @@ static struct libwebsocket_protocols _lwsProtocols[] = {
 \*=========================================================================*/
 void *_ickMainThread( void *arg )
 {
-  _ickP2pLibContext_t *icklib = *(_ickP2pLibContext_t**)arg;
+  ickP2pContext_t     *ictx = *(ickP2pContext_t**)arg;
+  int                  rc;
   ickPolllist_t        plist;
   ickWGetContext_t    *wget, *wgetNext;
   char                *buffer;
@@ -184,7 +183,7 @@ void *_ickMainThread( void *arg )
 /*------------------------------------------------------------------------*\
     Reset error state
 \*------------------------------------------------------------------------*/
-  icklib->error = ICKERR_SUCCESS;
+  ictx->error = ICKERR_SUCCESS;
 
 /*------------------------------------------------------------------------*\
     Allocate buffers
@@ -192,52 +191,67 @@ void *_ickMainThread( void *arg )
   buffer = malloc( ICKDISCOVERY_HEADER_SIZE_MAX );
   if( !buffer ) {
     logerr( "ickp2p main thread: out of memory" );
-    icklib->error = ICKERR_NOMEM;
-    pthread_cond_signal( &icklib->condIsReady );
+    ictx->error = ICKERR_NOMEM;
+    pthread_cond_signal( &ictx->condIsReady );
     return NULL;
   }
   if( _ickPolllistInit(&plist,ICKPOLLIST_INITSIZE,ICKPOLLIST_INCEMENT) ) {
     logerr( "ickp2p main thread: out of memory" );
     Sfree( buffer );
-    icklib->error = ICKERR_NOMEM;
-    pthread_cond_signal( &icklib->condIsReady );
+    ictx->error = ICKERR_NOMEM;
+    pthread_cond_signal( &ictx->condIsReady );
     return NULL;
   }
-  if( _ickPolllistInit(&icklib->lwsPolllist,ICKPOLLIST_INITSIZE,ICKPOLLIST_INCEMENT) ) {
+  if( _ickPolllistInit(&ictx->lwsPolllist,ICKPOLLIST_INITSIZE,ICKPOLLIST_INCEMENT) ) {
     logerr( "ickp2p main thread: out of memory" );
     Sfree( buffer );
     _ickPolllistFree( &plist );
-    icklib->error = ICKERR_NOMEM;
-    pthread_cond_signal( &icklib->condIsReady );
+    ictx->error = ICKERR_NOMEM;
+    pthread_cond_signal( &ictx->condIsReady );
     return NULL;
   }
 
 /*------------------------------------------------------------------------*\
     Init libwebsocket server
 \*------------------------------------------------------------------------*/
-  icklib->lwsContext = _ickCreateLwsContext( icklib, NULL, &icklib->lwsPort );
-  if( !icklib->lwsContext ) {
+  ictx->lwsContext = _ickCreateLwsContext( ictx, ictx->interface, &ictx->lwsPort );
+  if( !ictx->lwsContext ) {
     Sfree( buffer );
     _ickPolllistFree( &plist );
-    _ickPolllistFree( &icklib->lwsPolllist );
-    icklib->error = ICKERR_LWSERR;
-    pthread_cond_signal( &icklib->condIsReady );
+    _ickPolllistFree( &ictx->lwsPolllist );
+    ictx->error = ICKERR_LWSERR;
+    pthread_cond_signal( &ictx->condIsReady );
     return NULL;
   }
 
 /*------------------------------------------------------------------------*\
+    Construct root of location url
+\*------------------------------------------------------------------------*/
+  rc = asprintf( &ictx->locationRoot, "http://%s:%d", ictx->hostName, ictx->lwsPort );
+  if( rc<0 ) {
+    logerr( "ickP2pDiscoveryInit: out of memory." );
+    libwebsocket_context_destroy( ictx->lwsContext );
+    Sfree( buffer );
+    _ickPolllistFree( &plist );
+    _ickPolllistFree( &ictx->lwsPolllist );
+    ictx->error = ICKERR_NOMEM;
+    pthread_cond_signal( &ictx->condIsReady );
+    return NULL;
+  }
+  debug( "ickP2pDiscoveryInit: Using location root \"%s\".", ictx->locationRoot );
+
+/*------------------------------------------------------------------------*\
     We're up and running!
 \*------------------------------------------------------------------------*/
-  icklib->state = ICKLIB_RUNNING;
-  pthread_cond_signal( &icklib->condIsReady );
+  ictx->state = ICKLIB_RUNNING;
+  pthread_cond_signal( &ictx->condIsReady );
 
 /*------------------------------------------------------------------------*\
     Run while not terminating
 \*------------------------------------------------------------------------*/
-  while( icklib->state<ICKLIB_TERMINATING ) {
+  while( ictx->state<ICKLIB_TERMINATING ) {
     struct sockaddr   address;
     socklen_t         addrlen = sizeof(address);
-    ickDiscovery_t   *dh;
     int               timeout;
     int               retval;
     int               i;
@@ -245,11 +259,11 @@ void *_ickMainThread( void *arg )
 /*------------------------------------------------------------------------*\
     Execute all pending timers
 \*------------------------------------------------------------------------*/
-    _ickTimerListLock( icklib );
-    while( icklib->timers ) {
+    _ickTimerListLock( ictx );
+    while( ictx->timers ) {
       struct timeval  now;
       // Note: timer list might get modified by the callback
-      ickTimer_t     *timer = icklib->timers;
+      ickTimer_t     *timer = ictx->timers;
 
       // Break if first timer is in future
       gettimeofday( &now, NULL );
@@ -264,7 +278,7 @@ void *_ickMainThread( void *arg )
 
       // Last execution of cyclic timer?
       if( timer->repeatCntr==1 ) {
-        _ickTimerDelete( icklib, timer );
+        _ickTimerDelete( ictx, timer );
         continue;
       }
 
@@ -275,60 +289,51 @@ void *_ickMainThread( void *arg )
       // Update timer with interval
       debug( "ickp2p main thread: rescheduling timer %p (%.3fs)",
              timer, timer->interval/1000.0 );
-      _ickTimerUpdate( icklib, timer, timer->interval, timer->repeatCntr );
+      _ickTimerUpdate( ictx, timer, timer->interval, timer->repeatCntr );
     }
 
 /*------------------------------------------------------------------------*\
     Calculate time interval to next timer
 \*------------------------------------------------------------------------*/
     timeout  = ICKMAINLOOP_TIMEOUT_MS;
-    if( icklib->timers ) {
+    if( ictx->timers ) {
       struct timeval now;
       gettimeofday( &now, NULL );
 
-      timeout = (icklib->timers->time.tv_sec-now.tv_sec)*1000 +
-                (icklib->timers->time.tv_usec-now.tv_usec)/1000;
+      timeout = (ictx->timers->time.tv_sec-now.tv_sec)*1000 +
+                (ictx->timers->time.tv_usec-now.tv_usec)/1000;
       // debug( "ickp2p main thread: timer: %ld, %ld ", _timerList->time.tv_sec, _timerList->time.tv_usec);
       // debug( "ickp2p main thread:   now: %ld, %ld ", now.tv_sec, now.tv_usec);
       debug( "ickp2p main thread: next timer %p in %.3fs",
-             icklib->timers, timeout/1000.0 );
+             ictx->timers, timeout/1000.0 );
       if( timeout<0 )
         timeout = 0;
       else if( timeout>ICKMAINLOOP_TIMEOUT_MS )
         timeout  = ICKMAINLOOP_TIMEOUT_MS;
     }
-    _ickTimerListUnlock( icklib );
+    _ickTimerListUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
     First poll descriptor is always the help pipe to break the poll on timer updates
 \*------------------------------------------------------------------------*/
     _ickPolllistClear( &plist );
-    _ickPolllistAdd( &plist, icklib->pollBreakPipe[0], POLLIN );
+    _ickPolllistAdd( &plist, ictx->pollBreakPipe[0], POLLIN );
 
 /*------------------------------------------------------------------------*\
-    Collect all SSDP sockets from discovery handlers
+    Add SSDP socket
 \*------------------------------------------------------------------------*/
-    pthread_mutex_lock( &icklib->discoveryHandlersMutex );
-    for( dh=icklib->discoveryHandlers; dh; dh=dh->next ) {
-      if( _ickPolllistAdd(&plist,dh->socket,POLLIN) )
-        break;
-    }
-    pthread_mutex_unlock( &icklib->discoveryHandlersMutex );
-    if( dh ) {
-      logerr( "ickp2p main thread: out of memory." );
-      break;
-    }
+    _ickPolllistAdd( &plist, ictx->upnpSocket, POLLIN );
 
 /*------------------------------------------------------------------------*\
     Collect all http client instances from discovery handlers
 \*------------------------------------------------------------------------*/
 #if 0
-    pthread_mutex_lock( &icklib->wGettersMutex );
-    for( wget=icklib->wGetters; wget; wget=wget->next ) {
+    _ickLibWGettersLock( ictx );
+    for( wget=ictx->wGetters; wget; wget=wget->next ) {
       if( _ickPolllistAdd(&plist,_ickWGetSocket(dh),POLLIN) )
         break;
     }
-    pthread_mutex_unlock( &icklib->wGettersMutex );
+    _ickLibWGettersUnock( ictx );
     if( wget ) {
       logerr( "ickp2p main thread: out of memory." );
       break;
@@ -338,7 +343,7 @@ void *_ickMainThread( void *arg )
 /*------------------------------------------------------------------------*\
     Merge sockets managed by libwebsockets
 \*------------------------------------------------------------------------*/
-    if( _ickPolllistAppend(&plist,&icklib->lwsPolllist) ) {
+    if( _ickPolllistAppend(&plist,&ictx->lwsPolllist) ) {
       logerr( "ickp2p main thread: out of memory." );
       break;
     }
@@ -347,7 +352,7 @@ void *_ickMainThread( void *arg )
     Do the polling...
 \*------------------------------------------------------------------------*/
     debug( "ickp2p main thread: polling %d sockets (%d lws), timeout %.3fs...",
-            plist.nfds, icklib->lwsPolllist.nfds, timeout/1000.0 );
+            plist.nfds, ictx->lwsPolllist.nfds, timeout/1000.0 );
     for( i=0; i<plist.nfds; i++ )
       debug( "ickp2p main thread: poll list element #%d - %d (event mask 0x%02x)",
              i, plist.fds[i].fd, plist.fds[i].events );
@@ -370,44 +375,42 @@ void *_ickMainThread( void *arg )
     if( plist.fds[0].revents&POLLIN ) {
       ssize_t len = read( plist.fds[0].fd, buffer, ICKDISCOVERY_HEADER_SIZE_MAX );
       if( len<0 )
-        logerr( "ickp2p main thread (%s:%d): Unable to read break request pipe: %s",
-                   dh->interface, dh->port, strerror(errno) );
+        logerr( "ickp2p main thread: Unable to read break request pipe: %s",
+                 strerror(errno) );
       else
         debug( "ickp2p main thread: received break requests (%dx: \"%.*s\")",
                (int)len, (int)len, buffer );
       if( retval==1 )
         continue;
     }
-    if( icklib->state==ICKLIB_TERMINATING )
+    if( ictx->state==ICKLIB_TERMINATING )
       break;
 
 /*------------------------------------------------------------------------*\
-    Process incoming data from SSDP ports
+    Process incoming data from SSDP socket
 \*------------------------------------------------------------------------*/
-    pthread_mutex_lock( &icklib->discoveryHandlersMutex );
-    for( dh=icklib->discoveryHandlers; dh; dh=dh->next ) {
+    _ickLibLock( ictx );
+    do {
       ssize_t len;
 
       // Is this socket readable?
-      if( _ickPolllistCheck(&plist,dh->socket,POLLIN)<=0 )
+      if( _ickPolllistCheck(&plist,ictx->upnpSocket,POLLIN)<=0 )
         continue;
 
       // receive data
       memset( buffer, 0, ICKDISCOVERY_HEADER_SIZE_MAX );
-      len = recvfrom( dh->socket, buffer, ICKDISCOVERY_HEADER_SIZE_MAX, 0, &address, &addrlen );
+      len = recvfrom( ictx->upnpSocket, buffer, ICKDISCOVERY_HEADER_SIZE_MAX, 0, &address, &addrlen );
       if( len<0 ) {
-        logwarn( "ickp2p main thread (%s:%d): recvfrom failed (%s).",
-                   dh->interface, dh->port, strerror(errno) );
+        logwarn( "ickp2p main thread: recvfrom failed (%s).", strerror(errno) );
         continue;
       }
       if( !len ) {  // ?? Not possible for udp
-        debug( "ickp2p main thread (%s:%d): disconnected.",
-               dh->interface, dh->port );
+        debug( "ickp2p main thread: disconnected." );
         continue;
       }
 
-      debug( "ickp2p main thread (%s:%d): received %ld bytes from %s:%d: \"%.*s\"",
-             dh->interface, dh->port, (long)len,
+      debug( "ickp2p main thread: received %ld bytes from %s:%d: \"%.*s\"",
+             (long)len,
              inet_ntoa(((const struct sockaddr_in *)&address)->sin_addr),
              ntohs(((const struct sockaddr_in *)&address)->sin_port),
              len, buffer );
@@ -418,28 +421,26 @@ void *_ickMainThread( void *arg )
         continue;
 
       // Ignore loop back messages from ourself
-      if( ssdp->uuid && !strcasecmp(ssdp->uuid,icklib->deviceUuid) ) {
-        debug( "ickp2p main thread (%s:%d): ignoring message from myself", dh->interface, dh->port );
+      if( ssdp->uuid && !strcasecmp(ssdp->uuid,ictx->deviceUuid) ) {
+        debug( "ickp2p main thread: ignoring message from myself" );
         _ickSsdpFree( ssdp );
         continue;
       }
 
       // Process data (lock handler while doing so)
-      pthread_mutex_lock( &dh->mutex );
-      _ickSsdpExecute( dh, ssdp );
-      pthread_mutex_unlock( &dh->mutex );
+      _ickSsdpExecute( ictx, ssdp );
 
       // Free internal SSDP representation
       _ickSsdpFree( ssdp );
 
-    }
-    pthread_mutex_unlock( &icklib->discoveryHandlersMutex );
+    } while( 0 );
+    _ickLibUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
     Process http client sockets
 \*------------------------------------------------------------------------*/
-    pthread_mutex_lock( &icklib->wGettersMutex );
-    for( wget=icklib->wGetters; wget; wget=wgetNext ) {
+    _ickLibWGettersLock( ictx );
+    for( wget=ictx->wGetters; wget; wget=wgetNext ) {
       wgetNext = wget->next;
 /*    int fd = _ickWGetSocket( wget );
 
@@ -453,29 +454,29 @@ void *_ickMainThread( void *arg )
       irc = _ickWGetServiceFd( wget, &plist.fds[i] );
 */    // For the time beeing just check the state of the separate thread
       if( _ickWGetServiceFd(wget,NULL) ) {
-        // unlink from list of getters
-        if( wget->next )
-          wget->next->prev = wget->prev;
-        if( wget->prev )
-          wget->prev->next = wget->next;
-        else
-          icklib->wGetters = wget->next;
-        // And Destroy
+        ickDevice_t *device = _ickWGetUserData( wget );
+
+        // unlink HTTP client from list of getters and destroy
+        _ickLibWGettersRemove( ictx, wget );
         _ickWGetDestroy( wget );
+
+        // If the device is complete, initiate web socket connection
+        if( device->friendlyName && !device->wsi )
+          _ickWebSocketOpen( ictx->lwsContext, device );
       }
     }
-    pthread_mutex_unlock( &icklib->wGettersMutex );
+    _ickLibWGettersUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
     Service libwebsockets descriptors
 \*------------------------------------------------------------------------*/
     for( i=0; i<plist.nfds; i++ ) {
       // Is this member of the lws set?
-      if( _ickPolllistGetIndex(&icklib->lwsPolllist,plist.fds[i].fd)<0 )
+      if( _ickPolllistGetIndex(&ictx->lwsPolllist,plist.fds[i].fd)<0 )
         continue;
       debug( "ickp2p main thread: servicing lws socket %d (event mask 0x%02x)",
              plist.fds[i].fd, plist.fds[i].revents );
-      if( libwebsocket_service_fd(icklib->lwsContext, &plist.fds[i])<0 ) {
+      if( libwebsocket_service_fd(ictx->lwsContext, &plist.fds[i])<0 ) {
         logerr( "ickp2p main thread: libwebsocket_service_fd returned an error." );
         break;
       }
@@ -485,45 +486,48 @@ void *_ickMainThread( void *arg )
   debug( "ickp2p main thread: terminating..." );
 
 /*------------------------------------------------------------------------*\
+    Stop SSDP services and announce termination
+\*------------------------------------------------------------------------*/
+  _ickSsdpEndDiscovery( ictx );
+
+/*------------------------------------------------------------------------*\
     Get rid of libwebsocket context
 \*------------------------------------------------------------------------*/
-  libwebsocket_context_destroy( icklib->lwsContext );
+  libwebsocket_context_destroy( ictx->lwsContext );
 
 /*------------------------------------------------------------------------*\
     Clean up
 \*------------------------------------------------------------------------*/
   Sfree( buffer );
   _ickPolllistFree( &plist );
-  _ickPolllistFree( &icklib->lwsPolllist );
+  _ickPolllistFree( &ictx->lwsPolllist );
 
 /*------------------------------------------------------------------------*\
     Clear all timer
 \*------------------------------------------------------------------------*/
-  _ickTimerListLock( icklib );
-  while( icklib->timers )
-    _ickTimerDelete( icklib, icklib->timers );
-  _ickTimerListUnlock( icklib );
+  _ickTimerListLock( ictx );
+  while( ictx->timers )
+    _ickTimerDelete( ictx, ictx->timers );
+  _ickTimerListUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
     Destroy all open http clients
 \*------------------------------------------------------------------------*/
-    pthread_mutex_lock( &icklib->wGettersMutex );
-    for( wget=icklib->wGetters; wget; wget=wgetNext ) {
-      wgetNext = wget->next;
-      _ickWGetDestroy( wget );
-    }
-    pthread_mutex_unlock( &icklib->wGettersMutex );
+  _ickLibWGettersLock( ictx );
+  while( ictx->wGetters )
+    _ickLibWGettersRemove( ictx, ictx->wGetters );
+  _ickLibWGettersUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
     Execute callback, if requested
 \*------------------------------------------------------------------------*/
-  if( icklib->cbEnd )
-    icklib->cbEnd();
+  if( ictx->cbEnd )
+    ictx->cbEnd( ictx );
 
 /*------------------------------------------------------------------------*\
     Destruct context, that's all
 \*------------------------------------------------------------------------*/
-  _ickLibDestruct( (_ickP2pLibContext_t**)arg );
+  _ickLibDestruct( ictx );
   return NULL;
 }
 
@@ -531,14 +535,14 @@ void *_ickMainThread( void *arg )
 /*=========================================================================*\
   Create a libwebsocket instance
 \*=========================================================================*/
-void _ickMainThreadBreak( _ickP2pLibContext_t *icklib, char flag )
+void _ickMainThreadBreak( ickP2pContext_t *ictx, char flag )
 {
-  debug( "_ickMainThreadBreak: sending break request '%c'", flag );
+  debug( "_ickMainThreadBreak (%p): sending break request '%c'", ictx, flag );
 
 /*------------------------------------------------------------------------*\
     Try to send flag
 \*------------------------------------------------------------------------*/
-  if( _ickLib && write(_ickLib->pollBreakPipe[1],&flag,1)<0 )
+  if( write(ictx->pollBreakPipe[1],&flag,1)<0 )
     logerr( "_ickMainThreadBreak: Unable to write to poll break pipe: %s", strerror(errno) );
 
 /*------------------------------------------------------------------------*\
@@ -553,7 +557,7 @@ void _ickMainThreadBreak( _ickP2pLibContext_t *icklib, char flag )
 /*=========================================================================*\
   Create a libwebsocket instance
 \*=========================================================================*/
-static struct libwebsocket_context *_ickCreateLwsContext( _ickP2pLibContext_t *icklib, const char *ifname, int *port )
+static struct libwebsocket_context *_ickCreateLwsContext( ickP2pContext_t *ictx, const char *ifname, int *port )
 {
   struct libwebsocket_context *lwsContext;
   struct lws_context_creation_info info;
@@ -583,7 +587,7 @@ static struct libwebsocket_context *_ickCreateLwsContext( _ickP2pLibContext_t *i
   info.gid                      = -1;
   info.uid                      = -1;
   info.options                  = 0;
-  info.user                     = icklib;
+  info.user                     = ictx;
 
 /*------------------------------------------------------------------------*\
     Try to create the context
@@ -607,7 +611,6 @@ static struct libwebsocket_context *_ickCreateLwsContext( _ickP2pLibContext_t *i
 }
 
 
-
 /*=========================================================================*\
   Handle HTTP requests
 \*=========================================================================*/
@@ -616,9 +619,8 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
                        enum libwebsocket_callback_reasons reason, void *user,
                        void *in, size_t len )
 {
-  _ickP2pLibContext_t  *icklib = libwebsocket_context_user( context );
+  ickP2pContext_t      *ictx = libwebsocket_context_user( context );
   _ickLwsHttpData_t    *psd = (_ickLwsHttpData_t*) user;
-  const ickDiscovery_t *dh;
   ickP2pServicetype_t   stype;
   int                   retval = 0;
   int                   fd, socket;
@@ -658,13 +660,12 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
       memset( psd, 0, sizeof(_ickLwsHttpData_t) );
 
       // Handle UPNP description requests
-      pthread_mutex_lock( &icklib->discoveryHandlersMutex );
-      dh = _ickDescrFindDicoveryHandlerByUrl( icklib, in, &stype );
-      if( dh ) {
-        debug( "_lwsHttpCb: found matching discovery handler (if \"%s\")",
-               dh->interface );
-        psd->payload = _ickDescrGetDeviceDescr( dh, wsi, stype );
-        pthread_mutex_unlock( &icklib->discoveryHandlersMutex );
+      _ickLibLock( ictx );
+      stype = _ickDescrFindServiceByUrl( ictx, in );
+      if( stype!=ICKP2P_SERVICE_NONE ) {
+        debug( "_lwsHttpCb: found matching service %d", stype );
+        psd->payload = _ickDescrGetDeviceDescr( ictx, wsi, stype );
+        _ickLibUnlock( ictx );
         if( !psd->payload )
           return -1;
         psd->psize   = strlen( psd->payload );
@@ -676,10 +677,10 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
         break;
       }
       else
-        pthread_mutex_unlock( &icklib->discoveryHandlersMutex );
+        _ickLibUnlock( ictx );
 
       // We don't serve root or files if no folder is set
-      if( !icklib->upnpFolder || !strcmp(in, "/") ) {
+      if( !ictx->upnpFolder || !strcmp(in, "/") ) {
         void *response = HTTP_404;
         libwebsocket_write( wsi, response, strlen(response), LWS_WRITE_HTTP );
         retval = -1;
@@ -688,13 +689,13 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
 
       // Serve file from folder
       else {
-        char        *resource  = malloc( strlen(icklib->upnpFolder)+strlen(in)+1 );
+        char        *resource  = malloc( strlen(ictx->upnpFolder)+strlen(in)+1 );
         char        *ext       = strrchr( in, '.' );
         struct stat  sbuffer;
         char        *mime;
 
         // Get full path
-        sprintf( resource, "%s%s", icklib->upnpFolder, (char*)in );
+        sprintf( resource, "%s%s", ictx->upnpFolder, (char*)in );
         debug( "_lwsHttpCb %d: resource path is \"%s\"", socket, resource );
 
         if( stat(resource,&sbuffer) ) {
@@ -789,13 +790,21 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
       break;
 
 /*------------------------------------------------------------------------*\
+    Append headers (not used)
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER:
+      socket = libwebsocket_get_socket_fd( wsi );
+      debug( "_lwsHttpCb %d: append handshake header", socket );
+      break;
+
+/*------------------------------------------------------------------------*\
     Add a socket to poll list
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_ADD_POLL_FD:
       fd = (int)(long)in;
       debug( "_lwsHttpCb: adding socket %d (mask 0x%02x)",
              fd, (int)(long)len );
-      if( _ickPolllistAdd(&icklib->lwsPolllist,fd,(int)(long)len) )
+      if( _ickPolllistAdd(&ictx->lwsPolllist,fd,(int)(long)len) )
         retval = 1;
       break;
 
@@ -805,7 +814,7 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
     case LWS_CALLBACK_DEL_POLL_FD:
       fd = (int)(long)in;
       debug( "_lwsHttpCb: removing socket %d", fd );
-      if( _ickPolllistRemove(&icklib->lwsPolllist,fd) )
+      if( _ickPolllistRemove(&ictx->lwsPolllist,fd) )
         retval = 1;
       break;
 
@@ -815,14 +824,14 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
     case LWS_CALLBACK_SET_MODE_POLL_FD:
       fd = (int)(long)in;
       debug( "_lwsHttpCb: set events for socket %d (mask 0x%02x)", fd, (int)(long)len );
-      if( _ickPolllistSet(&icklib->lwsPolllist,fd,(int)(long)len) )
+      if( _ickPolllistSet(&ictx->lwsPolllist,fd,(int)(long)len) )
         retval = 1;
       break;
 
     case LWS_CALLBACK_CLEAR_MODE_POLL_FD:
       fd = (int)(long)in;
       debug( "_lwsHttpCb: clear events for socket %d (mask 0x%02x)", fd, (int)(long)len );
-      if( _ickPolllistUnset(&icklib->lwsPolllist,fd,(int)(long)len) )
+      if( _ickPolllistUnset(&ictx->lwsPolllist,fd,(int)(long)len) )
         retval = 1;
       break;
 
@@ -1119,21 +1128,21 @@ static int _ickPolllistGetIndex( const ickPolllist_t *plist, int fd )
 /*=========================================================================*\
   Lock list of timers
 \*=========================================================================*/
-void _ickTimerListLock( _ickP2pLibContext_t *icklib )
+void _ickTimerListLock( ickP2pContext_t *ictx )
 {
-  debug ( "_ickTimerListLock: locking..." );
-  pthread_mutex_lock( &icklib->timersMutex );
-  debug ( "_ickTimerListLock: locked" );
+  debug ( "_ickTimerListLock (%p): locking...", ictx );
+  pthread_mutex_lock( &ictx->timersMutex );
+  debug ( "_ickTimerListLock (%p): locked", ictx );
 }
 
 
 /*=========================================================================*\
   Unlock list of timers
 \*=========================================================================*/
-void _ickTimerListUnlock( _ickP2pLibContext_t *icklib )
+void _ickTimerListUnlock( ickP2pContext_t *ictx )
 {
-  debug ( "_ickTimerListLock: unlocked" );
-  pthread_mutex_unlock( &icklib->timersMutex );
+  debug ( "_ickTimerListLock (%p): unlocked", ictx );
+  pthread_mutex_unlock( &ictx->timersMutex );
 }
 
 
@@ -1142,7 +1151,7 @@ void _ickTimerListUnlock( _ickP2pLibContext_t *icklib )
     interval is in millisecs
     Timer list must be locked by caller
 \*=========================================================================*/
-ickErrcode_t _ickTimerAdd( _ickP2pLibContext_t *icklib, long interval, int repeat, ickTimerCb_t callback, void *data, int tag )
+ickErrcode_t _ickTimerAdd( ickP2pContext_t *ictx, long interval, int repeat, ickTimerCb_t callback, void *data, int tag )
 {
   ickTimer_t *timer;
 
@@ -1174,7 +1183,7 @@ ickErrcode_t _ickTimerAdd( _ickP2pLibContext_t *icklib, long interval, int repea
 /*------------------------------------------------------------------------*\
     link timer to list
 \*------------------------------------------------------------------------*/
-  _ickTimerLink( icklib, timer );
+  _ickTimerLink( ictx, timer );
 
 /*------------------------------------------------------------------------*\
     That's all
@@ -1188,14 +1197,14 @@ ickErrcode_t _ickTimerAdd( _ickP2pLibContext_t *icklib, long interval, int repea
     If callback is NULL, it is not used for comparison
     Timer list must be locked by caller
 \*=========================================================================*/
-ickTimer_t *_ickTimerFind( _ickP2pLibContext_t *icklib, ickTimerCb_t callback, const void *data, int tag )
+ickTimer_t *_ickTimerFind( ickP2pContext_t *ictx, ickTimerCb_t callback, const void *data, int tag )
 {
   ickTimer_t *walk;
 
 /*------------------------------------------------------------------------*\
     Find list entry with same id vector
 \*------------------------------------------------------------------------*/
-  for( walk=icklib->timers; walk; walk=walk->next ) {
+  for( walk=ictx->timers; walk; walk=walk->next ) {
     if( walk->usrPtr==data && walk->usrTag==tag && (!callback||walk->callback==callback) )
       break;
   }
@@ -1212,14 +1221,14 @@ ickTimer_t *_ickTimerFind( _ickP2pLibContext_t *icklib, ickTimerCb_t callback, c
     interval is in millisecs
     Timer list must be locked by caller
 \*=========================================================================*/
-ickErrcode_t _ickTimerUpdate( _ickP2pLibContext_t *icklib, ickTimer_t *timer, long interval, int repeat )
+ickErrcode_t _ickTimerUpdate( ickP2pContext_t *ictx, ickTimer_t *timer, long interval, int repeat )
 {
 
 /*------------------------------------------------------------------------*\
     unlink timer
 \*------------------------------------------------------------------------*/
-  if( _ickTimerUnlink(icklib,timer) ) {
-    logerr( "_ickTimerUpdate: invalid timer." );
+  if( _ickTimerUnlink(ictx,timer) ) {
+    logerr( "_ickTimerUpdate (%p): invalid timer.", ictx );
     return ICKERR_INVALID;
   }
 
@@ -1239,7 +1248,7 @@ ickErrcode_t _ickTimerUpdate( _ickP2pLibContext_t *icklib, ickTimer_t *timer, lo
 /*------------------------------------------------------------------------*\
     link timer to list
 \*------------------------------------------------------------------------*/
-  _ickTimerLink( icklib, timer );
+  _ickTimerLink( ictx, timer );
 
 /*------------------------------------------------------------------------*\
     That's all
@@ -1252,14 +1261,14 @@ ickErrcode_t _ickTimerUpdate( _ickP2pLibContext_t *icklib, ickTimer_t *timer, lo
   Delete a timer
     Timer list must be locked by caller
 \*=========================================================================*/
-ickErrcode_t _ickTimerDelete( _ickP2pLibContext_t *icklib, ickTimer_t *timer )
+ickErrcode_t _ickTimerDelete( ickP2pContext_t *ictx, ickTimer_t *timer )
 {
 
 /*------------------------------------------------------------------------*\
     Unlink timer
 \*------------------------------------------------------------------------*/
-  if( _ickTimerUnlink(icklib,timer) ) {
-    logerr( "_ickTimerUpdate: invalid timer." );
+  if( _ickTimerUnlink(ictx,timer) ) {
+    logerr( "_ickTimerDelete (%p): invalid timer.", ictx );
     return ICKERR_INVALID;
   }
 
@@ -1276,14 +1285,14 @@ ickErrcode_t _ickTimerDelete( _ickP2pLibContext_t *icklib, ickTimer_t *timer )
     If callback is NULL, it is not used for comparison
     Timer list must be locked by caller
 \*=========================================================================*/
-void _ickTimerDeleteAll( _ickP2pLibContext_t *icklib, ickTimerCb_t callback, const void *data, int tag )
+void _ickTimerDeleteAll( ickP2pContext_t *ictx, ickTimerCb_t callback, const void *data, int tag )
 {
   ickTimer_t *walk, *next;
 
 /*------------------------------------------------------------------------*\
     Find list entries with same id vector
 \*------------------------------------------------------------------------*/
-  for( walk=icklib->timers; walk; walk=next ) {
+  for( walk=ictx->timers; walk; walk=next ) {
     next = walk->next;
 
     // no match?
@@ -1296,7 +1305,7 @@ void _ickTimerDeleteAll( _ickP2pLibContext_t *icklib, ickTimerCb_t callback, con
     if( walk->prev )
       walk->prev->next = next;
     else
-      icklib->timers = next;
+      ictx->timers = next;
 
     // and free
     Sfree( walk );
@@ -1312,14 +1321,14 @@ void _ickTimerDeleteAll( _ickP2pLibContext_t *icklib, ickTimerCb_t callback, con
   Link a timer to list
     Timer list must be locked by caller
 \*=========================================================================*/
-static void _ickTimerLink( _ickP2pLibContext_t *icklib, ickTimer_t *timer )
+static void _ickTimerLink( ickP2pContext_t *ictx, ickTimer_t *timer )
 {
   ickTimer_t *walk, *last;
 
 /*------------------------------------------------------------------------*\
     Find list entry with time stamp larger than the new one
 \*------------------------------------------------------------------------*/
-  for( last=NULL,walk=icklib->timers; walk; last=walk,walk=walk->next ) {
+  for( last=NULL,walk=ictx->timers; walk; last=walk,walk=walk->next ) {
     if( walk->time.tv_sec>timer->time.tv_sec )
       break;
     if( walk->time.tv_sec==timer->time.tv_sec && walk->time.tv_usec>timer->time.tv_usec)
@@ -1336,10 +1345,10 @@ static void _ickTimerLink( _ickP2pLibContext_t *icklib, ickTimer_t *timer )
   if( last )
     last->next = timer;
   else {
-    icklib->timers = timer;
+    ictx->timers = timer;
 
     // If root was changed write to help pipe to break main loop poll timer
-    _ickMainThreadBreak( icklib, 'T' );
+    _ickMainThreadBreak( ictx, 'T' );
   }
 
 /*------------------------------------------------------------------------*\
@@ -1353,14 +1362,14 @@ static void _ickTimerLink( _ickP2pLibContext_t *icklib, ickTimer_t *timer )
     Timer list must be locked by caller, the timer descriptor is not freed
     Returns 0 on success
 \*=========================================================================*/
-static int _ickTimerUnlink( _ickP2pLibContext_t *icklib, ickTimer_t *timer )
+static int _ickTimerUnlink( ickP2pContext_t *ictx, ickTimer_t *timer )
 {
   ickTimer_t *walk;
 
 /*------------------------------------------------------------------------*\
     Be defensive: check it timer is list element
 \*------------------------------------------------------------------------*/
-  for( walk=icklib->timers; walk&&walk!=timer; walk=walk->next );
+  for( walk=ictx->timers; walk&&walk!=timer; walk=walk->next );
   if( !walk )
     return -1;
 
@@ -1372,7 +1381,7 @@ static int _ickTimerUnlink( _ickP2pLibContext_t *icklib, ickTimer_t *timer )
   if( timer->prev )
     timer->prev->next = timer->next;
   else
-    icklib->timers = timer->next;
+    ictx->timers = timer->next;
 
 /*------------------------------------------------------------------------*\
     That's all (No need to inform main loop in this case...)

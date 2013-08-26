@@ -57,11 +57,10 @@ Remarks         : -
 
 #include "ickP2p.h"
 #include "ickP2pInternal.h"
-#include "ickSSDP.h"
-#include "ickDiscovery.h"
-#include "ickWGet.h"
-#include "ickIpTools.h"
 #include "logutils.h"
+#include "ickDevice.h"
+#include "ickSSDP.h"
+#include "ickWGet.h"
 #include "ickDescription.h"
 
 
@@ -111,81 +110,76 @@ static int  _strmcmp( const char *str, const char *ptr, size_t plen );
 
 
 /*=========================================================================*\
+    Check what ickstream service was announced
+      // fixme: do version comparison
+\*=========================================================================*/
+ickP2pServicetype_t _ickDescrFindServiceByUsn( const char *usn )
+{
+
+/*------------------------------------------------------------------------*\
+    The SSDP root device announcement defines no services
+\*------------------------------------------------------------------------*/
+  if( strstr(usn, ICKDEVICE_TYPESTR_ROOT) )
+    return ICKP2P_SERVICE_GENERIC;
+
+/*------------------------------------------------------------------------*\
+    Check for known services
+\*------------------------------------------------------------------------*/
+  if( strstr(usn, ICKSERVICE_TYPESTR_PLAYER) )
+    return ICKP2P_SERVICE_PLAYER;
+  if( strstr(usn, ICKSERVICE_TYPESTR_SERVER) )
+    return ICKP2P_SERVICE_SERVER_GENERIC;
+  if( strstr(usn, ICKSERVICE_TYPESTR_CONTROLLER) )
+    return ICKP2P_SERVICE_CONTROLLER;
+  if( strstr(usn, ICKSERVICE_TYPESTR_CONTROLLER) )
+    return ICKP2P_SERVICE_DEBUG;
+
+/*------------------------------------------------------------------------*\
+    No compatible ickstream service found
+\*------------------------------------------------------------------------*/
+  return ICKP2P_SERVICE_NONE;
+}
+
+
+/*=========================================================================*\
   Find discovery handler and ickstream service type for an
   UPnp description request received over HTTP
     caller must lock discovery handler list
     returns NULL if no match
 \*=========================================================================*/
-ickDiscovery_t *_ickDescrFindDicoveryHandlerByUrl( const _ickP2pLibContext_t *icklib, const char *uri, ickP2pServicetype_t *stype )
+ickP2pServicetype_t _ickDescrFindServiceByUrl( const ickP2pContext_t *ictx, const char *uri )
 {
-  ickDiscovery_t *walk;
-  char            buffer[32];
+  char    buffer[32];
 
-  debug( "_ickDescrFindDicoveryHandlerByUrl: \"%s\"", uri );
+  debug( "_ickDescrFindServiceByUrl: \"%s\"", uri );
 
 /*------------------------------------------------------------------------*\
-    Loop over all interfaces
+    Check for root device
 \*------------------------------------------------------------------------*/
-  for( walk=icklib->discoveryHandlers; walk; walk=walk->next ) {
-    char   *prefix = walk->locationRoot;
-    size_t  plen;
+  snprintf( buffer, sizeof(buffer), "/%s.xml", ICKDEVICE_STRING_ROOT );
+  if( !strcmp(uri,buffer) )
+    return ICKP2P_SERVICE_GENERIC;
 
-    // Harry way to skip over server name in prefix
-    if( strlen(prefix)>8 ) { // strlen( "https://" );
-      prefix += 8;
-      prefix = strchr( prefix, '/' );
-    }
-    if( !prefix ) {
-      logerr( "_ickDescrFindDicoveryHandlerByUrl: bad local location root \"%s\"", walk->locationRoot );
-      continue;
-    }
-    plen = strlen( prefix );
-
-    // First check match of location prefix
-    if( strncmp(prefix,uri,plen) )
-      continue;
-    uri += plen;
-
-    // Check for root device
-    snprintf( buffer, sizeof(buffer), "/%s.xml", ICKDEVICE_STRING_ROOT );
-    if( !strcmp(uri,buffer) ) {
-      if( stype )
-        *stype = ICKP2P_SERVICE_GENERIC;
-      return walk;
-    }
-
-    // For services check if they are actually up
-    snprintf( buffer, sizeof(buffer), "/%s.xml", ICKSERVICE_STRING_PLAYER );
-    if( (walk->ickServices&ICKP2P_SERVICE_PLAYER) && !strcmp(uri,buffer) ) {
-      if( stype )
-        *stype = ICKP2P_SERVICE_PLAYER;
-      return walk;
-    }
-    snprintf( buffer, sizeof(buffer), "/%s.xml", ICKSERVICE_STRING_SERVER );
-    if( (walk->ickServices&ICKP2P_SERVICE_PLAYER) && !strcmp(uri,buffer) ) {
-      if( stype )
-        *stype = ICKP2P_SERVICE_SERVER_GENERIC;
-      return walk;
-    }
-    snprintf( buffer, sizeof(buffer), "/%s.xml", ICKSERVICE_STRING_CONTROLLER );
-    if( (walk->ickServices&ICKP2P_SERVICE_PLAYER) && !strcmp(uri,buffer) ) {
-      if( stype )
-        *stype = ICKP2P_SERVICE_CONTROLLER;
-      return walk;
-    }
-    snprintf( buffer, sizeof(buffer), "/%s.xml", ICKSERVICE_STRING_DEBUG );
-    if( (walk->ickServices&ICKP2P_SERVICE_PLAYER) && !strcmp(uri,buffer) ) {
-      if( stype )
-        *stype = ICKP2P_SERVICE_DEBUG;
-      return walk;
-    }
-
-  } // next discovery handler
+/*------------------------------------------------------------------------*\
+    For services check if they are actually up
+\*------------------------------------------------------------------------*/
+  snprintf( buffer, sizeof(buffer), "/%s.xml", ICKSERVICE_STRING_PLAYER );
+  if( (ictx->ickServices&ICKP2P_SERVICE_PLAYER) && !strcmp(uri,buffer) )
+    return ICKP2P_SERVICE_PLAYER;
+  snprintf( buffer, sizeof(buffer), "/%s.xml", ICKSERVICE_STRING_SERVER );
+  if( (ictx->ickServices&ICKP2P_SERVICE_PLAYER) && !strcmp(uri,buffer) )
+    return ICKP2P_SERVICE_SERVER_GENERIC;
+  snprintf( buffer, sizeof(buffer), "/%s.xml", ICKSERVICE_STRING_CONTROLLER );
+  if( (ictx->ickServices&ICKP2P_SERVICE_PLAYER) && !strcmp(uri,buffer) )
+    return ICKP2P_SERVICE_CONTROLLER;
+  snprintf( buffer, sizeof(buffer), "/%s.xml", ICKSERVICE_STRING_DEBUG );
+  if( (ictx->ickServices&ICKP2P_SERVICE_PLAYER) && !strcmp(uri,buffer) )
+    return ICKP2P_SERVICE_DEBUG;
 
 /*------------------------------------------------------------------------*\
     No match
 \*------------------------------------------------------------------------*/
-  return NULL;
+  return ICKP2P_SERVICE_NONE;
 }
 
 
@@ -194,9 +188,8 @@ ickDiscovery_t *_ickDescrFindDicoveryHandlerByUrl( const _ickP2pLibContext_t *ic
     this includes a corresponding HTTP header
     returns an allocated string (caller must free) or NULL on error
 \*=========================================================================*/
-char *_ickDescrGetDeviceDescr( const ickDiscovery_t *dh, struct libwebsocket *wsi, ickP2pServicetype_t stype )
+char *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket *wsi, ickP2pServicetype_t stype )
 {
-  const _ickP2pLibContext_t *icklib = dh->icklib;
   int                        xlen, hlen;
   char                      *xmlcontent = NULL;
   char                      *type;
@@ -252,13 +245,13 @@ char *_ickDescrGetDeviceDescr( const ickDiscovery_t *dh, struct libwebsocket *ws
                     ICKDEVICE_UPNP_MAJOR,
                     ICKDEVICE_UPNP_MINOR,
                     type,
-                    icklib->deviceName,
+                    ictx->deviceName,
                     ickUpnpNames.manufacturer,
                     ickUpnpNames.manufacturerUrl,
                     ickUpnpNames.modelDescriptor,
                     ickUpnpNames.modelName,
-                    icklib->deviceUuid,
-                    ICKPROTOCOL_P2P_CURRENT_SUPPORT
+                    ictx->deviceUuid,
+                    ICKP2PLEVEL_SUPPORTED
                   );
 
 /*------------------------------------------------------------------------*\
@@ -303,7 +296,7 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
   const char       *uri = _ickWGetUri( context );
   struct xmlparser  _xmlParser;
   ickXmlUserData_t  _xmlUserData;
-  upnp_device_t    *device = _ickWGetUserData( context );
+  ickDevice_t       *device = _ickWGetUserData( context );
 
   debug( "_ickWGetXmlCb (%s): action=%d", uri, action );
 
@@ -343,7 +336,7 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
 
       // Init and execute xml parser
       memset( &_xmlUserData, 0, sizeof(_xmlUserData) );
-      _xmlUserData.protocolLevel = ICKPROTOCOL_P2P_GENERIC;
+      _xmlUserData.protocolLevel = ICKP2PLEVEL_GENERIC;
       _xmlParser.xmlstart        = _ickWGetPayload( context );
       _xmlParser.xmlsize         = _ickWGetPayloadSize( context );
       _xmlParser.data            = &_xmlUserData;
@@ -357,22 +350,22 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
       if( _xmlUserData.level )
         logwarn( "_ickWGetXmlCb (%s): xml data unbalanced (end level %d)",
                  uri, _xmlUserData.level );
-      if( !_xmlUserData.deviceName ) {
+      if( !_xmlUserData.deviceName )
         logwarn( "_ickWGetXmlCb (%s): found no device name (using UUID)", uri );
-        device->friendlyName = strdup( device->uuid );
-        if( !device->friendlyName )
-          logerr( "_ickWGetXmlCb (%s): out of memory", uri );
-        return ICKERR_NOMEM;
-      }
       if( !_xmlUserData.protocolLevel )
         logwarn( "_ickWGetXmlCb (%s): found no protocol level", uri );
 
       // Complete device description
-      device->friendlyName = _xmlUserData.deviceName;
+      _ickDeviceLock( device );
+      _ickDeviceSetName( device, _xmlUserData.deviceName );
       device->ickP2pLevel  = _xmlUserData.protocolLevel;
+      _ickDeviceUnlock( device );
+
+      // Clean up
+      Sfree( _xmlUserData.deviceName );
 
       // Signal device readiness to user code
-      _ickDiscoveryExecDeviceCallback( device->dh, device, ICKP2P_ADD, device->services );
+      _ickLibExecDeviceCallback( device->ictx, device, ICKP2P_ADD, device->services );
 
       break;
 
@@ -515,7 +508,7 @@ static void _ickParsexmlProcessData( void *data, const char *content, int len )
 /*=========================================================================*\
   Compare a string to a memory region
 \*=========================================================================*/
-static int _strmcmp( const char *str, const char *ptr, size_t plen )
+int _strmcmp( const char *str, const char *ptr, size_t plen )
 {
 
   // String length must match
