@@ -193,7 +193,9 @@ void _ickLibDeviceListLock( ickP2pContext_t *ictx );
 void _ickLibDeviceListUnlock( ickP2pContext_t *ictx );
 void _ickLibDeviceAdd( ickP2pContext_t *ictx, ickDevice_t *device );
 void _ickLibDeviceRemove( ickP2pContext_t *ictx, ickDevice_t *device );
-ickDevice_t *_ickLibDeviceFind( ickP2pContext_t *ictx, const char *uuid );
+ickDevice_t *_ickLibDeviceFindByUuid( ickP2pContext_t *ictx, const char *uuid );
+ickDevice_t *_ickLibDeviceFindByWsi( ickP2pContext_t *ictx,struct libwebsocket *wsi );
+
 
 void _ickLibExecDiscoveryCallback( ickP2pContext_t *ictx,
              const ickDevice_t *dev, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type );

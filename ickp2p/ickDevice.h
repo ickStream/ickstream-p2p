@@ -70,11 +70,14 @@ Remarks         : -
 struct _ickMessage;
 typedef struct _ickMessage ickMessage_t;
 struct _ickMessage {
-  ickMessage_t *next;
-  ickMessage_t *prev;
-  void         *payload;
+  ickMessage_t  *next;
+  ickMessage_t  *prev;
+  unsigned char *payload;    // strong
+  unsigned char *writeptr;
   size_t        size;
 };
+
+#define ICKMESSAGE_REMAINDER(m) ((m)->size - ((m)->writeptr-(m)->payload-LWS_SEND_BUFFER_PRE_PADDING))
 
 //
 // Type of device creation
@@ -130,9 +133,11 @@ ickDevice_t  *_ickDeviceNew( const char *uuid, ickDeviceType_t type );
 void          _ickDeviceFree( ickDevice_t *device );
 void          _ickDeviceLock( ickDevice_t *device );
 void          _ickDeviceUnlock( ickDevice_t *device );
+
 ickErrcode_t  _ickDeviceSetLocation( ickDevice_t *device, const char *location );
 ickErrcode_t  _ickDeviceSetName( ickDevice_t *device, const char *name );
 ickErrcode_t  _ickDeviceAddMessage( ickDevice_t *device, void *container, size_t size );
+ickErrcode_t  _ickDeviceRemoveAndFreeMessage( ickDevice_t *device, ickMessage_t *message );
 ickMessage_t *_ickDeviceOutQueue( ickDevice_t *device );
 int           _ickDevicePendingMessages( ickDevice_t *device );
 size_t        _ickDevicePendingBytes( ickDevice_t *device );

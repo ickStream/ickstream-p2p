@@ -208,15 +208,18 @@ ickErrcode_t _ickDeviceSetName( ickDevice_t *device, const char *name )
   return ICKERR_SUCCESS;
 }
 
+
 /*=========================================================================*\
-  Add an message container (including LWS padding) to the output queue
+  Add a message container to the output queue
     caller should lock the device
-    container needs to be allocated and will be reed when the message was sent
+    container needs to be allocated and will be freed when the message is destroyed
+    container must including LWS padding, while size does NOT include LWS padding
     caller should free the payload in case an error code is returned
 \*=========================================================================*/
 ickErrcode_t _ickDeviceAddMessage( ickDevice_t *device, void *container, size_t size )
 {
   ickMessage_t *message;
+  ickMessage_t *walk;
   debug ( "_ickDeviceAddMessage (%s): %ld bytes", device->uuid, (long)size );
 
 /*------------------------------------------------------------------------*\
@@ -227,22 +230,72 @@ ickErrcode_t _ickDeviceAddMessage( ickDevice_t *device, void *container, size_t 
     logerr( "_ickDeviceAddMessage: out of memory" );
     return ICKERR_NOMEM;
   }
-  message->payload = container;
-  message->size    = size;
+  message->payload  = container;
+  message->size     = size;
+  message->writeptr = container + LWS_SEND_BUFFER_PRE_PADDING;
 
 /*------------------------------------------------------------------------*\
-    Link to output queue
+    Link to end of output queue
 \*------------------------------------------------------------------------*/
-  message->next = device->outQueue;
-  if( message->next )
-    message->next->prev = message;
-  device->outQueue = message;
+  if( !device->outQueue )
+    device->outQueue = message;
+  else {
+    for( walk=device->outQueue; walk->next; walk=walk->next );
+    message->prev = walk;
+    walk->next    = message;
+  }
 
 /*------------------------------------------------------------------------*\
     That's it
 \*------------------------------------------------------------------------*/
-  debug ( "_ickDeviceAddMessage (%s): output queue has now %d entries (%ld bytes)",
-          device->uuid, _ickDevicePendingMessages(device), _ickDevicePendingBytes(device) );
+  debug( "_ickDeviceAddMessage (%s): output queue has now %d entries (%ld bytes)",
+         device->uuid, _ickDevicePendingMessages(device), _ickDevicePendingBytes(device) );
+  return ICKERR_SUCCESS;
+}
+
+
+/*=========================================================================*\
+  Remove a message container from the output queue
+    caller should lock the device
+    This will also free the message
+\*=========================================================================*/
+ickErrcode_t _ickDeviceRemoveAndFreeMessage( ickDevice_t *device, ickMessage_t *message )
+{
+  ickMessage_t *walk;
+  debug( "_ickDeviceRemoveAndFreeMessage (%s): message %p (%ld bytes)",
+         device->uuid, message, message->size );
+
+/*------------------------------------------------------------------------*\
+    Check if member
+\*------------------------------------------------------------------------*/
+  for( walk=device->outQueue; walk->next; walk=walk->next )
+    if( walk==message )
+      break;
+  if( !walk ) {
+    logerr( "_ickDeviceRemoveMessage (%s): message not member of output queue",
+            device->uuid );
+    return ICKERR_NOMEMBER;
+  }
+
+/*------------------------------------------------------------------------*\
+    Unlink
+\*------------------------------------------------------------------------*/
+  if( message->next )
+    message->next->prev = message->prev;
+  if( message->prev )
+    message->prev->next = message->next;
+  else
+    device->outQueue = message->next;
+
+/*------------------------------------------------------------------------*\
+    Free payload and descriptor
+\*------------------------------------------------------------------------*/
+  Sfree( message->payload );
+  Sfree( message );
+
+/*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
   return ICKERR_SUCCESS;
 }
 

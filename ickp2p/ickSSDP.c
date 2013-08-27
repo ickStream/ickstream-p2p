@@ -592,7 +592,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 /*------------------------------------------------------------------------*\
    New device?
 \*------------------------------------------------------------------------*/
-  device = _ickLibDeviceFind( ictx, ssdp->uuid );
+  device = _ickLibDeviceFindByUuid( ictx, ssdp->uuid );
   if( !device ) {
     debug ( "_ickDeviceUpdate (%s): adding new device (%s).", ssdp->usn, ssdp->location );
 
@@ -779,7 +779,7 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 /*------------------------------------------------------------------------*\
     Find matching device entry
 \*------------------------------------------------------------------------*/
-  device = _ickLibDeviceFind( ictx, ssdp->uuid );
+  device = _ickLibDeviceFindByUuid( ictx, ssdp->uuid );
   if( !device ) {
     loginfo( "_ickDeviceRemove (%s): no instance found.", ssdp->usn );
     _ickLibDeviceListUnlock( ictx );

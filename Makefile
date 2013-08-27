@@ -139,8 +139,8 @@ ickp2p/ickDescription.o: ickp2p/ickP2pInternal.h ickp2p/logutils.h
 ickp2p/ickDescription.o: ickp2p/ickDevice.h ickp2p/ickDescription.h
 ickp2p/ickDescription.o: ickp2p/ickWGet.h ickp2p/ickSSDP.h
 ickp2p/ickP2pCom.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h ickp2p/logutils.h
-ickp2p/ickP2pCom.o: ickp2p/ickDevice.h ickp2p/ickDescription.h
-ickp2p/ickP2pCom.o: ickp2p/ickWGet.h ickp2p/ickP2pCom.h
+ickp2p/ickP2pCom.o: ickp2p/ickDescription.h ickp2p/ickWGet.h
+ickp2p/ickP2pCom.o: ickp2p/ickDevice.h ickp2p/ickP2pCom.h
 ickp2p/ickErrors.o: ickp2p/ickP2p.h
 ickp2p/ickWGet.o: miniupnp/miniupnpc/miniwget.h miniupnp/miniupnpc/declspec.h
 ickp2p/ickWGet.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h

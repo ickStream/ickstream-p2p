@@ -49,6 +49,7 @@ Remarks         : -
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
 #include <uuid/uuid.h>
@@ -86,10 +87,12 @@ static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDiscov
 \*=========================================================================*/
 int main( int argc, char *argv[] )
 {
-  ickErrcode_t     irc;
-  ickP2pContext_t *ictx;
-  uuid_t           uuid;
-  char             uuidStr[37];
+  ickErrcode_t         irc;
+  ickP2pContext_t     *ictx;
+  uuid_t               uuid;
+  char                 uuidStr[37];
+  ickP2pServicetype_t  service;
+  int                  cntr;
 
 
 /*------------------------------------------------------------------------*\
@@ -100,10 +103,12 @@ int main( int argc, char *argv[] )
   ickP2pSetLogLevel( LOGLEVEL );
 
 /*------------------------------------------------------------------------*\
-    Use random uuid
+    Use random uuid and service
 \*------------------------------------------------------------------------*/
+  srandom( (unsigned int)time(NULL) );
   uuid_generate( uuid );
   uuid_unparse( uuid, uuidStr );
+  service = 1<<random()%4;
 
 /*------------------------------------------------------------------------*\
     OK, from here on we catch some terminating signals and ignore others
@@ -118,7 +123,7 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Create context
 \*------------------------------------------------------------------------*/
-  ictx = ickP2pCreate( DEVICENAME, uuidStr, "./httpFolder", 100, NULL, IFNAME, 1900, ICKP2P_SERVICE_GENERIC, &irc  );
+  ictx = ickP2pCreate( DEVICENAME, uuidStr, "./httpFolder", 100, NULL, IFNAME, 1900, service, &irc  );
   if( !ictx ) {
     fprintf( stderr, "ickP2pCreate: %s\n", ickStrError(irc) );
     return -1;
@@ -163,12 +168,29 @@ int main( int argc, char *argv[] )
   printf( "ickP2pGetUpnpPort:   %d\n",     ickP2pGetUpnpPort(ictx) );
   printf( "ickP2pGetLwsPort:    %d\n",     ickP2pGetLwsPort(ictx) );
   printf( "ickP2pGetHostname:   %s\n",     ickP2pGetHostname(ictx) );
+  printf( "ickP2pGetServices:   0x%02x\n", ickP2pGetServices(ictx) );
 
 /*------------------------------------------------------------------------*\
     Main loop: wait for termination
 \*------------------------------------------------------------------------*/
-  while( !stop_signal ) {
-    sleep( 1 );
+  for( cntr=1; !stop_signal; cntr++ ) {
+    char buffer [256];
+
+    // construct message
+    sprintf( buffer, "Message #%03d from %s - hello ickstream world!", cntr, uuidStr );
+
+    // Broadcast message as string
+    printf( "Sending test message #%03d...\n", cntr );
+    irc = ickP2pSendMsg( ictx, NULL, ICKP2P_SERVICE_ANY, service, buffer, 0 );
+    if( irc ) {
+      printf( "ickP2pSendMsg: %s\n", ickStrError(irc) );
+//      goto end;
+    }
+
+
+    // wait a random time [0-9s]
+    sleep( random()%10 );
+
   }
 
 /*------------------------------------------------------------------------*\

@@ -55,6 +55,7 @@ Remarks         : refactored from ickP2PComm.c
 #include "ickP2p.h"
 #include "ickP2pInternal.h"
 #include "logutils.h"
+#include "ickMainThread.h"
 #include "ickDescription.h"
 #include "ickDevice.h"
 #include "ickP2pCom.h"
@@ -75,8 +76,9 @@ Remarks         : refactored from ickP2PComm.c
 /*=========================================================================*\
   Private prototypes
 \*=========================================================================*/
+static int   _ickP2pComTransmit( struct libwebsocket *wsi, ickMessage_t *message );
 static char *_ickLwsDupToken( struct libwebsocket *wsi, enum lws_token_indexes h );
-static void dump_handshake_info( struct libwebsocket *wsi );
+static void   dump_handshake_info( struct libwebsocket *wsi );
 
 
 
@@ -88,13 +90,13 @@ static void dump_handshake_info( struct libwebsocket *wsi );
                      addressed
     targetServices - services at target to address
     sourceService  - sending service
-    payload        - the message
-    pSize          - size of message, if 0 the message is interpreted
+    message        - the message
+    mSize          - size of message, if 0 the message is interpreted
                      as a 0-terminated string
 \*=========================================================================*/
 ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
                             ickP2pServicetype_t targetServices, ickP2pServicetype_t sourceService,
-                            const char *payload, size_t pSize )
+                            const char *message, size_t mSize )
 {
   ickErrcode_t  irc = ICKERR_SUCCESS;
   ickDevice_t  *device;
@@ -103,21 +105,30 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
 /*------------------------------------------------------------------------*\
     Determine size if payload is a string
 \*------------------------------------------------------------------------*/
-  if( !pSize )
-    pSize = strlen( payload );
+  if( !mSize )
+    mSize = strlen( message );
 
   debug( "ickP2pSendMsg: target=\"%s\" targetServices=0x%02x sourceServices=0x%02x size=%ld",
-         uuid?uuid:"<Notification>", targetServices, sourceService, (long)pSize );
+         uuid?uuid:"<Notification>", targetServices, sourceService, (long)mSize );
 
 /*------------------------------------------------------------------------*\
-    Lock device list and find device
+    Lock device list and find (first) device
 \*------------------------------------------------------------------------*/
   _ickLibDeviceListLock( ictx );
-   device = uuid ? _ickLibDeviceFind(ictx,uuid) : ictx->deviceList ;
-  if( !device ) {
-    _ickLibDeviceListUnlock( ictx );
-    return ICKERR_NODEVICE;
+  if( uuid ) {
+    device = _ickLibDeviceFindByUuid( ictx, uuid );
+    if( !device ) {
+      _ickLibDeviceListUnlock( ictx );
+      return ICKERR_NODEVICE;
+    }
   }
+  else if( ictx->deviceList )
+    device = ictx->deviceList;
+  else {
+    _ickLibDeviceListUnlock( ictx );
+    return ICKERR_SUCCESS;
+  }
+  _ickLibDeviceListUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
     Loop over all devices
@@ -125,6 +136,7 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
   do {
     ickP2pLevel_t p2pLevel;
     size_t        preambleLen = 2;  // p2pLevel
+    size_t        pSize;
     size_t        cSize;
     char         *container;
     int           offset;
@@ -149,7 +161,8 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
 /*------------------------------------------------------------------------*\
     Allocate payload container, include LWS padding and trailing zero
 \*------------------------------------------------------------------------*/
-    cSize = LWS_SEND_BUFFER_PRE_PADDING + preambleLen + pSize + 1 + LWS_SEND_BUFFER_POST_PADDING;
+    pSize = preambleLen + mSize + 1;
+    cSize = LWS_SEND_BUFFER_PRE_PADDING + pSize + LWS_SEND_BUFFER_POST_PADDING;
     container = malloc( cSize );
     if( !container ) {
       logerr( "ickP2pSendMsg: out of memory (%ld bytes)", (long)cSize );
@@ -184,19 +197,28 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
 /*------------------------------------------------------------------------*\
     Copy payload to container and add trailing zero
 \*------------------------------------------------------------------------*/
-    memcpy( container+LWS_SEND_BUFFER_PRE_PADDING+preambleLen, container, pSize );
-    container[ LWS_SEND_BUFFER_PRE_PADDING + preambleLen + pSize ] = 0;
+    memcpy( container+LWS_SEND_BUFFER_PRE_PADDING+preambleLen, container, mSize );
+    container[ LWS_SEND_BUFFER_PRE_PADDING + preambleLen + mSize ] = 0;
 
 /*------------------------------------------------------------------------*\
     Try queue message for transmission
 \*------------------------------------------------------------------------*/
     _ickDeviceLock( device );
-    irc = _ickDeviceAddMessage( device, container, cSize );
+    irc = _ickDeviceAddMessage( device, container, pSize );
     _ickDeviceUnlock( device );
     if( irc ) {
       Sfree( container );
       break;
     }
+
+/*------------------------------------------------------------------------*\
+    Book a writable callback for the devices wsi
+\*------------------------------------------------------------------------*/
+    if( device->wsi )
+      libwebsocket_callback_on_writable( ictx->lwsContext, device->wsi );
+    else
+      debug( "ickP2pSendMsg (%s): sending deferred, wsi not yet present (%ld bytes).",
+             device->uuid, (long)mSize );
 
 /*------------------------------------------------------------------------*\
     Handle next device in notification mode
@@ -205,9 +227,14 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
   } while( uuid && device );
 
 /*------------------------------------------------------------------------*\
-    That's all - unlock device list
+    That's all - unlock device list and break polling in main thread
 \*------------------------------------------------------------------------*/
   _ickLibDeviceListUnlock( ictx );
+  _ickMainThreadBreak( ictx, 'o' );
+
+/*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
   return irc;
 }
 
@@ -226,7 +253,6 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
   int                  port;
   char                *ptr;
   _ickLwsP2pData_t    *psd;
-  struct libwebsocket *wsi;
 
   debug( "_ickWebSocketOpen: \"%s\"", device->uuid );
 
@@ -290,18 +316,18 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
 /*------------------------------------------------------------------------*\
     Initiate connection
 \*------------------------------------------------------------------------*/
-  wsi = libwebsocket_client_connect_extended(
-        context,
-        address,
-        port,
-        0,                        // ssl_connection
-        "/",                      // path
-        host,                     // host
-        device->ictx->deviceUuid, // origin,
-        ICKP2P_WS_PROTOCOLNAME,   // protocol,
-        -1,                       // ietf_version_or_minus_one
-        psd );
-  if( !wsi ) {
+  device->wsi = libwebsocket_client_connect_extended(
+                    context,
+                    address,
+                    port,
+                    0,                        // ssl_connection
+                    "/",                      // path
+                    host,                     // host
+                    device->ictx->deviceUuid, // origin,
+                    ICKP2P_WS_PROTOCOLNAME,   // protocol,
+                    -1,                       // ietf_version_or_minus_one
+                    psd );
+  if( !device->wsi ) {
     logerr( "_ickWebSocketOpen (%s): Could not create lws client socket.",
             device->uuid );
     irc = ICKERR_LWSERR;
@@ -377,6 +403,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
   _ickLwsP2pData_t  *psd = (_ickLwsP2pData_t*) user;
   int                socket;
   ickDevice_t       *device;
+  ickMessage_t      *message;
+  int                remainder;
   char              *dscrPath;
 
 /*------------------------------------------------------------------------*\
@@ -425,11 +453,64 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       break;
 
 /*------------------------------------------------------------------------*\
-    A outgoing connection is established
+    A outgoing (client) connection is established
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_CLIENT_ESTABLISHED:
       socket = libwebsocket_get_socket_fd( wsi );
-      debug( "_lwsP2pCb %d: client connection established", socket );
+      debug( "_lwsP2pCb %d: client connection established, %d messages pending",
+             socket, _ickDevicePendingMessages(psd->device) );
+
+      // Book a write event if a message is already pending
+      if( _ickDeviceOutQueue(psd->device) )
+        libwebsocket_callback_on_writable( context, wsi );
+
+      break;
+
+/*------------------------------------------------------------------------*\
+    An outgoing (client) connection is writable
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_CLIENT_WRITEABLE:
+      socket = libwebsocket_get_socket_fd( wsi );
+      debug( "_lwsP2pCb %d: client connection is writable", socket );
+
+      // Check wsi
+      if( wsi!=psd->device->wsi ) {
+        logerr( "_lwsP2pCb %d: wsi mismatch for \"%s\"", socket, psd->device->uuid );
+        return -1;
+      }
+
+      // There should be a pending message...
+      _ickDeviceLock( psd->device );
+      message = _ickDeviceOutQueue( psd->device );
+      if( !message ) {
+        _ickDeviceUnlock( psd->device );
+        logerr( "_lwsP2pCb %d: received writable signal with empty out queue for \"%s\"", socket, psd->device->uuid );
+        break;
+      }
+
+      // Try to transmit the current message
+      remainder = _ickP2pComTransmit( wsi, message );
+
+      // Error handling
+      if( remainder<0 ) {
+        _ickDeviceUnlock( psd->device );
+        logerr( "_lwsP2pCb %d: error writing to \"%s\"", socket, psd->device->uuid );
+        return -1;
+      }
+
+      // If not complete book another write callback
+      if( remainder )
+        libwebsocket_callback_on_writable( context, wsi );
+
+      // If complete, delete message and chack for a next one
+      else {
+        _ickDeviceRemoveAndFreeMessage( psd->device, message );
+        if( _ickDeviceOutQueue(psd->device) )
+          libwebsocket_callback_on_writable( context, wsi );
+      }
+
+      // That's it
+      _ickDeviceUnlock( psd->device );
       break;
 
 /*------------------------------------------------------------------------*\
@@ -458,7 +539,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
       // Lock device list and try to find device
       _ickLibDeviceListLock( ictx );
-      device = _ickLibDeviceFind( ictx , psd->uuid );
+      device = _ickLibDeviceFindByUuid( ictx , psd->uuid );
 
       // Device already connected
       if( device && device->wsi ) {
@@ -542,6 +623,49 @@ int _lwsP2pCb( struct libwebsocket_context *context,
     That's all
 \*------------------------------------------------------------------------*/
   return 0;
+}
+
+
+/*=========================================================================*\
+  Transmit a message
+    this will return the number of bytes left over (call again if>0 )
+                     -1 on error
+\*=========================================================================*/
+static int _ickP2pComTransmit( struct libwebsocket *wsi, ickMessage_t *message )
+{
+  size_t left;
+  int    len;
+
+/*------------------------------------------------------------------------*\
+    Calculate remaining bytes
+\*------------------------------------------------------------------------*/
+  left = ICKMESSAGE_REMAINDER( message );
+  debug( "_ickP2pComTransmit (%p): pptr=%p, wptr=%p (wptr-pptr-pad)=%ld size=%ld",
+         wsi, message->payload, message->writeptr,
+         message->writeptr - message->payload - LWS_SEND_BUFFER_PRE_PADDING,
+         (long)message->size );
+  debug( "_ickP2pComTransmit (%p): %ld/%ld bytes",
+         wsi, (long)left, (long)message->size );
+
+/*------------------------------------------------------------------------*\
+    Try to send
+\*------------------------------------------------------------------------*/
+  len = libwebsocket_write( wsi, message->writeptr, left, LWS_WRITE_BINARY );
+  debug( "_ickP2pComTransmit (%p): libwebsocket_write returned %d", wsi, len );
+  if( len<0 )
+    return -1;
+  if( len>left )
+    len = (int)left;
+
+/*------------------------------------------------------------------------*\
+    Calculate new write pointer
+\*------------------------------------------------------------------------*/
+  message->writeptr += len;
+
+/*------------------------------------------------------------------------*\
+    return new leftover
+\*------------------------------------------------------------------------*/
+  return (int)ICKMESSAGE_REMAINDER( message );
 }
 
 

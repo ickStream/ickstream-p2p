@@ -184,9 +184,10 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
       *error = ICKERR_NOMEM;
     return NULL;
   }
-  ictx->state    = ICKLIB_CREATED;
-  ictx->upnpPort = port;
-  ictx->liveTime = liveTime;
+  ictx->state       = ICKLIB_CREATED;
+  ictx->upnpPort    = port;
+  ictx->liveTime    = liveTime;
+  ictx->ickServices = services;
 
 /*------------------------------------------------------------------------*\
     Init mutexes
@@ -942,11 +943,19 @@ const char *ickP2pGetIf( const ickP2pContext_t *ictx )
 
 
 /*=========================================================================*\
-  Get listener port of a discovery handler
+  Get ssdp listener port of a context
 \*=========================================================================*/
 int ickP2pGetUpnpPort( const ickP2pContext_t *ictx )
 {
   return ictx->upnpPort;
+}
+
+/*=========================================================================*\
+  Get services of a context
+\*=========================================================================*/
+ickP2pServicetype_t  ickP2pGetServices( const ickP2pContext_t *ictx )
+{
+  return ictx->ickServices;
 }
 
 
@@ -1091,7 +1100,7 @@ void _ickLibDeviceRemove( ickP2pContext_t *ictx, ickDevice_t *device )
 /*------------------------------------------------------------------------*\
      Be paranoid
 \*------------------------------------------------------------------------*/
-  if( !_ickLibDeviceFind(ictx,device->uuid) ) {
+  if( !_ickLibDeviceFindByUuid(ictx,device->uuid) ) {
     debug ( "_ickLibDeviceRemove (%p): device \"%s\" not in list.",
             ictx, device->uuid );
     return;
@@ -1119,11 +1128,11 @@ void _ickLibDeviceRemove( ickP2pContext_t *ictx, ickDevice_t *device )
 
 
 /*=========================================================================*\
-  Find a device associated with a discovery handler
+  Find a device associated with a ickstream context by uuid
     caller should lock the device list of the handler
     nt and usn are the SSDP header files identifying the device
 \*=========================================================================*/
-ickDevice_t *_ickLibDeviceFind( ickP2pContext_t *ictx, const char *uuid )
+ickDevice_t *_ickLibDeviceFindByUuid( ickP2pContext_t *ictx, const char *uuid )
 {
   ickDevice_t *device;
   debug ( "_ickLibDeviceFind (%p): UUID=\"%s\".", ictx, uuid );
@@ -1140,6 +1149,32 @@ ickDevice_t *_ickLibDeviceFind( ickP2pContext_t *ictx, const char *uuid )
     Thats it
 \*------------------------------------------------------------------------*/
   debug ( "_ickLibDeviceFind (%p): result=%p", ictx, device );
+  return device;
+}
+
+
+/*=========================================================================*\
+  Find a device associated with a ickstream context by web socket interface
+    caller should lock the device list of the handler
+    nt and usn are the SSDP header files identifying the device
+\*=========================================================================*/
+ickDevice_t *_ickLibDeviceFindByWsi( ickP2pContext_t *ictx,struct libwebsocket *wsi )
+{
+  ickDevice_t *device;
+  debug ( "_ickLibDeviceFindByWsi (%p): wsi=%p.", ictx, wsi );
+
+/*------------------------------------------------------------------------*\
+    Find matching device entry
+\*------------------------------------------------------------------------*/
+  for( device=ictx->deviceList; device; device=device->next ) {
+    if( device->wsi==wsi )
+      break;
+  }
+
+/*------------------------------------------------------------------------*\
+    Thats it
+\*------------------------------------------------------------------------*/
+  debug ( "_ickLibDeviceFindByWsi (%p): result=%p", ictx, device );
   return device;
 }
 

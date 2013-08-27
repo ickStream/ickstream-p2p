@@ -177,12 +177,12 @@ ickErrcode_t      ickDeviceRemoveMessageCallback( ickP2pContext_t *ictx,ickP2pMe
 
 ickErrcode_t      ickP2pAddinterface( ickP2pContext_t *ictx, const char *ifname );
 
-const char          *ickP2pGetOsName( const ickP2pContext_t *ictx );
 ickErrcode_t         ickP2pSetName( ickP2pContext_t *ictx, const char *name );
+ickP2pLibState_t     ickP2pGetState( const ickP2pContext_t *ictx );
+const char          *ickP2pGetOsName( const ickP2pContext_t *ictx );
 const char          *ickP2pGetName( const ickP2pContext_t *ictx );
 const char          *ickP2pGetDeviceUuid( const ickP2pContext_t *ictx );
 const char          *ickP2pGetUpnpFolder( const ickP2pContext_t *ictx );
-ickP2pLibState_t     ickP2pGetState( const ickP2pContext_t *ictx );
 int                  ickP2pGetLiveTime( const ickP2pContext_t *ictx );
 const char          *ickP2pGetHostname( const ickP2pContext_t *ictx );
 const char          *ickP2pGetIf( const ickP2pContext_t *ictx );
@@ -190,6 +190,7 @@ int                  ickP2pGetLwsPort( const ickP2pContext_t *ictx );
 int                  ickP2pGetUpnpPort( const ickP2pContext_t *ictx );
 long                 ickP2pGetBootId( const ickP2pContext_t *ictx );
 long                 ickP2pGetConfigId( const ickP2pContext_t *ictx );
+ickP2pServicetype_t  ickP2pGetServices( const ickP2pContext_t *ictx );
 
 #ifdef ICKP2P_DYNAMICSERVICES
 ickErrcode_t         ickP2pDiscoveryAddService( ickP2pContext_t *ictx, ickP2pServicetype_t type );

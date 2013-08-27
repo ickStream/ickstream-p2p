@@ -378,8 +378,7 @@ void *_ickMainThread( void *arg )
         logerr( "ickp2p main thread: Unable to read break request pipe: %s",
                  strerror(errno) );
       else
-        debug( "ickp2p main thread: received break requests (%dx: \"%.*s\")",
-               (int)len, (int)len, buffer );
+        debug( "ickp2p main thread: received break requests (\"%.*s\")", (int)len, buffer );
       if( retval==1 )
         continue;
     }
