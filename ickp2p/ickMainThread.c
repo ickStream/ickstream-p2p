@@ -535,19 +535,22 @@ void *_ickMainThread( void *arg )
 /*=========================================================================*\
   Create a libwebsocket instance
 \*=========================================================================*/
-void _ickMainThreadBreak( ickP2pContext_t *ictx, char flag )
+ickErrcode_t _ickMainThreadBreak( ickP2pContext_t *ictx, char flag )
 {
   debug( "_ickMainThreadBreak (%p): sending break request '%c'", ictx, flag );
 
 /*------------------------------------------------------------------------*\
     Try to send flag
 \*------------------------------------------------------------------------*/
-  if( write(ictx->pollBreakPipe[1],&flag,1)<0 )
+  if( write(ictx->pollBreakPipe[1],&flag,1)<0 ) {
     logerr( "_ickMainThreadBreak: Unable to write to poll break pipe: %s", strerror(errno) );
+    return ICKERR_GENERIC;
+  }
 
 /*------------------------------------------------------------------------*\
     That's it
 \*------------------------------------------------------------------------*/
+  return ICKERR_SUCCESS;
 }
 
 

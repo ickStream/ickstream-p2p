@@ -666,7 +666,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 
     // Execute callbacks registered with discovery handler
     // this is done by the xml handler after the device is full initialzed
-    // _ickDiscoveryExecDeviceCallback( dh, device, ICKP2P_ADD, stype );
+    // _ickDiscoveryExecDiscoveryCallback( dh, device, ICKP2P_NEW, stype );
 
     // Release all locks and return code 1 (a device was added)
     _ickLibDeviceListUnlock( ictx );
@@ -729,7 +729,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   // New service: Execute callbacks registered with discovery handler
   if( (stype&~device->services) ) {
     device->services |= stype;
-    _ickLibExecDeviceCallback( ictx, device, ICKP2P_ADD, stype );
+    _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_NEW, stype );
   }
 
   // Release all locks and return code 0 (no device added)
@@ -793,7 +793,7 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 \*------------------------------------------------------------------------*/
   if( (device->services&stype) || stype!=ICKP2P_SERVICE_GENERIC ) {
     device->services &= ~stype;
-    _ickLibExecDeviceCallback( ictx, device, ICKP2P_REMOVE, stype );
+    _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_REMOVED, stype );
   }
 
 /*------------------------------------------------------------------------*\
@@ -802,7 +802,7 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   if( stype==ICKP2P_SERVICE_GENERIC ) {
 
     // Execute callback with all registered services
-    _ickLibExecDeviceCallback( ictx, device, ICKP2P_REMOVE, device->services );
+    _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_REMOVED, device->services );
 
     // Unlink from device list
     _ickLibDeviceRemove( ictx, device );
@@ -863,7 +863,7 @@ static void _ickDeviceExpireCb( const ickTimer_t *timer, void *data, int tag )
 /*------------------------------------------------------------------------*\
     Execute callback with all registered services
 \*------------------------------------------------------------------------*/
-  _ickLibExecDeviceCallback( device->ictx, device, ICKP2P_EXPIRED, device->services );
+  _ickLibExecDiscoveryCallback( device->ictx, device, ICKP2P_EXPIRED, device->services );
 
 /*------------------------------------------------------------------------*\
     Unlink from device list and free instance
@@ -977,7 +977,7 @@ void _ickSsdpEndDiscovery( ickP2pContext_t *ictx )
   _ickLibDeviceListLock( ictx );
   while( ictx->deviceList ) {
     ickDevice_t *device = ictx->deviceList;
-    _ickLibExecDeviceCallback( ictx, device, ICKP2P_TERMINATE, device->services );
+    _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_TERMINATE, device->services );
     _ickLibDeviceRemove( ictx, device );
     _ickDeviceFree( device );
   }
@@ -1150,6 +1150,8 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     if( !_ssdpVercmp(ssdp->st,ICKDEVICE_TYPESTR_ROOT) )
       _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
                              ICKP2P_SERVICE_GENERIC, ICKSSDP_REPEATS );
+
+#ifdef ICKP2P_DYNAMICSERVICES
     if( (ictx->ickServices&ICKP2P_SERVICE_PLAYER) && !_ssdpVercmp(ssdp->st,ICKSERVICE_TYPESTR_PLAYER) )
       _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
                              ICKP2P_SERVICE_PLAYER, ICKSSDP_REPEATS );
@@ -1162,6 +1164,7 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     if( (ictx->ickServices&ICKP2P_SERVICE_DEBUG) && !_ssdpVercmp(ssdp->st,ICKSERVICE_TYPESTR_DEBUG) )
       _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
                              ICKP2P_SERVICE_DEBUG, ICKSSDP_REPEATS );
+#endif
   }
 
 /*------------------------------------------------------------------------*\
@@ -1323,6 +1326,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
       break;
 
     case SSDPMSGLEVEL_SERVICE:
+#ifdef ICKP2P_DYNAMICSERVICES
       switch( service ) {
         case ICKP2P_SERVICE_GENERIC:
           sstr = ICKDEVICE_STRING_ROOT;
@@ -1348,6 +1352,10 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
           logerr( "_ssdpSendDiscoveryMsg: bad service type (%d)", service );
           return ICKERR_INVALID;
       }
+#else
+      sstr = ICKDEVICE_STRING_ROOT;
+      nst  = ICKDEVICE_TYPESTR_ROOT;
+#endif
       asprintf( &usn, "uuid:%s::%s", ictx->deviceUuid, nst );
       nst = strdup( nst );
       break;

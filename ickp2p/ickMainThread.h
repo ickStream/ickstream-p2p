@@ -84,8 +84,8 @@ typedef void (*ickTimerCb_t)( const ickTimer_t *timer, void *data, int tag );
 /*=========================================================================*\
   Internal prototypes
 \*=========================================================================*/
-void *_ickMainThread( void *arg );
-void  _ickMainThreadBreak( ickP2pContext_t *ictx, char flag );
+void         *_ickMainThread( void *arg );
+ickErrcode_t  _ickMainThreadBreak( ickP2pContext_t *ictx, char flag );
 
 
 ickErrcode_t  _ickMainThreadAddWGet( ickWGetContext_t *ickWGet );

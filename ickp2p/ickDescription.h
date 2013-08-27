@@ -92,10 +92,13 @@ Remarks         : -
 // strings defining ickstream devices and services
 //
 #define ICKDEVICE_STRING_ROOT            "Root"
+
+#ifdef ICKP2P_DYNAMICSERVICES
 #define ICKSERVICE_STRING_PLAYER         "Player"
 #define ICKSERVICE_STRING_SERVER         "Server"
 #define ICKSERVICE_STRING_CONTROLLER     "Controller"
 #define ICKSERVICE_STRING_DEBUG          "Debug"
+#endif
 
 //
 // Upnp strings defining ickstream devices and services
@@ -105,10 +108,13 @@ Remarks         : -
 #define ICKDEVICE_UPNP_MINOR             0
 #define ICKDEVICE_TYPESTR_PREFIX         "urn:schemas-ickstream-com:device:"
 #define ICKDEVICE_TYPESTR_ROOT           "urn:schemas-ickstream-com:device:Root:1"
+
+#ifdef ICKP2P_DYNAMICSERVICES
 #define ICKSERVICE_TYPESTR_PLAYER        "urn:schemas-ickstream-com:device:Player:1"
 #define ICKSERVICE_TYPESTR_SERVER        "urn:schemas-ickstream-com:device:Server:1"
 #define ICKSERVICE_TYPESTR_CONTROLLER    "urn:schemas-ickstream-com:device:Controller:1"
 #define ICKSERVICE_TYPESTR_DEBUG         "urn:schemas-ickstream-com:device:Debug:1"
+#endif
 
 //
 // ickstream preamble elements

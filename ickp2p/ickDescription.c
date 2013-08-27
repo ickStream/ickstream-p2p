@@ -80,14 +80,15 @@ ickUpnpNames_t ickUpnpNames = {
   Private definitions
 \*=========================================================================*/
 typedef struct {
-  int            level;
-  const char    *eltPtr;
-  int            eltLen;
-  int            deviceLevel;
+  int                  level;
+  const char          *eltPtr;
+  int                  eltLen;
+  int                  deviceLevel;
 
   // extracted data
-  char          *deviceName;            // strong
-  ickP2pLevel_t  protocolLevel;
+  char                *deviceName;            // strong
+  ickP2pLevel_t        protocolLevel;
+  ickP2pServicetype_t  services;
 
 } ickXmlUserData_t;
 
@@ -125,6 +126,7 @@ ickP2pServicetype_t _ickDescrFindServiceByUsn( const char *usn )
 /*------------------------------------------------------------------------*\
     Check for known services
 \*------------------------------------------------------------------------*/
+#ifdef ICKP2P_DYNAMICSERVICES
   if( strstr(usn, ICKSERVICE_TYPESTR_PLAYER) )
     return ICKP2P_SERVICE_PLAYER;
   if( strstr(usn, ICKSERVICE_TYPESTR_SERVER) )
@@ -133,6 +135,7 @@ ickP2pServicetype_t _ickDescrFindServiceByUsn( const char *usn )
     return ICKP2P_SERVICE_CONTROLLER;
   if( strstr(usn, ICKSERVICE_TYPESTR_CONTROLLER) )
     return ICKP2P_SERVICE_DEBUG;
+#endif
 
 /*------------------------------------------------------------------------*\
     No compatible ickstream service found
@@ -163,6 +166,7 @@ ickP2pServicetype_t _ickDescrFindServiceByUrl( const ickP2pContext_t *ictx, cons
 /*------------------------------------------------------------------------*\
     For services check if they are actually up
 \*------------------------------------------------------------------------*/
+#ifdef ICKP2P_DYNAMICSERVICES
   snprintf( buffer, sizeof(buffer), "/%s.xml", ICKSERVICE_STRING_PLAYER );
   if( (ictx->ickServices&ICKP2P_SERVICE_PLAYER) && !strcmp(uri,buffer) )
     return ICKP2P_SERVICE_PLAYER;
@@ -175,6 +179,7 @@ ickP2pServicetype_t _ickDescrFindServiceByUrl( const ickP2pContext_t *ictx, cons
   snprintf( buffer, sizeof(buffer), "/%s.xml", ICKSERVICE_STRING_DEBUG );
   if( (ictx->ickServices&ICKP2P_SERVICE_PLAYER) && !strcmp(uri,buffer) )
     return ICKP2P_SERVICE_DEBUG;
+#endif
 
 /*------------------------------------------------------------------------*\
     No match
@@ -199,6 +204,7 @@ char *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket 
 /*------------------------------------------------------------------------*\
     Get type string
 \*------------------------------------------------------------------------*/
+#ifdef ICKP2P_DYNAMICSERVICES
   switch( stype ) {
     case ICKP2P_SERVICE_GENERIC:
       type = ICKDEVICE_TYPESTR_ROOT;
@@ -219,6 +225,9 @@ char *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket 
       logerr( "_ickDescrGetDeviceDescr: invalid service type %d", stype );
       return NULL;
   }
+#else
+  type = ICKDEVICE_TYPESTR_ROOT;
+#endif
 
 /*------------------------------------------------------------------------*\
     Construct XML payload
@@ -239,6 +248,7 @@ char *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket 
                     "  <modelName>%s</modelName>\r\n"
                     "  <UDN>uuid:%s</UDN>\r\n"
                     "  <protocolLevel>%d</protocolLevel>"
+                    "  <services>%d</services>"
                     " </device>\r\n"
                     "</root>",
 
@@ -251,7 +261,8 @@ char *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket 
                     ickUpnpNames.modelDescriptor,
                     ickUpnpNames.modelName,
                     ictx->deviceUuid,
-                    ICKP2PLEVEL_SUPPORTED
+                    ICKP2PLEVEL_SUPPORTED,
+                    ictx->ickServices
                   );
 
 /*------------------------------------------------------------------------*\
@@ -337,6 +348,7 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
       // Init and execute xml parser
       memset( &_xmlUserData, 0, sizeof(_xmlUserData) );
       _xmlUserData.protocolLevel = ICKP2PLEVEL_GENERIC;
+      _xmlUserData.services      = ICKP2P_SERVICE_GENERIC;
       _xmlParser.xmlstart        = _ickWGetPayload( context );
       _xmlParser.xmlsize         = _ickWGetPayloadSize( context );
       _xmlParser.data            = &_xmlUserData;
@@ -359,13 +371,19 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
       _ickDeviceLock( device );
       _ickDeviceSetName( device, _xmlUserData.deviceName );
       device->ickP2pLevel  = _xmlUserData.protocolLevel;
+      if( device->services&~_xmlUserData.services )
+        logwarn( "_ickWGetXmlCb (%s): found superset of already known services", uri );
+      else if( ~device->services&_xmlUserData.services )
+        logwarn( "_ickWGetXmlCb (%s): found subset of already known services", uri );
+      device->services |= _xmlUserData.services;
+
       _ickDeviceUnlock( device );
 
       // Clean up
       Sfree( _xmlUserData.deviceName );
 
       // Signal device readiness to user code
-      _ickLibExecDeviceCallback( device->ictx, device, ICKP2P_ADD, device->services );
+      _ickLibExecDiscoveryCallback( device->ictx, device, ICKP2P_NEW, device->services );
 
       break;
 
@@ -496,6 +514,20 @@ static void _ickParsexmlProcessData( void *data, const char *content, int len )
     }
     // should be terminated by non-digit, so it's safe to ignore len here
     xmlUserData->protocolLevel = atoi( content );
+    return;
+  }
+
+/*------------------------------------------------------------------------*\
+  Found ickstream services
+\*------------------------------------------------------------------------*/
+  if( !_strmcmp("services",xmlUserData->eltPtr,xmlUserData->eltLen)) {
+    debug( "_ickParsexmlProcessData: found services \"%.*s\"", len, content );
+    if( xmlUserData->services ) {
+      logwarn( "_ickParsexmlProcessData: found more then one service vector (ignoring)" );
+      return;
+    }
+    // should be terminated by non-digit, so it's safe to ignore len here
+    xmlUserData->services = atoi( content );
     return;
   }
 

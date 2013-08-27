@@ -77,7 +77,7 @@ static volatile int stop_signal;
   Private prototypes
 \*=========================================================================*/
 static void sigHandler( int sig, siginfo_t *siginfo, void *context );
-static void ickDeviceCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDeviceCommand_t change, ickP2pServicetype_t type );
+static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type );
 
 
 
@@ -116,13 +116,44 @@ int main( int argc, char *argv[] )
   sigaction( SIGTERM, &act, NULL );
 
 /*------------------------------------------------------------------------*\
-    Init library
+    Create context
 \*------------------------------------------------------------------------*/
-  ictx = ickP2pInit( DEVICENAME, uuidStr, "./httpFolder", 100, -1, -1, NULL, IFNAME, 1900, ickDeviceCb, NULL, &irc  );
+  ictx = ickP2pCreate( DEVICENAME, uuidStr, "./httpFolder", 100, NULL, IFNAME, 1900, ICKP2P_SERVICE_GENERIC, &irc  );
   if( !ictx ) {
-    fprintf( stderr, "ickP2pInit: %s\n", ickStrError(irc) );
+    fprintf( stderr, "ickP2pCreate: %s\n", ickStrError(irc) );
     return -1;
   }
+
+/*------------------------------------------------------------------------*\
+    Add callbacks
+\*------------------------------------------------------------------------*/
+  irc = ickP2pRegisterDiscoveryCallback( ictx, ickDiscoverCb );
+  if( irc ) {
+    printf( "ickP2pRegisterDiscoveryCallback: %s\n", ickStrError(irc) );
+    goto end;
+  }
+
+/*------------------------------------------------------------------------*\
+    Add interface
+\*------------------------------------------------------------------------*/
+  irc = ickP2pAddInterface( ictx, "lo" );
+  if( irc ) {
+    printf( "ickP2pAddInterface: %s\n", ickStrError(irc) );
+    goto end;
+  }
+
+/*------------------------------------------------------------------------*\
+    Startup
+\*------------------------------------------------------------------------*/
+  irc = ickP2pResume( ictx );
+  if( irc ) {
+    printf( "ickP2pResume: %s\n", ickStrError(irc) );
+    goto end;
+  }
+
+/*------------------------------------------------------------------------*\
+    Report status
+\*------------------------------------------------------------------------*/
   printf( "ickP2pGetOsName:     \"%s\"\n", ickP2pGetOsName(ictx) );
   printf( "ickP2pGetDeviceName: \"%s\"\n", ickP2pGetName(ictx) );
   printf( "ickP2pGetDeviceUuid: \"%s\"\n", ickP2pGetDeviceUuid(ictx) );
@@ -143,6 +174,7 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Terminate library
 \*------------------------------------------------------------------------*/
+end:
   irc = ickP2pEnd( ictx, NULL );
   if( irc ) {
     printf( "ickP2pEnd: %s\n", ickStrError(irc) );
@@ -160,16 +192,19 @@ int main( int argc, char *argv[] )
 /*=========================================================================*\
     Caled when devices or services are found or terminated
 \*=========================================================================*/
-static void ickDeviceCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDeviceCommand_t change, ickP2pServicetype_t type )
+static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type )
 {
   char *cstr = "???";
   char  tstr[128];
 
   switch( change ) {
-    case   ICKP2P_ADD:
-      cstr = "adding";
+    case   ICKP2P_LEGACY:
+      cstr = "adding (legacy)";
       break;
-    case ICKP2P_REMOVE:
+    case   ICKP2P_NEW:
+      cstr = "adding (new)";
+      break;
+    case ICKP2P_REMOVED:
       cstr = "removing";
       break;
     case ICKP2P_EXPIRED:

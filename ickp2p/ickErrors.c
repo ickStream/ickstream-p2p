@@ -85,6 +85,7 @@ const char *ickStrError( ickErrcode_t code )
     case ICKERR_INVALID:          return "Invalid parameter";
     case ICKERR_UNINITIALIZED:    return "Not initialized";
     case ICKERR_INITIALIZED:      return "Already initialized";
+    case ICKERR_NOMEMBER:         return "Not a member";
     case ICKERR_WRONGSTATE:       return "Library in wrong state";
     case ICKERR_NOMEM:            return "Out of memory";
     case ICKERR_NOINTERFACE:      return "Bad interface";

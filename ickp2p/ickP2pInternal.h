@@ -89,7 +89,14 @@ typedef struct _ickWGetContext ickWGetContext_t;
 struct _ickDevice;
 typedef struct _ickDevice ickDevice_t;
 
+// Elements in linked list of callbacks
+struct _cblist {
+  struct _cblist  *next;
+  struct _cblist  *prev;
+  void            *callback;
+};
 
+// The context descriptor
 struct _ickP2pContext {
   ickP2pLibState_t             state;
   ickErrcode_t                 error;
@@ -98,8 +105,11 @@ struct _ickP2pContext {
   char                        *osName;      // strong
   char                        *deviceName;  // strong
   char                        *hostName;    // strong
-  ickP2pDeviceCb_t             deviceCb;
-  ickP2pMessageCb_t            messageCb;
+
+  struct _cblist              *discoveryCbs;
+  pthread_mutex_t              discoveryCbsMutex;
+  struct _cblist              *messageCbs;
+  pthread_mutex_t              messageCbsMutex;
 
   // Main thread and timer
   pthread_t                    thread;
@@ -185,7 +195,11 @@ void _ickLibDeviceAdd( ickP2pContext_t *ictx, ickDevice_t *device );
 void _ickLibDeviceRemove( ickP2pContext_t *ictx, ickDevice_t *device );
 ickDevice_t *_ickLibDeviceFind( ickP2pContext_t *ictx, const char *uuid );
 
-void _ickLibExecDeviceCallback( ickP2pContext_t *ictx, const ickDevice_t *dev, ickP2pDeviceCommand_t change, ickP2pServicetype_t type );
+void _ickLibExecDiscoveryCallback( ickP2pContext_t *ictx,
+             const ickDevice_t *dev, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type );
+void _ickLibExecMessageCallback( ickP2pContext_t *ictx,
+             const char *sourceUuid, ickP2pServicetype_t sourceService,
+             ickP2pServicetype_t targetService, const char* message, size_t mSize );
 
 void _ickLibWGettersLock( ickP2pContext_t *ictx );
 void _ickLibWGettersUnlock( ickP2pContext_t *ictx  );
