@@ -467,7 +467,8 @@ void _ickLibUnlock( ickP2pContext_t *ictx )
 \*=========================================================================*/
 void _ickLibDestruct( ickP2pContext_t *ictx )
 {
-  int              i;
+  struct _cblist *walk, *next;
+  int             i;
   debug( "_ickP2pDestruct: %p", ictx );
 
 /*------------------------------------------------------------------------*\
@@ -485,6 +486,20 @@ void _ickLibDestruct( ickP2pContext_t *ictx )
     close( ictx->upnpSocket );
 
 // lwsPolllist's livecycle is handled by main thread
+
+/*------------------------------------------------------------------------*\
+    Free call back lists
+\*------------------------------------------------------------------------*/
+  for( walk=ictx->discoveryCbs; walk; walk=next ) {
+    next = walk->next;
+    Sfree( walk );
+  }
+  ictx->discoveryCbs = NULL;
+  for( walk=ictx->messageCbs; walk; walk=next ) {
+    next = walk->next;
+    Sfree( walk );
+  }
+  ictx->messageCbs = NULL;
 
 /*------------------------------------------------------------------------*\
     Free strong string references
@@ -774,25 +789,6 @@ void _ickLibExecDiscoveryCallback( ickP2pContext_t *ictx, const ickDevice_t *dev
 }
 
 
-/*=========================================================================*\
-  Execute a messaging callback
-\*=========================================================================*/
-void _ickLibExecMessageCallback( ickP2pContext_t *ictx,
-             const char *sourceUuid, ickP2pServicetype_t sourceService,
-             ickP2pServicetype_t targetService, const char* message, size_t mSize )
-{
-  struct _cblist *walk;
-  debug( "_ickLibExecMessageCallback (%p): (%s,0x%02x) -> 0x%02x, %ld bytes",
-         ictx, sourceUuid, sourceService, targetService, (long)mSize );
-
-/*------------------------------------------------------------------------*\
-   Lock list mutex and execute all registered callbacks
-\*------------------------------------------------------------------------*/
-  pthread_mutex_lock( &ictx->discoveryCbsMutex );
-  for( walk=ictx->discoveryCbs; walk; walk=walk->next )
-    ((ickP2pMessageCb_t)walk->callback)( ictx, sourceUuid, sourceService, targetService, message, mSize );
-  pthread_mutex_unlock( &ictx->discoveryCbsMutex );
-}
 
 
 #pragma mark -- Setters and getters

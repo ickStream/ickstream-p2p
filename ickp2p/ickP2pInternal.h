@@ -137,6 +137,7 @@ struct _ickP2pContext {
   ickP2pServicetype_t          ickServices;
 
   // Web socket layer
+  ickP2pConnectMatrixCb_t      lwsConnectMatrixCb;
   struct libwebsocket_context *lwsContext;
   int                          lwsPort;
   ickPolllist_t                lwsPolllist;
@@ -199,9 +200,6 @@ ickDevice_t *_ickLibDeviceFindByWsi( ickP2pContext_t *ictx,struct libwebsocket *
 
 void _ickLibExecDiscoveryCallback( ickP2pContext_t *ictx,
              const ickDevice_t *dev, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type );
-void _ickLibExecMessageCallback( ickP2pContext_t *ictx,
-             const char *sourceUuid, ickP2pServicetype_t sourceService,
-             ickP2pServicetype_t targetService, const char* message, size_t mSize );
 
 void _ickLibWGettersLock( ickP2pContext_t *ictx );
 void _ickLibWGettersUnlock( ickP2pContext_t *ictx  );

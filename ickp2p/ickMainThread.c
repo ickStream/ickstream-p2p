@@ -938,8 +938,10 @@ static int _ickPolllistAdd( ickPolllist_t *plist, int fd, int events )
   if( plist->nfds>=plist->size ) {
     struct pollfd *fds;
     fds = realloc( plist->fds, (plist->size+plist->increment) *sizeof(struct pollfd) );
-    if( !fds )
+    if( !fds ) {
+      logerr( "_ickPolllistAdd: out of memory" );
       return -1;
+    }
     plist->fds   = fds;
     plist->size += plist->increment;
   }

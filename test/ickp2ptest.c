@@ -79,6 +79,7 @@ static volatile int stop_signal;
 \*=========================================================================*/
 static void sigHandler( int sig, siginfo_t *siginfo, void *context );
 static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type );
+static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices, const char* message, size_t mSize );
 
 
 
@@ -135,6 +136,11 @@ int main( int argc, char *argv[] )
   irc = ickP2pRegisterDiscoveryCallback( ictx, ickDiscoverCb );
   if( irc ) {
     printf( "ickP2pRegisterDiscoveryCallback: %s\n", ickStrError(irc) );
+    goto end;
+  }
+  irc = ickP2pRegisterMessageCallback( ictx, ickMessageCb );
+  if( irc ) {
+    printf( "ickP2pRegisterMessageCallback: %s\n", ickStrError(irc) );
     goto end;
   }
 
@@ -212,7 +218,7 @@ end:
 
 
 /*=========================================================================*\
-    Caled when devices or services are found or terminated
+    Called when devices or services are found or terminated
 \*=========================================================================*/
 static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type )
 {
@@ -253,6 +259,19 @@ static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDiscov
   }
 
   printf( "%s: %s -- %s %s\n", ickP2pGetIf(ictx), uuid, cstr, tstr );
+}
+
+
+/*=========================================================================*\
+    Called for incoming messages
+\*=========================================================================*/
+static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid,
+                          ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices,
+                          const char* message, size_t mSize )
+{
+  printf( "%s: message from %s,0x%02x -> 0x%02x \"%.20s\" (%ld bytes)\n",
+          ickP2pGetIf(ictx), sourceUuid, sourceService, targetServices, message, (long)mSize );
+
 }
 
 

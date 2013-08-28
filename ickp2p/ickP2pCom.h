@@ -66,9 +66,11 @@ Remarks         : -
 //
 typedef struct {
   ickP2pContext_t *ictx;         // weak
-  char            *uuid;       // strong
-  char            *host;       // strong
-  ickDevice_t     *device;     // weak
+  char            *uuid;         // strong
+  char            *host;         // strong
+  ickDevice_t     *device;       // weak
+  unsigned char   *inBuffer;     // strong;
+  size_t           inBufferSize;
 } _ickLwsP2pData_t;
 
 
@@ -97,7 +99,6 @@ int    _lwsP2pCb( struct libwebsocket_context *context,
                   struct libwebsocket *wsi,
                   enum libwebsocket_callback_reasons reason, void *user,
                   void *in, size_t len );
-
 
 
 #endif /* __ICKP2PCOM_H */

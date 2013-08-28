@@ -139,7 +139,8 @@ typedef struct _ickP2pContext ickP2pContext_t;
 \*------------------------------------------------------------------------*/
 typedef void         (*ickP2pEndCb_t)( ickP2pContext_t *ictx );
 typedef void         (*ickP2pDiscoveryCb_t)( ickP2pContext_t *ictx, const char *uuid, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type );
-typedef ickErrcode_t (*ickP2pMessageCb_t)( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetService, const char* message, size_t mSize );
+typedef ickErrcode_t (*ickP2pMessageCb_t)( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices, const char* message, size_t mSize );
+typedef int          (*ickP2pConnectMatrixCb_t)( ickP2pContext_t *ictx, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetService );
 typedef void         (*ickP2pLogFacility_t)( const char *file, int line, int prio, const char * format, ... );
 
 
@@ -178,6 +179,7 @@ ickErrcode_t      ickDeviceRemoveMessageCallback( ickP2pContext_t *ictx,ickP2pMe
 ickErrcode_t      ickP2pAddinterface( ickP2pContext_t *ictx, const char *ifname );
 
 ickErrcode_t         ickP2pSetName( ickP2pContext_t *ictx, const char *name );
+ickErrcode_t         ickP2pSetConnectMatrix( ickP2pContext_t *ictx, ickP2pConnectMatrixCb_t matrixCb );
 ickP2pLibState_t     ickP2pGetState( const ickP2pContext_t *ictx );
 const char          *ickP2pGetOsName( const ickP2pContext_t *ictx );
 const char          *ickP2pGetName( const ickP2pContext_t *ictx );

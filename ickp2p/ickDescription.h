@@ -124,10 +124,10 @@ typedef enum {
   ICKP2PLEVEL_GENERIC         = 0,     // first protocol version or unknown
   ICKP2PLEVEL_TARGETSERVICES  = 0x01,  // include target service type with messages
   ICKP2PLEVEL_SOURCESERVICE   = 0x02,  // include source service in message
-/* Not needed since each device has a unique UUID. Use source service instead
+  // fixme:  Not needed since each device has a unique UUID. Use source service instead
   ICKP2PLEVEL_TARGETUUID      = 0x04,  // include target UUID with services (when supporting more than one UUID per websocket)
   ICKP2PLEVEL_SOURCEUUID      = 0x08,  // include source UUID with services (when supporting more than one UUID per websocket)
-*/
+  //
   ICKP2PLEVEL_SUPPORTED       = 0x03,  // that's what we currently support: including the service types
   ICKP2PLEVEL_DEFAULT         = 0,     // that's what we currently use as the default
   ICKP2PLEVEL_INVALID         = 0xf0   // mask to find illegal codes. Used to be backward compatible with previous implementations usually starting messages with "{" or "[". Should be deprecated until launch, then we can use 8 bits for protocol properties
