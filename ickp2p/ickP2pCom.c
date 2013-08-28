@@ -594,10 +594,13 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
       // Error handling
       if( remainder<0 ) {
-        _ickDeviceUnlock( psd->device );
         logerr( "_lwsP2pCb %d: error writing to \"%s\"", socket, psd->device->uuid );
-        // fixme: mark device descriptor
-        return -1;
+        // fixme: callback and mark device descriptor
+        _ickDeviceRemoveAndFreeMessage( psd->device, message );
+        if( _ickDeviceOutQueue(psd->device) )
+          libwebsocket_callback_on_writable( context, wsi );
+        _ickDeviceUnlock( psd->device );
+        break;;
       }
 
       // If not complete book another write callback
@@ -622,12 +625,14 @@ int _lwsP2pCb( struct libwebsocket_context *context,
     case LWS_CALLBACK_CLIENT_RECEIVE:
       socket = libwebsocket_get_socket_fd( wsi );
       rlen   = libwebsockets_remaining_packet_payload( wsi );
-      debug( "_lwsP2pCb %d: %s ready to receive (%ld bytes, %ld remain)", socket,
+  int final = libwebsocket_is_final_fragment( wsi );
+
+      debug( "_lwsP2pCb %d: %s ready to receive (%ld bytes, %ld remain, %s)", socket,
              reason==LWS_CALLBACK_CLIENT_RECEIVE?"client":"server",
-             (long)len, (long)rlen );
+             (long)len, (long)rlen, final?"final":"to be continued" );
 
       // No fragmentation? Execute callbacks directly
-      if( !psd->inBuffer && !rlen ) {
+      if( !psd->inBuffer && /* !rlen && */ final) {
         _ickP2pExecMessageCallback( ictx, psd->device, in, len );
         break;
       }
@@ -646,7 +651,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       psd->inBufferSize += len;
 
       // If complete: execute callbacks and clean up
-      if( !rlen ) {
+      if( /* !rlen */ final ) {
         _ickP2pExecMessageCallback( ictx, psd->device, psd->inBuffer, psd->inBufferSize );
         Sfree( psd->inBuffer );
         psd->inBufferSize = 0;
@@ -662,6 +667,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       debug( "_lwsP2pCb %d: connection closed", socket );
 
       //fixme: mark devices descriptor
+      if( psd->device )
+        psd->device->wsi = NULL;
+
       // Free per session data
       Sfree( psd->uuid );
       Sfree( psd->host );
@@ -740,22 +748,32 @@ static int _ickP2pComTransmit( struct libwebsocket *wsi, ickMessage_t *message )
 {
   size_t left;
   int    len;
+  int    wmode;
 
 /*------------------------------------------------------------------------*\
     Calculate remaining bytes
 \*------------------------------------------------------------------------*/
-  left = ICKMESSAGE_REMAINDER( message );
-  debug( "_ickP2pComTransmit (%p): pptr=%p, wptr=%p (wptr-pptr-pad)=%ld size=%ld",
-         wsi, message->payload, message->writeptr,
-         message->writeptr - message->payload - LWS_SEND_BUFFER_PRE_PADDING,
-         (long)message->size );
-  debug( "_ickP2pComTransmit (%p): %ld/%ld bytes",
-         wsi, (long)left, (long)message->size );
+  left = message->size - message->issued;
+  debug( "_ickP2pComTransmit (%p): pptr=%p, issued=%ld size=%ld",
+         wsi, message->payload, (long)message->issued, (long)message->size );
+  debug( "_ickP2pComTransmit (%p): %ld/%ld bytes done, %ld left",
+         wsi, (long)message->issued, (long)message->size, (long)left );
+
+/*------------------------------------------------------------------------*\
+    Generate fragments.
+\*------------------------------------------------------------------------*/
+  wmode =  message->issued ? LWS_WRITE_CONTINUATION : LWS_WRITE_BINARY;
+  if( left>1024 ) {
+    left = 1024;
+    wmode |= LWS_WRITE_NO_FIN;
+  }
+  debug( "_ickP2pComTransmit (%p): sending %ld bytes, wmode 0x%02x",
+         wsi, (long)left, wmode );
 
 /*------------------------------------------------------------------------*\
     Try to send
 \*------------------------------------------------------------------------*/
-  len = libwebsocket_write( wsi, message->writeptr, left, LWS_WRITE_BINARY );
+  len = libwebsocket_write( wsi, message->payload+LWS_SEND_BUFFER_PRE_PADDING+message->issued, left, wmode );
   debug( "_ickP2pComTransmit (%p): libwebsocket_write returned %d", wsi, len );
   if( len<0 )
     return -1;
@@ -767,12 +785,12 @@ static int _ickP2pComTransmit( struct libwebsocket *wsi, ickMessage_t *message )
 /*------------------------------------------------------------------------*\
     Calculate new write pointer
 \*------------------------------------------------------------------------*/
-  message->writeptr += len;
+  message->issued += len;
 
 /*------------------------------------------------------------------------*\
     return new leftover
 \*------------------------------------------------------------------------*/
-  return (int)ICKMESSAGE_REMAINDER( message );
+  return (int)(message->size - message->issued);
 }
 
 

@@ -851,30 +851,32 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 \*=========================================================================*/
 static void _ickDeviceExpireCb( const ickTimer_t *timer, void *data, int tag )
 {
-  ickDevice_t *device = data;
+  ickDevice_t     *device = data;
+  ickP2pContext_t *ictx   = device->ictx;
+
 
   debug( "_ickDeviceExpireCb: %s", device->uuid );
 
 /*------------------------------------------------------------------------*\
     Lock device list
 \*------------------------------------------------------------------------*/
-  _ickLibDeviceListLock( device->ictx );
+  _ickLibDeviceListLock( ictx );
 
 /*------------------------------------------------------------------------*\
     Execute callback with all registered services
 \*------------------------------------------------------------------------*/
-  _ickLibExecDiscoveryCallback( device->ictx, device, ICKP2P_EXPIRED, device->services );
+  _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_EXPIRED, device->services );
 
 /*------------------------------------------------------------------------*\
     Unlink from device list and free instance
 \*------------------------------------------------------------------------*/
-  _ickLibDeviceRemove( device->ictx, device );
+  _ickLibDeviceRemove( ictx, device );
   _ickDeviceFree( device );
 
 /*------------------------------------------------------------------------*\
     Release device list locks
 \*------------------------------------------------------------------------*/
-  _ickLibDeviceListUnlock( device->ictx );
+  _ickLibDeviceListUnlock( ictx );
 }
 
 

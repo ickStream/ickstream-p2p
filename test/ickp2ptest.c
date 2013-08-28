@@ -71,6 +71,9 @@ Remarks         : -
 #define UUID        "3fe109ad-aa4c-4b0e-a089-3e30f5fc1afe"
 #define IFNAME      "wlan0"
 
+#define VLP_SIZE    23456L
+#define VLP_MODUL   251
+
 static volatile int stop_signal;
 
 
@@ -94,6 +97,8 @@ int main( int argc, char *argv[] )
   char                 uuidStr[37];
   ickP2pServicetype_t  service;
   int                  cntr;
+  char                *vlp;
+  long                 i;
 
 
 /*------------------------------------------------------------------------*\
@@ -110,6 +115,17 @@ int main( int argc, char *argv[] )
   uuid_generate( uuid );
   uuid_unparse( uuid, uuidStr );
   service = 1<<random()%4;
+
+/*------------------------------------------------------------------------*\
+    Create a very large payload message
+\*------------------------------------------------------------------------*/
+  vlp = malloc( VLP_SIZE );
+  if( !vlp ) {
+    printf( "%s: could not allocate %ld bytes\n", argv[0], VLP_SIZE );
+    return -1;
+  }
+  for( i=0; i<VLP_SIZE; i++ )
+    vlp[i] = (char)(i%VLP_MODUL);
 
 /*------------------------------------------------------------------------*\
     OK, from here on we catch some terminating signals and ignore others
@@ -190,9 +206,17 @@ int main( int argc, char *argv[] )
     irc = ickP2pSendMsg( ictx, NULL, ICKP2P_SERVICE_ANY, service, buffer, 0 );
     if( irc ) {
       printf( "ickP2pSendMsg: %s\n", ickStrError(irc) );
-//      goto end;
+      goto end;
     }
 
+    if( !(cntr%10) ) {
+      printf( "Sending very large payload (%ld bytes) message #%03d...\n", (long)VLP_SIZE, ++cntr );
+      irc = ickP2pSendMsg( ictx, NULL, ICKP2P_SERVICE_ANY, service, vlp, VLP_SIZE );
+      if( irc ) {
+        printf( "ickP2pSendMsg: %s\n", ickStrError(irc) );
+        goto end;
+      }
+    }
 
     // wait a random time [0-9s]
     sleep( random()%10 );
@@ -269,9 +293,25 @@ static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid,
                           ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices,
                           const char* message, size_t mSize )
 {
-  printf( "%s: message from %s,0x%02x -> 0x%02x \"%.20s\" (%ld bytes)\n",
-          ickP2pGetIf(ictx), sourceUuid, sourceService, targetServices, message, (long)mSize );
+  long i;
 
+/*------------------------------------------------------------------------*\
+    Print meta data and message snippet
+\*------------------------------------------------------------------------*/
+  printf( "%s: message from %s,0x%02x -> 0x%02x \"%.30s%s\" (%ld bytes)\n",
+          ickP2pGetIf(ictx), sourceUuid, sourceService, targetServices, message,
+          mSize>30?"...":"", (long)mSize );
+
+/*------------------------------------------------------------------------*\
+    Check integrity of VLP
+\*------------------------------------------------------------------------*/
+  if( mSize>VLP_SIZE-10 ) {
+    for( i=0; i<VLP_SIZE; i++ )
+      if( message[i] != (char)(i%VLP_MODUL) )
+        break;
+    if( i<VLP_SIZE )
+      printf( "VLP is corrupt at position %ld", i );
+  }
 }
 
 

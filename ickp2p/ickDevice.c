@@ -232,7 +232,7 @@ ickErrcode_t _ickDeviceAddMessage( ickDevice_t *device, void *container, size_t 
   }
   message->payload  = container;
   message->size     = size;
-  message->writeptr = container + LWS_SEND_BUFFER_PRE_PADDING;
+  message->issued   = 0;
 
 /*------------------------------------------------------------------------*\
     Link to end of output queue

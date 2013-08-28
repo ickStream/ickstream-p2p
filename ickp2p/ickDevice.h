@@ -73,11 +73,9 @@ struct _ickMessage {
   ickMessage_t  *next;
   ickMessage_t  *prev;
   unsigned char *payload;    // strong
-  unsigned char *writeptr;
-  size_t        size;
+  size_t         size;
+  size_t         issued;
 };
-
-#define ICKMESSAGE_REMAINDER(m) ((m)->size - ((m)->writeptr-(m)->payload-LWS_SEND_BUFFER_PRE_PADDING))
 
 //
 // Type of device creation
