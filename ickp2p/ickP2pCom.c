@@ -76,6 +76,7 @@ Remarks         : refactored from ickP2PComm.c
 /*=========================================================================*\
   Private prototypes
 \*=========================================================================*/
+static void  _ickWriteTimerCb( const ickTimer_t *timer, void *data, int tag );
 static void  _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t *device,
                                          const void *message, size_t mSize );
 static int   _ickP2pComTransmit( struct libwebsocket *wsi, ickMessage_t *message );
@@ -655,6 +656,22 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         break;
       }
 
+      // Check if protocol level is already known. This might not the case for incoming LWS connections
+      // when the XML file was not yet received or interpreted. Then delay the sending of messages as
+      // we cannot construct a preamble. Recheck in 100 ms
+      if( psd->device->ickP2pLevel==ICKP2PLEVEL_GENERIC ) {
+        _ickTimerListLock( ictx );
+        if( !_ickTimerFind(ictx,_ickWriteTimerCb,psd->device,0) ) {
+          ickErrcode_t irc;
+          irc = _ickTimerAdd( ictx, 100, 1, _ickWriteTimerCb, psd->device, 0 );
+          if( irc )
+            logerr( "_lwsP2pCb (%s): could not create write timer (%s)",
+                    psd->uuid, ickStrError(irc) );
+        }
+        _ickTimerListUnlock( ictx );
+        break;
+      }
+
       // Try to transmit the current message
       remainder = _ickP2pComTransmit( wsi, message );
 
@@ -739,8 +756,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       socket = libwebsocket_get_socket_fd( wsi );
       debug( "_lwsP2pCb %d: connection closed", socket );
 
-      // Remove heartbeat handler for this device
+      // Remove heartbeat and delayed write handler for this device
       _ickTimerDeleteAll( ictx, _ickDeviceHeartbeatTimerCb, psd->device, 0 );
+      _ickTimerDeleteAll( ictx, _ickWriteTimerCb, psd->device, 0 );
 
       //fixme: mark devices descriptor
       if( psd->device )
@@ -768,6 +786,18 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
 
 /*=========================================================================*\
+  Execute a timed write request for an wsi
+\*=========================================================================*/
+static void _ickWriteTimerCb( const ickTimer_t *timer, void *data, int tag )
+{
+  const ickDevice_t *device = data;
+  debug( "_ickWriteTimerCb: \"%s\"", device->wsi );
+
+  libwebsocket_callback_on_writable( device->ictx->lwsContext, device->wsi );
+}
+
+
+/*=========================================================================*\
   Execute a messaging callback
     Message is the raw message including preamble
 \*=========================================================================*/
@@ -786,16 +816,6 @@ static void _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t
   if( mSize==1 && !*payload ) {
     debug( "_ickP2pExecMessageCallback (%p): Heartbeat from %s",
            ictx, device->uuid );
-    return;
-  }
-
-  // fixme: for incoming connections there might be lws messages received before the xml file was
-  //        interpreted, in that case the ickP2pLevel of the device is not set. We need to drop
-  //        those messages, since we cannot interpret the preamble.
-  //        The better solution would be to send the xml file as first message and don't use
-  //        the http retrieval for incoming connections
-  if( device->ickP2pLevel==ICKP2PLEVEL_GENERIC ) {
-    logwarn( "_ickP2pExecMessageCallback: dropping message from \"%s\" received prior to xml answer.", device->uuid );
     return;
   }
 
