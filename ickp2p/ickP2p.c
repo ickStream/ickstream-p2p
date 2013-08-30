@@ -139,7 +139,7 @@ const char *ickP2pGitVersion( void )
   Create an ickstream contex
 \*=========================================================================*/
 ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
-                               const char *upnpFolder, int liveTime,
+                               const char *upnpFolder, int lifetime,
                                const char *hostname, const char *ifname, int port,
                                ickP2pServicetype_t services,
                                ickErrcode_t *error )
@@ -150,8 +150,8 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
   char             buffer[64];
   struct utsname   utsname;
 
-  debug( "ickP2pCreate: \"%s\" (%s) lt=%d folder=\"%s\" livetime=%ds",
-         deviceName, deviceUuid, liveTime, upnpFolder, liveTime );
+  debug( "ickP2pCreate: \"%s\" (%s) lt=%ds folder=\"%s\"",
+         deviceName, deviceUuid, lifetime, upnpFolder  );
   debug( "ickP2pCreate: wost=\"%s\" if=\"%s\" port=%d services=0x%02x",
          hostname, ifname, port, services );
 
@@ -186,7 +186,7 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
   }
   ictx->state       = ICKLIB_CREATED;
   ictx->upnpPort    = port;
-  ictx->liveTime    = liveTime;
+  ictx->lifetime    = lifetime;
   ictx->ickServices = services;
 
 /*------------------------------------------------------------------------*\
@@ -912,11 +912,11 @@ long ickP2pGetConfigId( const ickP2pContext_t *ictx )
 }
 
 /*=========================================================================*\
-  Get livetime of announcements
+  Get lifetime of announcements
 \*=========================================================================*/
-int ickP2pGetLiveTime( const ickP2pContext_t *ictx )
+int ickP2pGetLifetime( const ickP2pContext_t *ictx )
 {
-  return ictx->liveTime;
+  return ictx->lifetime;
 }
 
 

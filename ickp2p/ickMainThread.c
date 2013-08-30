@@ -852,6 +852,68 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
 }
 
 
+#pragma mark -- Timer callbacks
+
+
+/*=========================================================================*\
+  A device has expired: remove from a discovery context
+    timer list is already locked as this is a timer callback
+\*=========================================================================*/
+void _ickDeviceExpireTimerCb( const ickTimer_t *timer, void *data, int tag )
+{
+  ickDevice_t     *device = data;
+  ickP2pContext_t *ictx   = device->ictx;
+
+  debug( "_ickDeviceExpireCb: %s", device->uuid );
+
+/*------------------------------------------------------------------------*\
+    Lock device list
+\*------------------------------------------------------------------------*/
+  _ickLibDeviceListLock( ictx );
+
+/*------------------------------------------------------------------------*\
+    Execute callback with all registered services
+\*------------------------------------------------------------------------*/
+  _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_EXPIRED, device->services );
+
+/*------------------------------------------------------------------------*\
+    Remove heartbeat handler for this device
+\*------------------------------------------------------------------------*/
+  _ickTimerDeleteAll( ictx, _ickDeviceHeartbeatTimerCb, device, 0 );
+
+/*------------------------------------------------------------------------*\
+    Unlink from device list and free instance
+\*------------------------------------------------------------------------*/
+  _ickLibDeviceRemove( ictx, device );
+  _ickDeviceFree( device );
+
+/*------------------------------------------------------------------------*\
+    Release device list locks
+\*------------------------------------------------------------------------*/
+  _ickLibDeviceListUnlock( ictx );
+}
+
+
+/*=========================================================================*\
+  Send heart bet on a LWS connection. This is done to reset the expiration
+    timer in case a ws connection exists but SSDP is not routed.
+    timer list is already locked as this is a timer callback
+\*=========================================================================*/
+void _ickDeviceHeartbeatTimerCb( const ickTimer_t *timer, void *data, int tag )
+{
+  ickDevice_t     *device = data;
+  ickP2pContext_t *ictx   = device->ictx;
+
+  debug( "_ickDeviceHeartbeatTimerCb: %s", device->uuid );
+
+/*------------------------------------------------------------------------*\
+    Queue heartbeat message
+\*------------------------------------------------------------------------*/
+  _ickP2pSendNullMessage( ictx, device );
+
+}
+
+
 #pragma mark -- Manage polling list
 
 

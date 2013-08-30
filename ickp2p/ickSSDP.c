@@ -114,7 +114,6 @@ typedef struct {
 \*=========================================================================*/
 static int   _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
 static int   _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
-static void  _ickDeviceExpireCb( const ickTimer_t *timer, void *data, int tag );
 
 static void         _ickSsdpAnnounceCb( const ickTimer_t *timer, void *data, int tag );
 static void         _ickSsdpSearchCb( const ickTimer_t *timer, void *data, int tag );
@@ -245,7 +244,7 @@ ickSsdp_t *_ickSsdpParse( const char *buffer, size_t length, const struct sockad
 /*------------------------------------------------------------------------*\
     Some defaults
 \*------------------------------------------------------------------------*/
-  ssdp->livetime = ICKSSDP_DEFAULTLIVETIME;
+  ssdp->lifetime = ICKSSDP_DEFAULTLIFETIME;
 
 /*------------------------------------------------------------------------*\
     Loop over all lines
@@ -429,11 +428,11 @@ ickSsdp_t *_ickSsdpParse( const char *buffer, size_t length, const struct sockad
       if( !ptr || strncmp(value,"max-age",7) )
         logwarn("_ickSsdpParse (%s): Invalid CACHE-CONTROL header value \"%s\"", peer, value );
       else {
-        unsigned long livetime = strtoul( ptr+1, &ptr, 10 );
+        unsigned long lifetime = strtoul( ptr+1, &ptr, 10 );
         if( *ptr )
           logwarn("_ickSsdpParse (%s): CACHE-CONTROL:max-age is not a number (%s)", peer, value );
         else
-          ssdp->livetime = livetime;
+          ssdp->lifetime = lifetime;
       }
     }
 
@@ -615,7 +614,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
       return -1;
     }
     device->services       = stype;
-    device->livetime       = ssdp->livetime;
+    device->lifetime       = ssdp->lifetime;
     device->ickUpnpVersion = _ssdpGetVersion( ssdp->usn );
 
     //fixme: Ver.1 devices only answer to root requests
@@ -650,8 +649,8 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     _ickLibWGettersAdd( ictx, wget );
     _ickLibWGettersUnlock( ictx );
 
-    // Create expire timer
-    irc = _ickTimerAdd( ictx, device->livetime*1000, 1, _ickDeviceExpireCb, device, 0 );
+    // Create expiration timer
+    irc = _ickTimerAdd( ictx, device->lifetime*1000, 1, _ickDeviceExpireTimerCb, device, 0 );
     if( irc ) {
       logerr( "_ickDeviceUpdate (%s): could not create expiration timer (%s)",
           device->uuid, ickStrError(irc) );
@@ -680,16 +679,16 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   debug ( "_ickDeviceUpdate (%s): found an instance (updating).", ssdp->usn );
 
   // Update timestamp for expiration time
-  device->livetime = ssdp->livetime;
+  device->lifetime = ssdp->lifetime;
 
   // Find and modify expiration handler for this device
-  timer = _ickTimerFind( ictx, _ickDeviceExpireCb, device, 0 );
+  timer = _ickTimerFind( ictx, _ickDeviceExpireTimerCb, device, 0 );
   if( timer )
-    _ickTimerUpdate( ictx, timer, device->livetime*1000, 1 );
+    _ickTimerUpdate( ictx, timer, device->lifetime*1000, 1 );
   else {
     if( device->type==ICKDEVICE_SSDP )
       logerr( "_ickDeviceUpdate: could not find expiration timer." );
-    irc = _ickTimerAdd( ictx, device->livetime*1000, 1, _ickDeviceExpireCb, device, 0 );
+    irc = _ickTimerAdd( ictx, device->lifetime*1000, 1, _ickDeviceExpireTimerCb, device, 0 );
     if( irc ) {
       logerr( "_ickDeviceUpdate (%s): could not create expiration timer (%s)",
           device->uuid, ickStrError(irc) );
@@ -807,12 +806,11 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     // Unlink from device list
     _ickLibDeviceRemove( ictx, device );
 
-    // Find and remove expiration handler for this device
-    timer = _ickTimerFind( ictx, _ickDeviceExpireCb, device, 0 );
-    if( timer )
-      _ickTimerDelete( ictx, timer );
-    else
-      logerr( "_ickDeviceRemove: could not find expiration timer." );
+    // Remove expiration handler for this device
+    _ickTimerDeleteAll( ictx, _ickDeviceExpireTimerCb, device, 0 );
+
+    // Remove heartbeat handler for this device
+    _ickTimerDeleteAll( ictx, _ickDeviceHeartbeatTimerCb, device, 0 );
 
     // Find and remove HTTP clients for this device
     _ickLibWGettersLock( ictx );
@@ -842,41 +840,6 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     That's all (code 2 indicates that a device or service was removed)
 \*------------------------------------------------------------------------*/
   return 2;
-}
-
-
-/*=========================================================================*\
-  A device or service has expired: remove from a discovery context
-    timer list is already locked
-\*=========================================================================*/
-static void _ickDeviceExpireCb( const ickTimer_t *timer, void *data, int tag )
-{
-  ickDevice_t     *device = data;
-  ickP2pContext_t *ictx   = device->ictx;
-
-
-  debug( "_ickDeviceExpireCb: %s", device->uuid );
-
-/*------------------------------------------------------------------------*\
-    Lock device list
-\*------------------------------------------------------------------------*/
-  _ickLibDeviceListLock( ictx );
-
-/*------------------------------------------------------------------------*\
-    Execute callback with all registered services
-\*------------------------------------------------------------------------*/
-  _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_EXPIRED, device->services );
-
-/*------------------------------------------------------------------------*\
-    Unlink from device list and free instance
-\*------------------------------------------------------------------------*/
-  _ickLibDeviceRemove( ictx, device );
-  _ickDeviceFree( device );
-
-/*------------------------------------------------------------------------*\
-    Release device list locks
-\*------------------------------------------------------------------------*/
-  _ickLibDeviceListUnlock( ictx );
 }
 
 
@@ -917,9 +880,9 @@ ickErrcode_t _ickSsdpNewDiscovery( ickP2pContext_t *ictx )
 /*------------------------------------------------------------------------*\
     Setup announcement timer
 \*------------------------------------------------------------------------*/
-  long interval = ictx->liveTime/ICKSSDP_ANNOUNCEDIVIDOR;
+  long interval = ictx->lifetime/ICKSSDP_ANNOUNCEDIVIDOR;
   if( interval<=0 )
-    interval = ICKSSDP_DEFAULTLIVETIME/ICKSSDP_ANNOUNCEDIVIDOR;
+    interval = ICKSSDP_DEFAULTLIFETIME/ICKSSDP_ANNOUNCEDIVIDOR;
   _ickTimerAdd( ictx, interval*1000, 0, _ickSsdpAnnounceCb, (void*)ictx, 0 );
 
 /*------------------------------------------------------------------------*\
@@ -1392,7 +1355,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
         "BOOTID.UPNP.ORG: %ld\r\n"
         "CONFIGID.UPNP.ORG: %ld\r\n"
         "\r\n",
-        ICKSSDP_MCASTADDR, ictx->upnpPort, ictx->liveTime,
+        ICKSSDP_MCASTADDR, ictx->upnpPort, ictx->lifetime,
         ictx->locationRoot, sstr,
         nst, ictx->osName, usn,
         ictx->upnpBootId, ictx->upnpConfigId );
@@ -1448,7 +1411,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
         "BOOTID.UPNP.ORG: %ld\r\n"
         "CONFIGID.UPNP.ORG: %ld\r\n"
         "\r\n",
-        ictx->liveTime, timestr,
+        ictx->lifetime, timestr,
         ictx->locationRoot, sstr,
         ictx->osName, nst, usn,
         ictx->upnpBootId, ictx->upnpConfigId );

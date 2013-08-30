@@ -61,6 +61,7 @@ Remarks         : -
 #include "ickDevice.h"
 #include "ickSSDP.h"
 #include "ickWGet.h"
+#include "ickMainThread.h"
 #include "ickDescription.h"
 
 
@@ -89,6 +90,7 @@ typedef struct {
   char                *deviceName;            // strong
   ickP2pLevel_t        protocolLevel;
   ickP2pServicetype_t  services;
+  int                  lifetime;
 
 } ickXmlUserData_t;
 
@@ -247,8 +249,9 @@ char *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket 
                     "  <modelDescription>%s</modelDescription>\r\n"
                     "  <modelName>%s</modelName>\r\n"
                     "  <UDN>uuid:%s</UDN>\r\n"
-                    "  <protocolLevel>%d</protocolLevel>"
-                    "  <services>%d</services>"
+                    "  <protocolLevel>%d</protocolLevel>\r\n"
+                    "  <services>%d</services>\r\n"
+                    "  <lifetime>%d</lifetime>\r\n"
                     " </device>\r\n"
                     "</root>",
 
@@ -262,7 +265,8 @@ char *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket 
                     ickUpnpNames.modelName,
                     ictx->deviceUuid,
                     ICKP2PLEVEL_SUPPORTED,
-                    ictx->ickServices
+                    ictx->ickServices,
+                    ictx->lifetime
                   );
 
 /*------------------------------------------------------------------------*\
@@ -349,6 +353,7 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
       memset( &_xmlUserData, 0, sizeof(_xmlUserData) );
       _xmlUserData.protocolLevel = ICKP2PLEVEL_GENERIC;
       _xmlUserData.services      = ICKP2P_SERVICE_GENERIC;
+      _xmlUserData.lifetime      = ICKSSDP_DEFAULTLIFETIME;
       _xmlParser.xmlstart        = _ickWGetPayload( context );
       _xmlParser.xmlsize         = _ickWGetPayloadSize( context );
       _xmlParser.data            = &_xmlUserData;
@@ -376,11 +381,31 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
       else if( ~device->services&_xmlUserData.services )
         logwarn( "_ickWGetXmlCb (%s): found subset of already known services", uri );
       device->services |= _xmlUserData.services;
-
+      if( !device->lifetime )
+        device->lifetime  = _xmlUserData.lifetime;
       _ickDeviceUnlock( device );
 
       // Clean up
       Sfree( _xmlUserData.deviceName );
+
+      // Create expiration and heartbeat timer if necessary (could have been created by an SSDP announcement in the meanwhile)
+      _ickTimerListLock( device->ictx );
+      if( !_ickTimerFind(device->ictx,_ickDeviceExpireTimerCb,device,0) ) {
+        ickErrcode_t irc;
+        irc = _ickTimerAdd( device->ictx, device->lifetime*1000, 1, _ickDeviceExpireTimerCb, device, 0 );
+        if( irc )
+          logerr( "_ickWGetXmlCb (%s): could not create expiration timer (%s)",
+                  uri, ickStrError(irc) );
+      }
+      // Create heartbeat timer on LWS layer (fallback if no SSDP connection exists)
+      if( !_ickTimerFind(device->ictx,_ickDeviceHeartbeatTimerCb,device,0) ) {
+        ickErrcode_t irc;
+        irc = _ickTimerAdd( device->ictx, device->lifetime*1000, 0, _ickDeviceHeartbeatTimerCb, device, 0 );
+        if( irc )
+          logerr( "_ickWGetXmlCb (%s): could not create heartbeat timer (%s)",
+                  uri, ickStrError(irc) );
+      }
+      _ickTimerListUnlock( device->ictx );
 
       // Signal device readiness to user code
       _ickLibExecDiscoveryCallback( device->ictx, device, ICKP2P_NEW, device->services );
@@ -528,6 +553,20 @@ static void _ickParsexmlProcessData( void *data, const char *content, int len )
     }
     // should be terminated by non-digit, so it's safe to ignore len here
     xmlUserData->services = atoi( content );
+    return;
+  }
+
+/*------------------------------------------------------------------------*\
+  Found lifetime
+\*------------------------------------------------------------------------*/
+  if( !_strmcmp("lifetime",xmlUserData->eltPtr,xmlUserData->eltLen)) {
+    debug( "_ickParsexmlProcessData: found lifetime \"%.*s\"", len, content );
+    if( xmlUserData->services ) {
+      logwarn( "_ickParsexmlProcessData: found more then one service vector (ignoring)" );
+      return;
+    }
+    // should be terminated by non-digit, so it's safe to ignore len here
+    xmlUserData->lifetime = atoi( content );
     return;
   }
 

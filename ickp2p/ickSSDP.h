@@ -59,7 +59,7 @@ Remarks         : -
 /*=========================================================================*\
   Definition of constants
 \*=========================================================================*/
-#define ICKSSDP_DEFAULTLIVETIME 180
+#define ICKSSDP_DEFAULTLIFETIME 180
 #define ICKSSDP_SEARCHINTERVAL  59
 #define ICKSSDP_REPEATS         3
 #define ICKSSDP_ANNOUNCEDIVIDOR 3
@@ -117,7 +117,7 @@ struct _ickSsdp_t {
   long            bootid;
   long            configid;
   long            nextbootid;
-  int             livetime;
+  int             lifetime;
   int             mx;
 };
 typedef struct _ickSsdp_t ickSsdp_t;
@@ -148,6 +148,7 @@ int           _ickSsdpExecute( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
 ickErrcode_t  _ickSsdpNewDiscovery( ickP2pContext_t *ictx );
 void          _ickSsdpEndDiscovery( ickP2pContext_t *ictx );
 ickErrcode_t  _ickSsdpAnnounceServices( ickP2pContext_t *ictx, ickP2pServicetype_t service, ickSsdpMsgType_t mtype );
+
 
 
 

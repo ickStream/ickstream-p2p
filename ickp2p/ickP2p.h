@@ -163,7 +163,7 @@ void              ickP2pSetLogLevel( int level );
 const char       *ickStrError( ickErrcode_t code );
 
 ickP2pContext_t  *ickP2pCreate( const char *deviceName, const char *deviceUuid,
-                                const char *upnpFolder, int liveTime,
+                                const char *upnpFolder, int lifetime,
                                 const char *hostname, const char *ifname, int port,
                                 ickP2pServicetype_t services,
                                 ickErrcode_t *error );
@@ -185,7 +185,7 @@ const char          *ickP2pGetOsName( const ickP2pContext_t *ictx );
 const char          *ickP2pGetName( const ickP2pContext_t *ictx );
 const char          *ickP2pGetDeviceUuid( const ickP2pContext_t *ictx );
 const char          *ickP2pGetUpnpFolder( const ickP2pContext_t *ictx );
-int                  ickP2pGetLiveTime( const ickP2pContext_t *ictx );
+int                  ickP2pGetLifetime( const ickP2pContext_t *ictx );
 const char          *ickP2pGetHostname( const ickP2pContext_t *ictx );
 const char          *ickP2pGetIf( const ickP2pContext_t *ictx );
 int                  ickP2pGetLwsPort( const ickP2pContext_t *ictx );

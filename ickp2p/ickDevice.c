@@ -78,6 +78,9 @@ Remarks         : refactored from ickDiscoverRegistry
 \*=========================================================================*/
 // none
 
+// forward from ickP2pCom.h
+void _lwsAliveTimerCb( const ickTimer_t *timer, void *data, int tag );
+
 
 /*=========================================================================*\
     Create an new device

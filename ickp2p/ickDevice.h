@@ -97,7 +97,7 @@ struct _ickDevice {
   ickP2pContext_t     *ictx;            // weak
   pthread_mutex_t      mutex;
   ickDeviceType_t      type;
-  int                  livetime;
+  int                  lifetime;
   char                *uuid;          // strong
   char                *location;      // strong
   int                  ickUpnpVersion;
@@ -139,5 +139,6 @@ ickErrcode_t  _ickDeviceRemoveAndFreeMessage( ickDevice_t *device, ickMessage_t 
 ickMessage_t *_ickDeviceOutQueue( ickDevice_t *device );
 int           _ickDevicePendingMessages( ickDevice_t *device );
 size_t        _ickDevicePendingBytes( ickDevice_t *device );
+
 
 #endif /* __ICKSSDP_H */

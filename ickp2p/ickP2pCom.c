@@ -87,7 +87,7 @@ static void  _ickLwsDumpHeaders( struct libwebsocket *wsi );
 
 /*=========================================================================*\
   Send an ickstream message
-    dh             - discovery handler
+    ictx           - ickstream context
     uuid           - uuid of target, if NULL all known ickstream devices are
                      addressed
     targetServices - services at target to address
@@ -238,6 +238,59 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
     That's all
 \*------------------------------------------------------------------------*/
   return irc;
+}
+
+
+/*=========================================================================*\
+  Send a Null message (used for heart beat and syncing)
+    ictx           - ickstream context
+    device         - target device
+\*=========================================================================*/
+ickErrcode_t _ickP2pSendNullMessage( ickP2pContext_t *ictx, ickDevice_t *device )
+{
+  ickErrcode_t  irc = ICKERR_SUCCESS;
+  size_t        cSize;
+  char         *container;
+
+  debug( "_ickP2pSendNullMessage: target=\"%s\"", device->uuid );
+
+/*------------------------------------------------------------------------*\
+    Allocate payload container, include LWS padding and trailing zero
+\*------------------------------------------------------------------------*/
+  cSize = LWS_SEND_BUFFER_PRE_PADDING + 1 + LWS_SEND_BUFFER_POST_PADDING;
+  container = malloc( cSize );
+  if( !container ) {
+    logerr( "_ickP2pSendNullMessage: out of memory (%ld bytes)", (long)cSize );
+    return ICKERR_NOMEM;
+  }
+
+/*------------------------------------------------------------------------*\
+    Create null payload
+\*------------------------------------------------------------------------*/
+  container[LWS_SEND_BUFFER_PRE_PADDING] = 0;
+
+/*------------------------------------------------------------------------*\
+    Try queue message for transmission
+\*------------------------------------------------------------------------*/
+  irc = _ickDeviceAddMessage( device, container, 1 );
+  if( irc ) {
+    Sfree( container );
+    return irc;
+  }
+
+/*------------------------------------------------------------------------*\
+    Book a writable callback for the devices wsi
+\*------------------------------------------------------------------------*/
+  if( device->wsi )
+    libwebsocket_callback_on_writable( ictx->lwsContext, device->wsi );
+  else
+    debug( "_ickP2pSendNullMessage (%s): sending deferred, wsi not yet present.",
+           device->uuid );
+
+/*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
+  return ICKERR_SUCCESS;
 }
 
 
@@ -410,6 +463,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
   size_t             rlen;
   unsigned char     *ptr;
   char              *dscrPath;
+  ickTimer_t        *timer;
 
 /*------------------------------------------------------------------------*\
     What to do?
@@ -463,6 +517,17 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       socket = libwebsocket_get_socket_fd( wsi );
       debug( "_lwsP2pCb %d: client connection established, %d messages pending",
              socket, _ickDevicePendingMessages(psd->device) );
+
+      // Create heartbeat timer on LWS layer (fallback if no SSDP connection exists)
+      _ickTimerListLock( ictx );
+      if( !_ickTimerFind(ictx,_ickDeviceHeartbeatTimerCb,psd->device,0) ) {
+        ickErrcode_t irc;
+        irc = _ickTimerAdd( ictx, psd->device->lifetime*1000, 0, _ickDeviceHeartbeatTimerCb, psd->device, 0 );
+        if( irc )
+          logerr( "_lwsP2pCb (%s): could not create heartbeat timer (%s)",
+                  psd->uuid, ickStrError(irc) );
+      }
+      _ickTimerListUnlock( ictx );
 
       // Book a write event if a message is already pending
       if( _ickDeviceOutQueue(psd->device) )
@@ -554,7 +619,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         _ickLibWGettersAdd( ictx, wget );
         _ickLibWGettersUnlock( ictx );
 
-        // No expire timer for WS discovered devices
+        // Expiration and heartbeat timer for WS discovered devices will be created in _ickWGetXmlCb()
+        // fixme: there might be lws messages received before the xml file is interpreted, ...
 
         //Link New device to discovery handler
         _ickLibDeviceAdd( ictx, psd->device );
@@ -631,6 +697,13 @@ int _lwsP2pCb( struct libwebsocket_context *context,
              reason==LWS_CALLBACK_CLIENT_RECEIVE?"client":"server",
              (long)len, (long)rlen, final?"final":"to be continued" );
 
+      // reset timer
+      timer = _ickTimerFind( ictx, _ickDeviceExpireTimerCb, psd->device, 0 );
+      if( timer )
+        _ickTimerUpdate( ictx, timer, psd->device->lifetime*1000, 1 );
+      else
+        logerr( "_lwsP2pCb (%s): could not find expiration timer.", psd->uuid );
+
       // No fragmentation? Execute callbacks directly
       if( !psd->inBuffer && !rlen && final) {
         _ickP2pExecMessageCallback( ictx, psd->device, in, len );
@@ -665,6 +738,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
     case LWS_CALLBACK_CLOSED:
       socket = libwebsocket_get_socket_fd( wsi );
       debug( "_lwsP2pCb %d: connection closed", socket );
+
+      // Remove heartbeat handler for this device
+      _ickTimerDeleteAll( ictx, _ickDeviceHeartbeatTimerCb, psd->device, 0 );
 
       //fixme: mark devices descriptor
       if( psd->device )
@@ -705,6 +781,25 @@ static void _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t
   struct _cblist      *walk;
 
 /*------------------------------------------------------------------------*\
+  Ignore empty messages
+\*------------------------------------------------------------------------*/
+  if( mSize==1 && !*payload ) {
+    debug( "_ickP2pExecMessageCallback (%p): Heartbeat from %s",
+           ictx, device->uuid );
+    return;
+  }
+
+  // fixme: for incoming connections there might be lws messages received before the xml file was
+  //        interpreted, in that case the ickP2pLevel of the device is not set. We need to drop
+  //        those messages, since we cannot interpret the preamble.
+  //        The better solution would be to send the xml file as first message and don't use
+  //        the http retrieval for incoming connections
+  if( device->ickP2pLevel==ICKP2PLEVEL_GENERIC ) {
+    logwarn( "_ickP2pExecMessageCallback: dropping message from \"%s\" received prior to xml answer.", device->uuid );
+    return;
+  }
+
+/*------------------------------------------------------------------------*\
   Interpret preamble and find start of payload
 \*------------------------------------------------------------------------*/
   p2pLevel = *payload++;
@@ -723,6 +818,11 @@ static void _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t
   if( p2pLevel&ICKP2PLEVEL_SOURCEUUID ) {
     logwarn( "_ickP2pExecMessageCallback: found sourceuuid \"%s\" in message from \"%s\"", payload, device->uuid );
     message = strchr((const char*)payload,0) + 1;
+  }
+
+  if( payload-(const unsigned char*)message>mSize ) {
+    logerr( "_ickP2pExecMessageCallback: truncated message from \"%s\"", device->uuid );
+    return;
   }
 
   mSize -= payload-(const unsigned char*)message;

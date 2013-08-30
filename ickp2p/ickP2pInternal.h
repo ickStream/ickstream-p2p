@@ -121,7 +121,7 @@ struct _ickP2pContext {
   // Upnp/Ssdp layer
   char                        *deviceUuid;  // strong
   char                        *upnpFolder;  // strong
-  int                          liveTime;
+  int                          lifetime;
   long                         upnpBootId;
   long                         upnpConfigId;
   char                        *interface;      // strong
