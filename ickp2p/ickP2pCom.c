@@ -632,7 +632,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
              (long)len, (long)rlen, final?"final":"to be continued" );
 
       // No fragmentation? Execute callbacks directly
-      if( !psd->inBuffer && /* !rlen && */ final) {
+      if( !psd->inBuffer && !rlen && final) {
         _ickP2pExecMessageCallback( ictx, psd->device, in, len );
         break;
       }
@@ -651,7 +651,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       psd->inBufferSize += len;
 
       // If complete: execute callbacks and clean up
-      if( /* !rlen */ final ) {
+      if( !rlen && final ) {
         _ickP2pExecMessageCallback( ictx, psd->device, psd->inBuffer, psd->inBufferSize );
         Sfree( psd->inBuffer );
         psd->inBufferSize = 0;
