@@ -110,6 +110,7 @@ struct _ickDevice {
   double               tXmlComplete;
   double               tConnect;
   double               tDisconnect;
+  int                  localIsServer;
   int                  nRx;
   int                  nRxSegmented;
   int                  nTx;

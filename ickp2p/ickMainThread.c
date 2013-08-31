@@ -684,7 +684,7 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
 
       // Serve debug info?
 #ifdef ICK_P2PENABLEDEBUGAPI
-      if( !strncmp(in,ICK_P2PDEBUGURI,strlen(ICK_P2PDEBUGURI)) ) {
+      if( ictx->debugApiEnabled && !strncmp(in,ICK_P2PDEBUGURI,strlen(ICK_P2PDEBUGURI)) ) {
 
         // Get debug info
         psd->payload = _ickP2pGetDebugFile( ictx, in );

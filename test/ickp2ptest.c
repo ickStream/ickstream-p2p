@@ -170,6 +170,15 @@ int main( int argc, char *argv[] )
   }
 
 /*------------------------------------------------------------------------*\
+    Allow remote access to debuggig information
+\*------------------------------------------------------------------------*/
+  irc = ickP2pRemoteDebugApi( ictx, 1 );
+  if( irc ) {
+    printf( "ickP2pRemoteDebugApi: %s\n", ickStrError(irc) );
+    goto end;
+  }
+
+/*------------------------------------------------------------------------*\
     Startup
 \*------------------------------------------------------------------------*/
   irc = ickP2pResume( ictx );

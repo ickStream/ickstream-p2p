@@ -633,8 +633,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       }
       _ickLibDeviceListUnlock( ictx );
 
-      // Timestamp for connection
-      device->tConnect = _ickTimeNow();
+      // We are server, set connection timestamp
+      device->localIsServer = 1;
+      device->tConnect      = _ickTimeNow();
 
       break;
 

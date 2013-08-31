@@ -24,8 +24,8 @@ TESTEXEC        = ickp2ptest
 
 ICKLIB          = $(LIBDIR)/$(LIBNAME).a
 
-GITVERSION      = $(shell git rev-list HEAD --count)
-#GITVERSION      = $(shell git rev-list HEAD --max-count=1)
+#GITVERSION      = $(shell git rev-list HEAD --count)
+GITVERSION      = $(shell git rev-list HEAD --max-count=1)
 #GITVERSION      = "undef"
 
 AR              = ar

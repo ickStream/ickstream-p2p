@@ -105,6 +105,10 @@ struct _ickP2pContext {
   double                       tCreation;
   double                       tResume;
 
+#ifdef ICK_P2PENABLEDEBUGAPI
+  int                          debugApiEnabled;
+#endif
+
   char                        *osName;      // strong
   char                        *deviceName;  // strong
   char                        *hostName;    // strong

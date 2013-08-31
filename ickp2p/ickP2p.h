@@ -206,11 +206,9 @@ int                  ickP2pGetDevicePort( const ickP2pContext_t *ictx, const cha
 
 ickErrcode_t         ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid, ickP2pServicetype_t targetServices, ickP2pServicetype_t sourceService, const char *payload, size_t pSize );
 
-ickErrcode_t         ickP2pDiscoverySetDebugging( ickP2pContext_t *ictx, int on );
-char                *ickP2pGetLocalDebugInfoForDevice( ickP2pContext_t *ictx, const char *uuid );
-char                *ickP2pGetLocalDebugInfo( ickP2pContext_t *ictx );
-char                *ickP2pGetRemoteDebugInfoForDevice( const ickP2pContext_t *ictx, const char *remoteUuid, const char uuid );
-char                *ickP2pGetRemoteDebugInfo( const ickP2pContext_t *ictx, const char *remoteUuid );
+ickErrcode_t         ickP2pRemoteDebugApi( ickP2pContext_t *ictx, int enable );
+char                *ickP2pGetLocalDebugInfo( ickP2pContext_t *ictx, const char *uuid );
+char                *ickP2pGetRemoteDebugInfo( ickP2pContext_t *ictx, const char *remoteUuid, const char *uuid );
 
 
 #endif /* __ICKP2P_H */
