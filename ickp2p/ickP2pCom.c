@@ -227,7 +227,7 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
     Handle next device in notification mode
 \*------------------------------------------------------------------------*/
     device = device->next;
-  } while( uuid && device );
+  } while( !uuid && device );
 
 /*------------------------------------------------------------------------*\
     That's all - unlock device list and break polling in main thread
