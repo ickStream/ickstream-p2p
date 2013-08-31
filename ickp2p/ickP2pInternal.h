@@ -102,6 +102,9 @@ struct _ickP2pContext {
   ickErrcode_t                 error;
   pthread_mutex_t              mutex;
 
+  double                       tCreation;
+  double                       tResume;
+
   char                        *osName;      // strong
   char                        *deviceName;  // strong
   char                        *hostName;    // strong
@@ -205,6 +208,8 @@ void _ickLibWGettersLock( ickP2pContext_t *ictx );
 void _ickLibWGettersUnlock( ickP2pContext_t *ictx  );
 void _ickLibWGettersAdd( ickP2pContext_t *ictx , ickWGetContext_t *wget );
 void _ickLibWGettersRemove( ickP2pContext_t *ictx , ickWGetContext_t *wget );
+
+double _ickTimeNow( void );
 
 
 

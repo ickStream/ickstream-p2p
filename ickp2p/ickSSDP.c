@@ -751,7 +751,6 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 {
   ickDevice_t         *device;
   ickWGetContext_t    *wget, *wgetNext;
-  ickTimer_t          *timer;
   ickP2pServicetype_t  stype;
 
 /*------------------------------------------------------------------------*\

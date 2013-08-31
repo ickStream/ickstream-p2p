@@ -72,6 +72,7 @@ typedef struct _ickMessage ickMessage_t;
 struct _ickMessage {
   ickMessage_t  *next;
   ickMessage_t  *prev;
+  double         tCreated;
   unsigned char *payload;    // strong
   size_t         size;
   size_t         issued;
@@ -105,7 +106,18 @@ struct _ickDevice {
   char                *friendlyName;  // strong
   ickP2pLevel_t        ickP2pLevel;
   ickMessage_t        *outQueue;
+  double               tCreation;
+  double               tXmlComplete;
+  double               tConnect;
+  double               tDisconnect;
+  int                  nRx;
+  int                  nRxSegmented;
+  int                  nTx;
+  double               tLastRx;
+  double               tLastTx;
+
   struct libwebsocket *wsi;
+
 };
 
 /*------------------------------------------------------------------------*\

@@ -24,9 +24,9 @@ TESTEXEC        = ickp2ptest
 
 ICKLIB          = $(LIBDIR)/$(LIBNAME).a
 
-#GITVERSION      = $(shell git rev-list HEAD --count)
+GITVERSION      = $(shell git rev-list HEAD --count)
 #GITVERSION      = $(shell git rev-list HEAD --max-count=1)
-GITVERSION      = "undef"
+#GITVERSION      = "undef"
 
 AR              = ar
 CC              = cc
@@ -34,7 +34,7 @@ CFLAGS          = -Wall -rdynamic -DLWS_NO_FORK -DGIT_VERSION=$(GITVERSION) -D_G
 MKDEPFLAGS	= -Y
 
 # Source files to process
-ICKP2PSRCS      = ickP2p.c ickMainThread.c ickDevice.c ickSSDP.c ickDescription.c ickP2pCom.c ickErrors.c ickWGet.c ickIpTools.c logutils.c
+ICKP2PSRCS      = ickP2p.c ickMainThread.c ickDevice.c ickSSDP.c ickDescription.c ickP2pCom.c ickP2pDebug.c ickErrors.c ickWGet.c ickIpTools.c logutils.c
 MINIUPNPSRCS    = miniupnp/miniupnpc/connecthostport.c miniupnp/miniupnpc/miniwget.c \
                   miniupnp/miniupnpc/minixml.c miniupnp/miniupnpc/receivedata.c
 MINISSDPDSRCS   = miniupnp/minissdpd/openssdpsocket.c miniupnp/minissdpd/upnputils.c                  
@@ -77,7 +77,7 @@ $(ICKLIB): $(LIBOBJ)
 $(TESTEXEC): $(INCLUDEDIR) $(TESTSRC) $(ICKLIB) Makefile
 	@echo '*************************************************************'
 	@echo "Building test executable:"
-	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(TESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -lpthread -luuid -o $(TESTEXEC)
+	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(TESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -ljansson -lpthread -luuid -o $(TESTEXEC)
 
 # Provide public headers
 $(INCLUDEDIR): $(PUBLICHEADERS)
@@ -126,7 +126,7 @@ ickp2p/ickMainThread.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h
 ickp2p/ickMainThread.o: ickp2p/logutils.h ickp2p/ickIpTools.h
 ickp2p/ickMainThread.o: ickp2p/ickDevice.h ickp2p/ickDescription.h
 ickp2p/ickMainThread.o: ickp2p/ickWGet.h ickp2p/ickSSDP.h ickp2p/ickP2pCom.h
-ickp2p/ickMainThread.o: ickp2p/ickMainThread.h
+ickp2p/ickMainThread.o: ickp2p/ickP2pDebug.h ickp2p/ickMainThread.h
 ickp2p/ickDevice.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h ickp2p/logutils.h
 ickp2p/ickDevice.o: ickp2p/ickDevice.h ickp2p/ickDescription.h
 ickp2p/ickDevice.o: ickp2p/ickWGet.h
@@ -138,9 +138,14 @@ ickp2p/ickDescription.o: miniupnp/miniupnpc/minixml.h ickp2p/ickP2p.h
 ickp2p/ickDescription.o: ickp2p/ickP2pInternal.h ickp2p/logutils.h
 ickp2p/ickDescription.o: ickp2p/ickDevice.h ickp2p/ickDescription.h
 ickp2p/ickDescription.o: ickp2p/ickWGet.h ickp2p/ickSSDP.h
+ickp2p/ickDescription.o: ickp2p/ickMainThread.h
 ickp2p/ickP2pCom.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h ickp2p/logutils.h
-ickp2p/ickP2pCom.o: ickp2p/ickDescription.h ickp2p/ickWGet.h
-ickp2p/ickP2pCom.o: ickp2p/ickDevice.h ickp2p/ickP2pCom.h
+ickp2p/ickP2pCom.o: ickp2p/ickMainThread.h ickp2p/ickDescription.h
+ickp2p/ickP2pCom.o: ickp2p/ickWGet.h ickp2p/ickDevice.h ickp2p/ickP2pCom.h
+ickp2p/ickP2pDebug.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h
+ickp2p/ickP2pDebug.o: ickp2p/logutils.h ickp2p/ickDevice.h
+ickp2p/ickP2pDebug.o: ickp2p/ickDescription.h ickp2p/ickWGet.h
+ickp2p/ickP2pDebug.o: ickp2p/ickP2pCom.h ickp2p/ickP2pDebug.h
 ickp2p/ickErrors.o: ickp2p/ickP2p.h
 ickp2p/ickWGet.o: miniupnp/miniupnpc/miniwget.h miniupnp/miniupnpc/declspec.h
 ickp2p/ickWGet.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h

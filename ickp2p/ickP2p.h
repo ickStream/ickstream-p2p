@@ -57,7 +57,7 @@ Remarks         : -
   Definition of constants
 \*=========================================================================*/
 // #define ICKP2P_DYNAMICSERVICES
-
+#define ICK_P2PENABLEDEBUGAPI
 
 
 /*=========================================================================*\

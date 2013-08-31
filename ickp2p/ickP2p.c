@@ -185,6 +185,7 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
     return NULL;
   }
   ictx->state       = ICKLIB_CREATED;
+  ictx->tCreation   = _ickTimeNow();
   ictx->upnpPort    = port;
   ictx->lifetime    = lifetime;
   ictx->ickServices = services;
@@ -285,6 +286,7 @@ ickErrcode_t ickP2pResume( ickP2pContext_t *ictx )
     logwarn( "ickP2pResume: wrong state (%d)", ictx->state );
     return ICKERR_WRONGSTATE;
   }
+  ictx->tResume = _ickTimeNow();
 
 /*------------------------------------------------------------------------*\
     Resuming? Set and signal new state
@@ -1178,8 +1180,6 @@ ickDevice_t *_ickLibDeviceFindByWsi( ickP2pContext_t *ictx,struct libwebsocket *
 #pragma mark -- Other internal functions
 
 
-
-
 /*=========================================================================*\
   Lock list of active HTTP clients for access or modification
 \*=========================================================================*/
@@ -1225,6 +1225,17 @@ void _ickLibWGettersRemove( ickP2pContext_t *ictx, ickWGetContext_t *wget )
     wget->prev->next = wget->next;
   else
     ictx->wGetters = wget->next;
+}
+
+
+/*========================================================================*\
+   Get time including fractional seconds
+\*========================================================================*/
+double _ickTimeNow( void )
+{
+  struct timeval tv;
+  gettimeofday( &tv, NULL );
+  return tv.tv_sec+tv.tv_usec*1E-6;
 }
 
 

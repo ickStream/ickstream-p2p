@@ -55,6 +55,10 @@ Remarks         : refactored from ickDiscoverRegistry
 #include <string.h>
 #include <pthread.h>
 
+#ifdef ICK_P2PDEBUGCALLS
+#include <jansson.h>
+#endif
+
 #include "ickP2p.h"
 #include "ickP2pInternal.h"
 #include "logutils.h"
@@ -104,6 +108,7 @@ ickDevice_t *_ickDeviceNew( const char *uuid, ickDeviceType_t type )
     logerr( "_ickDeviceNew: out of memory" );
     return NULL;
   }
+  device->tCreation = _ickTimeNow();
 
 /*------------------------------------------------------------------------*\
     That's all
@@ -233,6 +238,7 @@ ickErrcode_t _ickDeviceAddMessage( ickDevice_t *device, void *container, size_t 
     logerr( "_ickDeviceAddMessage: out of memory" );
     return ICKERR_NOMEM;
   }
+  message->tCreated = _ickTimeNow();
   message->payload  = container;
   message->size     = size;
   message->issued   = 0;
@@ -354,6 +360,7 @@ size_t _ickDevicePendingBytes( ickDevice_t *device )
 \*------------------------------------------------------------------------*/
   return size;
 }
+
 
 
 

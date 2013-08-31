@@ -516,14 +516,15 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_CLIENT_ESTABLISHED:
       socket = libwebsocket_get_socket_fd( wsi );
+      device = psd->device;
       debug( "_lwsP2pCb %d: client connection established, %d messages pending",
-             socket, _ickDevicePendingMessages(psd->device) );
+             socket, _ickDevicePendingMessages(device) );
 
       // Create heartbeat timer on LWS layer (fallback if no SSDP connection exists)
       _ickTimerListLock( ictx );
-      if( !_ickTimerFind(ictx,_ickDeviceHeartbeatTimerCb,psd->device,0) ) {
+      if( !_ickTimerFind(ictx,_ickDeviceHeartbeatTimerCb,device,0) ) {
         ickErrcode_t irc;
-        irc = _ickTimerAdd( ictx, psd->device->lifetime*1000, 0, _ickDeviceHeartbeatTimerCb, psd->device, 0 );
+        irc = _ickTimerAdd( ictx, device->lifetime*1000, 0, _ickDeviceHeartbeatTimerCb, device, 0 );
         if( irc )
           logerr( "_lwsP2pCb (%s): could not create heartbeat timer (%s)",
                   psd->uuid, ickStrError(irc) );
@@ -531,8 +532,11 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       _ickTimerListUnlock( ictx );
 
       // Book a write event if a message is already pending
-      if( _ickDeviceOutQueue(psd->device) )
+      if( _ickDeviceOutQueue(device) )
         libwebsocket_callback_on_writable( context, wsi );
+
+      // Timestamp for connection
+      device->tConnect = _ickTimeNow();
 
       break;
 
@@ -592,14 +596,15 @@ int _lwsP2pCb( struct libwebsocket_context *context,
                psd->uuid, psd->host );
 
         // Create and init device
-        psd->device = _ickDeviceNew( psd->uuid, ICKDEVICE_WS );
-        if( !psd->device ) {
+        device = _ickDeviceNew( psd->uuid, ICKDEVICE_WS );
+        if( !device ) {
           logerr( "_lwsP2pCb: out of memory" );
           _ickLibDeviceListUnlock( ictx );
           return 1;
         }
-        _ickDeviceSetLocation( psd->device, psd->host );
-        psd->device->wsi = wsi;
+        _ickDeviceSetLocation( device, psd->host );
+        psd->device = device;
+        device->wsi = wsi;
 
         // Start retrieval of unpn descriptor, use ickstream root device
         if( asprintf(&dscrPath,"http://%s/%s.xml",psd->host,ICKDEVICE_STRING_ROOT)<0 ) {
@@ -607,12 +612,12 @@ int _lwsP2pCb( struct libwebsocket_context *context,
           _ickLibDeviceListUnlock( ictx );
           return 1;
         }
-        wget = _ickWGetInit( ictx, dscrPath, _ickWGetXmlCb, psd->device, &irc );
+        wget = _ickWGetInit( ictx, dscrPath, _ickWGetXmlCb, device, &irc );
         Sfree( dscrPath );
         if( !wget ) {
           logerr( "_lwsP2pCb (%s): could not start xml retriever \"%s\" (%s).",
               psd->uuid, psd->host, ickStrError(irc) );
-          _ickDeviceFree( psd->device );
+          _ickDeviceFree( device );
           _ickLibDeviceListUnlock( ictx );
           return -1;
         }
@@ -624,9 +629,12 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         // fixme: there might be lws messages received before the xml file is interpreted, ...
 
         //Link New device to discovery handler
-        _ickLibDeviceAdd( ictx, psd->device );
+        _ickLibDeviceAdd( ictx, device );
       }
       _ickLibDeviceListUnlock( ictx );
+
+      // Timestamp for connection
+      device->tConnect = _ickTimeNow();
 
       break;
 
@@ -636,34 +644,34 @@ int _lwsP2pCb( struct libwebsocket_context *context,
     case LWS_CALLBACK_CLIENT_WRITEABLE:
     case LWS_CALLBACK_SERVER_WRITEABLE:
       socket = libwebsocket_get_socket_fd( wsi );
+      device = psd->device;
       debug( "_lwsP2pCb %d: %s connection is writable", socket,
              reason==LWS_CALLBACK_CLIENT_WRITEABLE?"client":"server" );
 
       // Check wsi
-      if( wsi!=psd->device->wsi ) {
-        logerr( "_lwsP2pCb %d: wsi mismatch for \"%s\"", socket, psd->device->uuid );
+      if( wsi!=device->wsi ) {
+        logerr( "_lwsP2pCb %d: wsi mismatch for \"%s\"", socket, device->uuid );
         // fixme: mark device descriptor
-
         return -1;
       }
 
       // There should be a pending message...
-      _ickDeviceLock( psd->device );
-      message = _ickDeviceOutQueue( psd->device );
+      _ickDeviceLock( device );
+      message = _ickDeviceOutQueue( device );
       if( !message ) {
-        _ickDeviceUnlock( psd->device );
-        logerr( "_lwsP2pCb %d: received writable signal with empty out queue for \"%s\"", socket, psd->device->uuid );
+        _ickDeviceUnlock( device );
+        logerr( "_lwsP2pCb %d: received writable signal with empty out queue for \"%s\"", socket, device->uuid );
         break;
       }
 
       // Check if protocol level is already known. This might not the case for incoming LWS connections
       // when the XML file was not yet received or interpreted. Then delay the sending of messages as
       // we cannot construct a preamble. Recheck in 100 ms
-      if( psd->device->ickP2pLevel==ICKP2PLEVEL_GENERIC ) {
+      if( device->ickP2pLevel==ICKP2PLEVEL_GENERIC ) {
         _ickTimerListLock( ictx );
-        if( !_ickTimerFind(ictx,_ickWriteTimerCb,psd->device,0) ) {
+        if( !_ickTimerFind(ictx,_ickWriteTimerCb,device,0) ) {
           ickErrcode_t irc;
-          irc = _ickTimerAdd( ictx, 100, 1, _ickWriteTimerCb, psd->device, 0 );
+          irc = _ickTimerAdd( ictx, 100, 1, _ickWriteTimerCb, device, 0 );
           if( irc )
             logerr( "_lwsP2pCb (%s): could not create write timer (%s)",
                     psd->uuid, ickStrError(irc) );
@@ -677,14 +685,17 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
       // Error handling
       if( remainder<0 ) {
-        logerr( "_lwsP2pCb %d: error writing to \"%s\"", socket, psd->device->uuid );
+        logerr( "_lwsP2pCb %d: error writing to \"%s\"", socket, device->uuid );
         // fixme: callback and mark device descriptor
-        _ickDeviceRemoveAndFreeMessage( psd->device, message );
-        if( _ickDeviceOutQueue(psd->device) )
+        _ickDeviceRemoveAndFreeMessage( device, message );
+        if( _ickDeviceOutQueue(device) )
           libwebsocket_callback_on_writable( context, wsi );
-        _ickDeviceUnlock( psd->device );
+        _ickDeviceUnlock( device );
         break;;
       }
+
+      // Set timestamp for last successful (partial) submission
+      device->tLastTx = _ickTimeNow();
 
       // If not complete book another write callback
       if( remainder )
@@ -692,13 +703,14 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
       // If complete, delete message and chack for a next one
       else {
-        _ickDeviceRemoveAndFreeMessage( psd->device, message );
-        if( _ickDeviceOutQueue(psd->device) )
+        _ickDeviceRemoveAndFreeMessage( device, message );
+        device->nTx++;
+        if( _ickDeviceOutQueue(device) )
           libwebsocket_callback_on_writable( context, wsi );
       }
 
       // That's it
-      _ickDeviceUnlock( psd->device );
+      _ickDeviceUnlock( device );
       break;
 
 /*------------------------------------------------------------------------*\
@@ -707,6 +719,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
     case LWS_CALLBACK_RECEIVE:
     case LWS_CALLBACK_CLIENT_RECEIVE:
       socket = libwebsocket_get_socket_fd( wsi );
+      device = psd->device;
       rlen   = libwebsockets_remaining_packet_payload( wsi );
   int final = libwebsocket_is_final_fragment( wsi );
 
@@ -715,15 +728,19 @@ int _lwsP2pCb( struct libwebsocket_context *context,
              (long)len, (long)rlen, final?"final":"to be continued" );
 
       // reset timer
-      timer = _ickTimerFind( ictx, _ickDeviceExpireTimerCb, psd->device, 0 );
+      timer = _ickTimerFind( ictx, _ickDeviceExpireTimerCb, device, 0 );
       if( timer )
-        _ickTimerUpdate( ictx, timer, psd->device->lifetime*1000, 1 );
+        _ickTimerUpdate( ictx, timer, device->lifetime*1000, 1 );
       else
         logerr( "_lwsP2pCb (%s): could not find expiration timer.", psd->uuid );
 
+      // Set timestamp of last (partial) receive
+      device->tLastRx = _ickTimeNow();
+
       // No fragmentation? Execute callbacks directly
       if( !psd->inBuffer && !rlen && final) {
-        _ickP2pExecMessageCallback( ictx, psd->device, in, len );
+        _ickP2pExecMessageCallback( ictx, device, in, len );
+        device->nRx++;
         break;
       }
 
@@ -742,7 +759,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
       // If complete: execute callbacks and clean up
       if( !rlen && final ) {
-        _ickP2pExecMessageCallback( ictx, psd->device, psd->inBuffer, psd->inBufferSize );
+        _ickP2pExecMessageCallback( ictx, device, psd->inBuffer, psd->inBufferSize );
+        device->nRxSegmented++;
         Sfree( psd->inBuffer );
         psd->inBufferSize = 0;
       }
@@ -754,15 +772,18 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_CLOSED:
       socket = libwebsocket_get_socket_fd( wsi );
+      device = psd->device;
       debug( "_lwsP2pCb %d: connection closed", socket );
 
       // Remove heartbeat and delayed write handler for this device
-      _ickTimerDeleteAll( ictx, _ickDeviceHeartbeatTimerCb, psd->device, 0 );
-      _ickTimerDeleteAll( ictx, _ickWriteTimerCb, psd->device, 0 );
+      _ickTimerDeleteAll( ictx, _ickDeviceHeartbeatTimerCb, device, 0 );
+      _ickTimerDeleteAll( ictx, _ickWriteTimerCb, device, 0 );
 
       //fixme: mark devices descriptor
-      if( psd->device )
-        psd->device->wsi = NULL;
+      if( device ) {
+        device->wsi = NULL;
+        device->tDisconnect = _ickTimeNow();
+      }
 
       // Free per session data
       Sfree( psd->uuid );
@@ -998,6 +1019,7 @@ static void _ickLwsDumpHeaders( struct libwebsocket *wsi )
   }
 }
 #endif
+
 
 /*=========================================================================*\
                                     END OF FILE

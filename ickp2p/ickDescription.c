@@ -385,6 +385,9 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
         device->lifetime  = _xmlUserData.lifetime;
       _ickDeviceUnlock( device );
 
+      // Set timestamp
+      device->tXmlComplete = _ickTimeNow();
+
       // Clean up
       Sfree( _xmlUserData.deviceName );
 
@@ -406,6 +409,7 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
                   uri, ickStrError(irc) );
       }
       _ickTimerListUnlock( device->ictx );
+
 
       // Signal device readiness to user code
       _ickLibExecDiscoveryCallback( device->ictx, device, ICKP2P_NEW, device->services );
