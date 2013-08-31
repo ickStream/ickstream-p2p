@@ -1091,7 +1091,7 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 /*------------------------------------------------------------------------*\
     Search for root device
 \*------------------------------------------------------------------------*/
-  else if( strcmp(ssdp->st,"upnp:rootdevice") ) {
+  else if( !strcmp(ssdp->st,"upnp:rootdevice") ) {
     _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_ROOT,
                           ICKP2P_SERVICE_NONE, ICKSSDP_REPEATS );
   }
@@ -1099,7 +1099,7 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 /*------------------------------------------------------------------------*\
     Search for a device with specific UUID
 \*------------------------------------------------------------------------*/
-  else if( strncmp(ssdp->st,"uuid:",5) ) {
+  else if( !strncmp(ssdp->st,"uuid:",5) ) {
     if( !strcasecmp(ssdp->st+5,ictx->deviceUuid) ) {
       _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_UUID,
                              ICKP2P_SERVICE_NONE, ICKSSDP_REPEATS );

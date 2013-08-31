@@ -678,6 +678,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
                     psd->uuid, ickStrError(irc) );
         }
         _ickTimerListUnlock( ictx );
+        _ickDeviceUnlock( device );
         break;
       }
 
@@ -813,7 +814,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 static void _ickWriteTimerCb( const ickTimer_t *timer, void *data, int tag )
 {
   const ickDevice_t *device = data;
-  debug( "_ickWriteTimerCb: \"%s\"", device->wsi );
+  debug( "_ickWriteTimerCb: \"%s\"", device->uuid );
 
   libwebsocket_callback_on_writable( device->ictx->lwsContext, device->wsi );
 }

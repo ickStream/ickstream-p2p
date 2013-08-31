@@ -942,6 +942,7 @@ void _ickDeviceHeartbeatTimerCb( const ickTimer_t *timer, void *data, int tag )
 \*=========================================================================*/
 static int _ickPolllistInit( ickPolllist_t *plist, int size, int increment )
 {
+  debug( "_ickPolllistInit (%p): size=%d, incr=%d", plist, size, increment );
 
 /*------------------------------------------------------------------------*\
     Init array
@@ -971,11 +972,12 @@ static int _ickPolllistInit( ickPolllist_t *plist, int size, int increment )
 \*=========================================================================*/
 static void _ickPolllistClear( ickPolllist_t *plist )
 {
+  debug( "_ickPolllistClear (%p): ", plist );
 
 /*------------------------------------------------------------------------*\
     reset index
 \*------------------------------------------------------------------------*/
-  plist->nfds      = 0;
+  plist->nfds = 0;
 
 }
 
@@ -985,12 +987,12 @@ static void _ickPolllistClear( ickPolllist_t *plist )
 \*=========================================================================*/
 static void _ickPolllistFree( ickPolllist_t *plist )
 {
+  debug( "_ickPolllistFree (%p): ", plist );
 
 /*------------------------------------------------------------------------*\
     Free array
 \*------------------------------------------------------------------------*/
   Sfree( plist->fds );
-
 }
 
 
@@ -1106,6 +1108,7 @@ static int _ickPolllistAppend( ickPolllist_t *plist, const ickPolllist_t *plista
 static int _ickPolllistSet( ickPolllist_t *plist, int fd, int events )
 {
   int idx;
+  debug( "_ickPolllistSet (%p): fd=%d, events=%d", plist, fd, events );
 
 /*------------------------------------------------------------------------*\
     Get list entry
@@ -1136,6 +1139,7 @@ static int _ickPolllistSet( ickPolllist_t *plist, int fd, int events )
 static int _ickPolllistUnset( ickPolllist_t *plist, int fd, int events )
 {
   int idx;
+  debug( "_ickPolllistUnset (%p): fd=%d, events=%d", plist, fd, events );
 
 /*------------------------------------------------------------------------*\
     Get list entry
@@ -1167,6 +1171,7 @@ static int _ickPolllistUnset( ickPolllist_t *plist, int fd, int events )
 static int _ickPolllistCheck( const ickPolllist_t *plist, int fd, int events )
 {
   int idx;
+  debug( "_ickPolllistCheck (%p): fd=%d, events=%d", plist, fd, events );
 
 /*------------------------------------------------------------------------*\
     Get list entry
@@ -1191,6 +1196,7 @@ static int _ickPolllistCheck( const ickPolllist_t *plist, int fd, int events )
 static int _ickPolllistGetIndex( const ickPolllist_t *plist, int fd )
 {
   int i;
+  debug( "_ickPolllistGetIndex (%p): fd=%d", plist, fd );
 
 /*------------------------------------------------------------------------*\
     Check all members
@@ -1239,6 +1245,8 @@ void _ickTimerListUnlock( ickP2pContext_t *ictx )
 ickErrcode_t _ickTimerAdd( ickP2pContext_t *ictx, long interval, int repeat, ickTimerCb_t callback, void *data, int tag )
 {
   ickTimer_t *timer;
+  debug( "_ickTimerAdd (%p): interval=%ld, repeat=%d, cp=%p, data=%p, tag=%d",
+         ictx, interval, repeat, callback, data, tag );
 
 /*------------------------------------------------------------------------*\
     Create and init timer structure
@@ -1285,6 +1293,8 @@ ickErrcode_t _ickTimerAdd( ickP2pContext_t *ictx, long interval, int repeat, ick
 ickTimer_t *_ickTimerFind( ickP2pContext_t *ictx, ickTimerCb_t callback, const void *data, int tag )
 {
   ickTimer_t *walk;
+  debug( "_ickTimerFind (%p): cb=%p data=%p tag=%d", ictx, callback, data, tag );
+
 
 /*------------------------------------------------------------------------*\
     Find list entry with same id vector
@@ -1297,6 +1307,7 @@ ickTimer_t *_ickTimerFind( ickP2pContext_t *ictx, ickTimerCb_t callback, const v
 /*------------------------------------------------------------------------*\
     Return result
 \*------------------------------------------------------------------------*/
+  debug( "_ickTimerFind (%p): result=%p", ictx, walk );
   return walk;
 }
 
@@ -1308,6 +1319,7 @@ ickTimer_t *_ickTimerFind( ickP2pContext_t *ictx, ickTimerCb_t callback, const v
 \*=========================================================================*/
 ickErrcode_t _ickTimerUpdate( ickP2pContext_t *ictx, ickTimer_t *timer, long interval, int repeat )
 {
+  debug( "_ickTimerUpdate (%p): timer=%p, interval=%ld, repeat=%d", ictx, timer, interval, repeat );
 
 /*------------------------------------------------------------------------*\
     unlink timer
@@ -1348,6 +1360,7 @@ ickErrcode_t _ickTimerUpdate( ickP2pContext_t *ictx, ickTimer_t *timer, long int
 \*=========================================================================*/
 ickErrcode_t _ickTimerDelete( ickP2pContext_t *ictx, ickTimer_t *timer )
 {
+  debug( "_ickTimerDelete (%p): %p", ictx, timer );
 
 /*------------------------------------------------------------------------*\
     Unlink timer
@@ -1373,6 +1386,7 @@ ickErrcode_t _ickTimerDelete( ickP2pContext_t *ictx, ickTimer_t *timer )
 void _ickTimerDeleteAll( ickP2pContext_t *ictx, ickTimerCb_t callback, const void *data, int tag )
 {
   ickTimer_t *walk, *next;
+  debug( "_ickTimerDeleteAll (%p): cb=%p data=%p tag=%d", ictx, callback, data, tag );
 
 /*------------------------------------------------------------------------*\
     Find list entries with same id vector
@@ -1409,6 +1423,7 @@ void _ickTimerDeleteAll( ickP2pContext_t *ictx, ickTimerCb_t callback, const voi
 static void _ickTimerLink( ickP2pContext_t *ictx, ickTimer_t *timer )
 {
   ickTimer_t *walk, *last;
+  debug( "_ickTimerLink (%p): %p", ictx, timer );
 
 /*------------------------------------------------------------------------*\
     Find list entry with time stamp larger than the new one
@@ -1450,6 +1465,7 @@ static void _ickTimerLink( ickP2pContext_t *ictx, ickTimer_t *timer )
 static int _ickTimerUnlink( ickP2pContext_t *ictx, ickTimer_t *timer )
 {
   ickTimer_t *walk;
+  debug( "_ickTimerUnlink (%p): %p", ictx, timer );
 
 /*------------------------------------------------------------------------*\
     Be defensive: check it timer is list element
