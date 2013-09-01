@@ -383,8 +383,8 @@ void *_ickMainThread( void *arg )
       if( retval==1 )
         continue;
     }
-    if( ictx->state==ICKLIB_TERMINATING )
-      break;
+//    if( ictx->state==ICKLIB_TERMINATING )
+//      break;
 
 /*------------------------------------------------------------------------*\
     Process incoming data from SSDP socket
@@ -485,15 +485,17 @@ void *_ickMainThread( void *arg )
   } //  while( icklib->state<ICKLIB_TERMINATING )
   debug( "ickp2p main thread: terminating..." );
 
-/*------------------------------------------------------------------------*\
-    Stop SSDP services and announce termination
-\*------------------------------------------------------------------------*/
-  _ickSsdpEndDiscovery( ictx );
 
 /*------------------------------------------------------------------------*\
     Get rid of libwebsocket context
 \*------------------------------------------------------------------------*/
   libwebsocket_context_destroy( ictx->lwsContext );
+
+/*------------------------------------------------------------------------*\
+    Stop SSDP services and announce termination,
+    this will also delete the device list
+\*------------------------------------------------------------------------*/
+  _ickSsdpEndDiscovery( ictx );
 
 /*------------------------------------------------------------------------*\
     Clean up
@@ -503,7 +505,7 @@ void *_ickMainThread( void *arg )
   _ickPolllistFree( &ictx->lwsPolllist );
 
 /*------------------------------------------------------------------------*\
-    Clear all timer
+    Clear all remaining timer
 \*------------------------------------------------------------------------*/
   _ickTimerListLock( ictx );
   while( ictx->timers )
@@ -1407,6 +1409,7 @@ void _ickTimerDeleteAll( ickP2pContext_t *ictx, ickTimerCb_t callback, const voi
       ictx->timers = next;
 
     // and free
+    debug( "_ickTimerDeleteAll (%p): deleted timer %p", ictx, walk );
     Sfree( walk );
   }
 

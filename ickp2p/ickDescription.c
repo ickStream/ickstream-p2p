@@ -311,7 +311,7 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
   const char       *uri = _ickWGetUri( context );
   struct xmlparser  _xmlParser;
   ickXmlUserData_t  _xmlUserData;
-  ickDevice_t       *device = _ickWGetUserData( context );
+  ickDevice_t       *device;
 
   debug( "_ickWGetXmlCb (%s): action=%d", uri, action );
 
@@ -346,6 +346,7 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
   Data is complete
 \*------------------------------------------------------------------------*/
     case ICKWGETACT_COMPLETE:
+      device = _ickWGetUserData( context );
       debug( "_ickWGetXmlCb (%s): complete \"%.*s\".", uri,
             _ickWGetPayloadSize(context), _ickWGetPayload(context) );
 

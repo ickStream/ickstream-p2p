@@ -1006,7 +1006,7 @@ static void _ickSsdpAnnounceCb( const ickTimer_t *timer, void *data, int tag )
   ickP2pContext_t *ictx = data;
   ickErrcode_t     irc;
 
-  debug( "_ickSsdpAnnounceCb: sending periodic announcements..." );
+  debug( "_ickSsdpAnnounceCb (%p): sending periodic announcements...", ictx );
 
 /*------------------------------------------------------------------------*\
     Schedule initial advertisements
@@ -1151,6 +1151,7 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
                                                   const struct sockaddr *addr )
 {
   ickErrcode_t irc;
+  debug( "_ssdpSendInitialDiscoveryMsg (%p): ", ictx );
 
 /*------------------------------------------------------------------------*\
     Advertise UPNP root
@@ -1246,6 +1247,8 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
   char                *usn = NULL;
   char                *sstr = NULL;
   char                *message = NULL;
+
+  debug( "_ssdpSendDiscoveryMsg (%p):", ictx );
 
 /*------------------------------------------------------------------------*\
     Use multicast?
