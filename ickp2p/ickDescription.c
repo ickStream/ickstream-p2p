@@ -312,6 +312,7 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
   struct xmlparser  _xmlParser;
   ickXmlUserData_t  _xmlUserData;
   ickDevice_t       *device;
+  ickP2pContext_t   *ictx;
 
   debug( "_ickWGetXmlCb (%s): action=%d", uri, action );
 
@@ -347,6 +348,7 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
 \*------------------------------------------------------------------------*/
     case ICKWGETACT_COMPLETE:
       device = _ickWGetUserData( context );
+      ictx   = device->ictx;
       debug( "_ickWGetXmlCb (%s): complete \"%.*s\".", uri,
             _ickWGetPayloadSize(context), _ickWGetPayload(context) );
 
@@ -386,34 +388,42 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
         device->lifetime  = _xmlUserData.lifetime;
       _ickDeviceUnlock( device );
 
+      //Evaluate connection matrix
+      device->doConnect = 1;
+      if( ictx->lwsConnectMatrixCb )
+        device->doConnect = ictx->lwsConnectMatrixCb( ictx, ictx->ickServices, device->services );
+      debug( "_ickWGetXmlCb (%s): %s need to connect", device->uuid, device->doConnect?"Do":"No" );
+
       // Set timestamp
       device->tXmlComplete = _ickTimeNow();
 
       // Clean up
       Sfree( _xmlUserData.deviceName );
 
-      // Create expiration and heartbeat timer if necessary (could have been created by an SSDP announcement in the meanwhile)
-      _ickTimerListLock( device->ictx );
-      if( !_ickTimerFind(device->ictx,_ickDeviceExpireTimerCb,device,0) ) {
+      // Create expiration timer if necessary (could have been created by an SSDP announcement in the meanwhile)
+      _ickTimerListLock( ictx );
+      if( !_ickTimerFind(ictx,_ickDeviceExpireTimerCb,device,0) ) {
         ickErrcode_t irc;
-        irc = _ickTimerAdd( device->ictx, device->lifetime*1000, 1, _ickDeviceExpireTimerCb, device, 0 );
+        debug( "_ickWGetXmlCb (%s): create expiration timer", device->uuid );
+        irc = _ickTimerAdd( ictx, device->lifetime*1000, 1, _ickDeviceExpireTimerCb, device, 0 );
         if( irc )
           logerr( "_ickWGetXmlCb (%s): could not create expiration timer (%s)",
                   uri, ickStrError(irc) );
       }
-      // Create heartbeat timer on LWS layer (fallback if no SSDP connection exists)
-      if( !_ickTimerFind(device->ictx,_ickDeviceHeartbeatTimerCb,device,0) ) {
+
+      // Create heartbeat timer if necessary
+      if( device->doConnect && !_ickTimerFind(ictx,_ickDeviceHeartbeatTimerCb,device,0) ) {
         ickErrcode_t irc;
-        irc = _ickTimerAdd( device->ictx, device->lifetime*1000, 0, _ickDeviceHeartbeatTimerCb, device, 0 );
+        debug( "_ickWGetXmlCb (%s): create heartbeat timer", device->uuid );
+        irc = _ickTimerAdd( ictx, device->lifetime*1000, 0, _ickDeviceHeartbeatTimerCb, device, 0 );
         if( irc )
           logerr( "_ickWGetXmlCb (%s): could not create heartbeat timer (%s)",
-                  uri, ickStrError(irc) );
+                  device->uuid, ickStrError(irc) );
       }
-      _ickTimerListUnlock( device->ictx );
-
+      _ickTimerListUnlock( ictx );
 
       // Signal device readiness to user code
-      _ickLibExecDiscoveryCallback( device->ictx, device, ICKP2P_NEW, device->services );
+      _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_NEW, device->services );
 
       break;
 

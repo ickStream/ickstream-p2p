@@ -108,6 +108,7 @@ struct _ickDevice {
   ickMessage_t        *outQueue;
   double               tCreation;
   double               tXmlComplete;
+  int                  doConnect;
   double               tConnect;
   double               tDisconnect;
   int                  localIsServer;

@@ -1248,7 +1248,8 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
   char                *sstr = NULL;
   char                *message = NULL;
 
-  debug( "_ssdpSendDiscoveryMsg (%p):", ictx );
+  debug( "_ssdpSendDiscoveryMsg (%p): level=%d, type=%d, service=0x%02x, repeat=%d",
+         ictx, level, type, service, repeat );
 
 /*------------------------------------------------------------------------*\
     Use multicast?
@@ -1263,6 +1264,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
   snprintf( addrstr, sizeof(addrstr), "%s:%d",
          inet_ntoa(((const struct sockaddr_in *)addr)->sin_addr),
          ntohs(((const struct sockaddr_in *)addr)->sin_port));
+  debug( "_ssdpSendDiscoveryMsg (%p): target \"%s\"", ictx, addrstr );
 
 /*------------------------------------------------------------------------*\
     Create NT/ST and USN according to level and service
@@ -1337,6 +1339,8 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
     logerr( "_ssdpSendDiscoveryMsg: out of memory" );
     return ICKERR_NOMEM;
   }
+  debug( "_ssdpSendDiscoveryMsg (%p): sstr=\"%s\" nst=\"%s\" usn=\"%s\"",
+         ictx, sstr, nst, usn );
 
 /*------------------------------------------------------------------------*\
     Create message according to type
@@ -1425,6 +1429,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
       logerr( "_ssdpSendDiscoveryMsg: bad message type (%d)", type );
       return ICKERR_INVALID;
   }
+  debug( "_ssdpSendDiscoveryMsg (%p): msg=\"%s\"", ictx, message );
   Sfree( nst );
   Sfree( usn );
   if( !message ) {

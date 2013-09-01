@@ -124,6 +124,10 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
       _ickLibDeviceListUnlock( ictx );
       return ICKERR_NODEVICE;
     }
+    if( !device->doConnect ) {
+      _ickLibDeviceListUnlock( ictx );
+      return ICKERR_NOTCONNECTED;
+    }
   }
   else if( ictx->deviceList )
     device = ictx->deviceList;
@@ -143,6 +147,12 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
     size_t        cSize;
     char         *container;
     char         *ptr;
+
+/*------------------------------------------------------------------------*\
+    Ignore unconnected devices in broadcast mode
+\*------------------------------------------------------------------------*/
+    if( !device->doConnect )
+      goto nextDevice;
 
 /*------------------------------------------------------------------------*\
     Determine preamble length and elements according to cross section of
@@ -226,6 +236,7 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
 /*------------------------------------------------------------------------*\
     Handle next device in notification mode
 \*------------------------------------------------------------------------*/
+nextDevice:
     device = device->next;
   } while( !uuid && device );
 
@@ -241,6 +252,53 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
   return irc;
 }
 
+
+/*=========================================================================*\
+  Default ickstream connection matrix
+\*=========================================================================*/
+int ickP2pDefaultConnectMatrixCb( ickP2pContext_t *ictx, ickP2pServicetype_t localServices, ickP2pServicetype_t remoteServices )
+{
+  debug( "ickP2pDefaultConnectMatrixCb (%p): local=0x%02x remote=0x%02x", ictx, localServices, remoteServices);
+
+/*------------------------------------------------------------------------*\
+    Debug always connects
+\*------------------------------------------------------------------------*/
+  if( (localServices&ICKP2P_SERVICE_DEBUG) || (remoteServices&ICKP2P_SERVICE_DEBUG) )
+    return 1;
+
+/*------------------------------------------------------------------------*\
+    Servers connect to controllers and players
+\*------------------------------------------------------------------------*/
+  if( localServices&ICKP2P_SERVICE_SERVER_GENERIC ) {
+    if( (remoteServices&ICKP2P_SERVICE_CONTROLLER) || (remoteServices&ICKP2P_SERVICE_PLAYER) )
+      return 1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Controller connect to servers and players
+\*------------------------------------------------------------------------*/
+  if( localServices&ICKP2P_SERVICE_CONTROLLER ) {
+    if( (remoteServices&ICKP2P_SERVICE_SERVER_GENERIC) || (remoteServices&ICKP2P_SERVICE_PLAYER) )
+      return 1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Players connect to servers and controllers
+\*------------------------------------------------------------------------*/
+  // I'm a player, so I want to connect to controllers and servers
+  if( localServices&ICKP2P_SERVICE_PLAYER ) {
+    if( (remoteServices&ICKP2P_SERVICE_SERVER_GENERIC) || (remoteServices&ICKP2P_SERVICE_CONTROLLER) )
+      return 1;
+  }
+
+/*------------------------------------------------------------------------*\
+   No connection wanted
+\*------------------------------------------------------------------------*/
+ return 0;
+}
+
+
+#pragma mark -- internal functions
 
 /*=========================================================================*\
   Send a Null message (used for heart beat and syncing)
@@ -379,8 +437,8 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
                     0,                        // ssl_connection
                     "/",                      // path
                     host,                     // host
-                    device->ictx->deviceUuid, // origin,
-                    ICKP2P_WS_PROTOCOLNAME,   // protocol,
+                    ictx->deviceUuid,         // origin
+                    ICKP2P_WS_PROTOCOLNAME,   // protocol
                     -1,                       // ietf_version_or_minus_one
                     psd );
   if( !device->wsi ) {
@@ -520,16 +578,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       debug( "_lwsP2pCb %d: client connection established, %d messages pending",
              socket, _ickDevicePendingMessages(device) );
 
-      // Create heartbeat timer on LWS layer (fallback if no SSDP connection exists)
-      _ickTimerListLock( ictx );
-      if( !_ickTimerFind(ictx,_ickDeviceHeartbeatTimerCb,device,0) ) {
-        ickErrcode_t irc;
-        irc = _ickTimerAdd( ictx, device->lifetime*1000, 0, _ickDeviceHeartbeatTimerCb, device, 0 );
-        if( irc )
-          logerr( "_lwsP2pCb (%s): could not create heartbeat timer (%s)",
-                  psd->uuid, ickStrError(irc) );
-      }
-      _ickTimerListUnlock( ictx );
+      // Heartbeat was already created in _ickWGetXmlCb() if necessary
 
       // Book a write event if a message is already pending
       if( _ickDeviceOutQueue(device) )

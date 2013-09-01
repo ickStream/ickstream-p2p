@@ -184,11 +184,12 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
       *error = ICKERR_NOMEM;
     return NULL;
   }
-  ictx->state       = ICKLIB_CREATED;
-  ictx->tCreation   = _ickTimeNow();
-  ictx->upnpPort    = port;
-  ictx->lifetime    = lifetime;
-  ictx->ickServices = services;
+  ictx->state              = ICKLIB_CREATED;
+  ictx->tCreation          = _ickTimeNow();
+  ictx->lwsConnectMatrixCb = ickP2pDefaultConnectMatrixCb;
+  ictx->upnpPort           = port;
+  ictx->lifetime           = lifetime;
+  ictx->ickServices        = services;
 
 /*------------------------------------------------------------------------*\
     Init mutexes
@@ -307,7 +308,7 @@ ickErrcode_t ickP2pResume( ickP2pContext_t *ictx )
 \*------------------------------------------------------------------------*/
   if( !ictx->upnpBootId )
     ictx->upnpBootId  = (long)time(NULL);
-  if( ictx->upnpConfigId )
+  if( !ictx->upnpConfigId )
     ictx->upnpConfigId = (long)time(NULL);
 
 /*------------------------------------------------------------------------*\
@@ -838,6 +839,25 @@ ickErrcode_t ickP2pAddInterface( ickP2pContext_t *ictx, const char *ifname )
 
 
 /*=========================================================================*\
+    Set upnp loopback behaviour, i.e. if a context sees itself as a device
+\*=========================================================================*/
+ickErrcode_t ickP2pUpnpLoopback( ickP2pContext_t *ictx, int enable )
+{
+  debug( "ickP2pUpnpLoopback (%p): %s", ictx, enable?"on":"off" );
+
+/*------------------------------------------------------------------------*\
+    Set flag in context
+\*------------------------------------------------------------------------*/
+  ictx->upnpLoopback = enable;
+
+/*------------------------------------------------------------------------*\
+  That's all
+\*------------------------------------------------------------------------*/
+  return ICKERR_SUCCESS;
+}
+
+
+/*=========================================================================*\
     Rename device
 \*=========================================================================*/
 ickErrcode_t ickP2pSetName( ickP2pContext_t *ictx, const char *name )
@@ -948,6 +968,16 @@ int ickP2pGetUpnpPort( const ickP2pContext_t *ictx )
   return ictx->upnpPort;
 }
 
+
+/*=========================================================================*\
+  Get loopbback mode of a context
+\*=========================================================================*/
+int ickP2pGetUpnpLoopback( const ickP2pContext_t *ictx )
+{
+  return ictx->upnpLoopback;
+}
+
+
 /*=========================================================================*\
   Get services of a context
 \*=========================================================================*/
@@ -1020,6 +1050,154 @@ ickErrcode_t ickP2pRemoveService( ickP2pContext_t *ictx, ickP2pServicetype_t typ
     That's all
 \*------------------------------------------------------------------------*/
   return ICKERR_SUCCESS;
+}
+
+
+#pragma mark -- Get device features (allowed only in callbacks!)
+
+
+/*=========================================================================*\
+  Get device name
+    caller must copy value before exit of callback
+    returns NULL on error (uuid unknown)
+\*=========================================================================*/
+char *ickP2pGetDeviceName( const ickP2pContext_t *ictx, const char *uuid )
+{
+  ickDevice_t *device = _ickLibDeviceFindByUuid( ictx, uuid );
+  if( !device )
+    return NULL;
+  return device->friendlyName;
+}
+
+
+/*=========================================================================*\
+  Device service types
+    returns ICKP2P_SERVICE_NONE on error (uuid unknown)
+\*=========================================================================*/
+ickP2pServicetype_t ickP2pGetDeviceServices( const ickP2pContext_t *ictx, const char *uuid )
+{
+  ickDevice_t *device = _ickLibDeviceFindByUuid( ictx, uuid );
+  if( !device )
+    return ICKP2P_SERVICE_NONE;
+  return device->services;
+}
+
+
+/*=========================================================================*\
+  Get device location (the URI of the unpn xml descriptor)
+    caller must copy value before exit of callback
+    returns NULL on error (uuid unknown) or if not yet known
+\*=========================================================================*/
+char *ickP2pGetDeviceLocation( const ickP2pContext_t *ictx, const char *uuid )
+{
+  ickDevice_t *device = _ickLibDeviceFindByUuid( ictx, uuid );
+  if( !device )
+    return NULL;
+  return device->location;
+}
+
+
+/*=========================================================================*\
+  Get device lifetime interval
+    returns -1 on error (uuid unknown) or 0 if not yet known
+\*=========================================================================*/
+int ickP2pGetDeviceLifetime( const ickP2pContext_t *ictx, const char *uuid )
+{
+  ickDevice_t *device = _ickLibDeviceFindByUuid( ictx, uuid );
+  if( !device )
+    return -1;
+  return device->lifetime;
+}
+
+
+/*=========================================================================*\
+  Get device unpn service version
+    returns -1 on error (uuid unknown) or 0 if not yet known
+\*=========================================================================*/
+int ickP2pGetDeviceUpnpVersion( const ickP2pContext_t *ictx, const char *uuid )
+{
+  ickDevice_t *device = _ickLibDeviceFindByUuid( ictx, uuid );
+  if( !device )
+    return -1;
+  return device->ickUpnpVersion;
+}
+
+
+/*=========================================================================*\
+  Get device connection matrix entry
+    returns -1 on error (uuid unknown)
+\*=========================================================================*/
+int ickP2pGetDeviceConnect( const ickP2pContext_t *ictx, const char *uuid )
+{
+  ickDevice_t *device = _ickLibDeviceFindByUuid( ictx, uuid );
+  if( !device )
+    return -1;
+  return device->doConnect;
+}
+
+
+/*=========================================================================*\
+  Get number of pending messages (output queue length) to a device
+    returns -1 on error (uuid unknown)
+\*=========================================================================*/
+int ickP2pGetDeviceMessagesPending( const ickP2pContext_t *ictx, const char *uuid )
+{
+  ickDevice_t *device = _ickLibDeviceFindByUuid( ictx, uuid );
+  if( !device )
+    return -1;
+  return _ickDevicePendingMessages( device );
+}
+
+
+/*=========================================================================*\
+  Get number of messages sent to a device
+    returns -1 on error (uuid unknown)
+\*=========================================================================*/
+int ickP2pGetDeviceMessagesSent( const ickP2pContext_t *ictx, const char *uuid )
+{
+  ickDevice_t *device = _ickLibDeviceFindByUuid( ictx, uuid );
+  if( !device )
+    return -1;
+  return device->nTx;
+}
+
+
+/*=========================================================================*\
+  Get number of messages received from a device
+    returns -1 on error (uuid unknown)
+\*=========================================================================*/
+int ickP2pGetDeviceMessagesReceived( const ickP2pContext_t *ictx, const char *uuid )
+{
+  ickDevice_t *device = _ickLibDeviceFindByUuid( ictx, uuid );
+  if( !device )
+    return -1;
+  return device->nRx;
+}
+
+
+/*=========================================================================*\
+  Get creation time of a device (time_t plus fractional seconds)
+    returns -1.0 on error (uuid unknown)
+\*=========================================================================*/
+double ickP2pGetDeviceTimeCreated( const ickP2pContext_t *ictx, const char *uuid )
+{
+  ickDevice_t *device = _ickLibDeviceFindByUuid( ictx, uuid );
+  if( !device )
+    return -1.0;
+  return device->tCreation;
+}
+
+
+/*=========================================================================*\
+  Get connection time of a device (time_t plus fractional seconds)
+    returns -1.0 on error (uuid unknown) or 0 if not (yet) connected
+\*=========================================================================*/
+double ickP2pGetDeviceTimeConnected( const ickP2pContext_t *ictx, const char *uuid )
+{
+  ickDevice_t *device = _ickLibDeviceFindByUuid( ictx, uuid );
+  if( !device )
+    return -1.0;
+  return device->tConnect;
 }
 
 
@@ -1130,7 +1308,7 @@ void _ickLibDeviceRemove( ickP2pContext_t *ictx, ickDevice_t *device )
     caller should lock the device list of the handler
     nt and usn are the SSDP header files identifying the device
 \*=========================================================================*/
-ickDevice_t *_ickLibDeviceFindByUuid( ickP2pContext_t *ictx, const char *uuid )
+ickDevice_t *_ickLibDeviceFindByUuid( const ickP2pContext_t *ictx, const char *uuid )
 {
   ickDevice_t *device;
   debug ( "_ickLibDeviceFind (%p): UUID=\"%s\".", ictx, uuid );
@@ -1156,7 +1334,7 @@ ickDevice_t *_ickLibDeviceFindByUuid( ickP2pContext_t *ictx, const char *uuid )
     caller should lock the device list of the handler
     nt and usn are the SSDP header files identifying the device
 \*=========================================================================*/
-ickDevice_t *_ickLibDeviceFindByWsi( ickP2pContext_t *ictx,struct libwebsocket *wsi )
+ickDevice_t *_ickLibDeviceFindByWsi( const ickP2pContext_t *ictx,struct libwebsocket *wsi )
 {
   ickDevice_t *device;
   debug ( "_ickLibDeviceFindByWsi (%p): wsi=%p.", ictx, wsi );

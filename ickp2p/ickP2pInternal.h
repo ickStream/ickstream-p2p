@@ -134,6 +134,7 @@ struct _ickP2pContext {
   char                        *interface;      // strong
   int                          upnpPort;
   int                          upnpSocket;
+  int                          upnpLoopback;
   char                        *locationRoot;   // strong
 
   // List of remote devices seen by this interface
@@ -201,8 +202,8 @@ void _ickLibDeviceListLock( ickP2pContext_t *ictx );
 void _ickLibDeviceListUnlock( ickP2pContext_t *ictx );
 void _ickLibDeviceAdd( ickP2pContext_t *ictx, ickDevice_t *device );
 void _ickLibDeviceRemove( ickP2pContext_t *ictx, ickDevice_t *device );
-ickDevice_t *_ickLibDeviceFindByUuid( ickP2pContext_t *ictx, const char *uuid );
-ickDevice_t *_ickLibDeviceFindByWsi( ickP2pContext_t *ictx,struct libwebsocket *wsi );
+ickDevice_t *_ickLibDeviceFindByUuid( const ickP2pContext_t *ictx, const char *uuid );
+ickDevice_t *_ickLibDeviceFindByWsi( const ickP2pContext_t *ictx,struct libwebsocket *wsi );
 
 
 void _ickLibExecDiscoveryCallback( ickP2pContext_t *ictx,

@@ -421,7 +421,7 @@ void *_ickMainThread( void *arg )
         continue;
 
       // Ignore loop back messages from ourself
-      if( ssdp->uuid && !strcasecmp(ssdp->uuid,ictx->deviceUuid) ) {
+      if( !ictx->upnpLoopback && ssdp->uuid && !strcasecmp(ssdp->uuid,ictx->deviceUuid) ) {
         debug( "ickp2p main thread: ignoring message from myself" );
         _ickSsdpFree( ssdp );
         continue;
@@ -461,7 +461,7 @@ void *_ickMainThread( void *arg )
         _ickWGetDestroy( wget );
 
         // If the device is complete, initiate web socket connection
-        if( device->friendlyName && !device->wsi )
+        if( device->friendlyName && !device->wsi && device->doConnect )
           _ickWebSocketOpen( ictx->lwsContext, device );
       }
     }

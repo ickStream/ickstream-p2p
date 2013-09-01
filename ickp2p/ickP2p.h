@@ -140,7 +140,7 @@ typedef struct _ickP2pContext ickP2pContext_t;
 typedef void         (*ickP2pEndCb_t)( ickP2pContext_t *ictx );
 typedef void         (*ickP2pDiscoveryCb_t)( ickP2pContext_t *ictx, const char *uuid, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type );
 typedef ickErrcode_t (*ickP2pMessageCb_t)( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices, const char* message, size_t mSize );
-typedef int          (*ickP2pConnectMatrixCb_t)( ickP2pContext_t *ictx, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetService );
+typedef int          (*ickP2pConnectMatrixCb_t)( ickP2pContext_t *ictx, ickP2pServicetype_t localServices, ickP2pServicetype_t remoteServices );
 typedef void         (*ickP2pLogFacility_t)( const char *file, int line, int prio, const char * format, ... );
 
 
@@ -173,9 +173,10 @@ ickErrcode_t         ickP2pSuspend( ickP2pContext_t *ictx );
 ickErrcode_t         ickP2pEnd( ickP2pContext_t *ictx, ickP2pEndCb_t callback );
 
 // Context configuration
-ickErrcode_t         ickP2pAddinterface( ickP2pContext_t *ictx, const char *ifname );
+ickErrcode_t         ickP2pAddInterface( ickP2pContext_t *ictx, const char *ifname );
+ickErrcode_t         ickP2pUpnpLoopback( ickP2pContext_t *ictx, int enable );
 ickErrcode_t         ickP2pSetConnectMatrix( ickP2pContext_t *ictx, ickP2pConnectMatrixCb_t matrixCb );
-ickErrcode_t         ickP2pSetName( ickP2pContext_t *ictx, const char *name );
+// ickErrcode_t         ickP2pSetName( ickP2pContext_t *ictx, const char *name );
 ickErrcode_t         ickP2pRegisterDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDiscoveryCb_t callback );
 ickErrcode_t         ickP2pRemoveDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDiscoveryCb_t callback );
 ickErrcode_t         ickP2pDiscoveryRegisterMessageCallback( ickP2pContext_t *ictx, ickP2pMessageCb_t callback );
@@ -192,6 +193,7 @@ const char          *ickP2pGetHostname( const ickP2pContext_t *ictx );
 const char          *ickP2pGetIf( const ickP2pContext_t *ictx );
 int                  ickP2pGetLwsPort( const ickP2pContext_t *ictx );
 int                  ickP2pGetUpnpPort( const ickP2pContext_t *ictx );
+int                  ickP2pGetUpnpLoopback( const ickP2pContext_t *ictx );
 long                 ickP2pGetBootId( const ickP2pContext_t *ictx );
 long                 ickP2pGetConfigId( const ickP2pContext_t *ictx );
 ickP2pServicetype_t  ickP2pGetServices( const ickP2pContext_t *ictx );
@@ -203,10 +205,18 @@ ickErrcode_t         ickDiscoveryRemoveService( ickP2pContext_t *ictx, ickP2pSer
 #endif
 
 // Get device features (allowed only in callbacks!)
-ickP2pServicetype_t  ickP2pGetDeviceType( const ickP2pContext_t *ictx, const char *uuid );
 char                *ickP2pGetDeviceName( const ickP2pContext_t *ictx, const char *uuid );
-char                *ickP2pGetDeviceURL( const ickP2pContext_t *ictx, const char *uuid );
-int                  ickP2pGetDevicePort( const ickP2pContext_t *ictx, const char *uuid );
+ickP2pServicetype_t  ickP2pGetDeviceServices( const ickP2pContext_t *ictx, const char *uuid );
+char                *ickP2pGetDeviceLocation( const ickP2pContext_t *ictx, const char *uuid );
+int                  ickP2pGetDeviceLifetime( const ickP2pContext_t *ictx, const char *uuid );
+int                  ickP2pGetDeviceUpnpVersion( const ickP2pContext_t *ictx, const char *uuid );
+int                  ickP2pGetDeviceConnect( const ickP2pContext_t *ictx, const char *uuid );
+int                  ickP2pGetDeviceMessagesPending( const ickP2pContext_t *ictx, const char *uuid );
+int                  ickP2pGetDeviceMessagesSent( const ickP2pContext_t *ictx, const char *uuid );
+int                  ickP2pGetDeviceMessagesReceived( const ickP2pContext_t *ictx, const char *uuid );
+double               ickP2pGetDeviceTimeCreated( const ickP2pContext_t *ictx, const char *uuid );
+double               ickP2pGetDeviceTimeConnected( const ickP2pContext_t *ictx, const char *uuid );
+
 
 // Messaging
 ickErrcode_t         ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid, ickP2pServicetype_t targetServices,
@@ -216,6 +226,9 @@ ickErrcode_t         ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid, ick
 ickErrcode_t         ickP2pRemoteDebugApi( ickP2pContext_t *ictx, int enable );
 char                *ickP2pGetLocalDebugInfo( ickP2pContext_t *ictx, const char *uuid );
 char                *ickP2pGetRemoteDebugInfo( ickP2pContext_t *ictx, const char *remoteUuid, const char *uuid );
+
+// Default connection matrix
+int                 ickP2pDefaultConnectMatrixCb( ickP2pContext_t *ictx, ickP2pServicetype_t localServices, ickP2pServicetype_t remoteServices );
 
 
 #endif /* __ICKP2P_H */

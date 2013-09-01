@@ -179,6 +179,15 @@ int main( int argc, char *argv[] )
   }
 
 /*------------------------------------------------------------------------*\
+    Set loopback mode
+\*------------------------------------------------------------------------*/
+  irc = ickP2pUpnpLoopback( ictx, 1 );
+  if( irc ) {
+    printf( "ickP2pUpnpLoopback: %s\n", ickStrError(irc) );
+    goto end;
+  }
+
+/*------------------------------------------------------------------------*\
     Startup
 \*------------------------------------------------------------------------*/
   irc = ickP2pResume( ictx );
@@ -190,16 +199,17 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Report status
 \*------------------------------------------------------------------------*/
-  printf( "ickP2pGetOsName:     \"%s\"\n", ickP2pGetOsName(ictx) );
-  printf( "ickP2pGetDeviceName: \"%s\"\n", ickP2pGetName(ictx) );
-  printf( "ickP2pGetDeviceUuid: \"%s\"\n", ickP2pGetDeviceUuid(ictx) );
-  printf( "ickP2pGetState:      %d\n",     ickP2pGetState(ictx) );
-  printf( "ickP2pGetBootId:     %ld\n",    ickP2pGetBootId(ictx) );
-  printf( "ickP2pGetConfigId:   %ld\n",    ickP2pGetConfigId(ictx) );
-  printf( "ickP2pGetUpnpPort:   %d\n",     ickP2pGetUpnpPort(ictx) );
-  printf( "ickP2pGetLwsPort:    %d\n",     ickP2pGetLwsPort(ictx) );
-  printf( "ickP2pGetHostname:   %s\n",     ickP2pGetHostname(ictx) );
-  printf( "ickP2pGetServices:   0x%02x\n", ickP2pGetServices(ictx) );
+  printf( "ickP2pGetOsName:        \"%s\"\n", ickP2pGetOsName(ictx) );
+  printf( "ickP2pGetDeviceName:    \"%s\"\n", ickP2pGetName(ictx) );
+  printf( "ickP2pGetDeviceUuid:    \"%s\"\n", ickP2pGetDeviceUuid(ictx) );
+  printf( "ickP2pGetState:         %d\n",     ickP2pGetState(ictx) );
+  printf( "ickP2pGetBootId:        %ld\n",    ickP2pGetBootId(ictx) );
+  printf( "ickP2pGetConfigId:      %ld\n",    ickP2pGetConfigId(ictx) );
+  printf( "ickP2pGetUpnpPort:      %d\n",     ickP2pGetUpnpPort(ictx) );
+  printf( "ickP2pGetLwsPort:       %d\n",     ickP2pGetLwsPort(ictx) );
+  printf( "ickP2pGetHostname:      %s\n",     ickP2pGetHostname(ictx) );
+  printf( "ickP2pGetServices:      0x%02x\n", ickP2pGetServices(ictx) );
+  printf( "ickP2pGetUpnpLoopback:  %d\n",     ickP2pGetUpnpLoopback(ictx) );
 
 /*------------------------------------------------------------------------*\
     Main loop: wait for termination
