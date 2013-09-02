@@ -148,7 +148,7 @@ char *ickP2pGetLocalDebugInfo( ickP2pContext_t *ictx, const char *uuid )
     }
 
     // Get debug info as JSON object string
-    result = _ickDeviceStateJson( device, 2 );
+    result = _ickDeviceStateJson( device, 0 );
 
     // Unlock device list
     _ickLibDeviceListUnlock( ictx );
@@ -382,7 +382,7 @@ static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
                   "%*s\"name\": \"%s\",\n"
                   "%*s\"services\": %d,\n"
                   "%*s\"hostname\": \"%s\",\n"
-                  "%*s\"upnpPort\": \"%d\",\n"
+                  "%*s\"upnpPort\": %d,\n"
                   "%*s\"wsPort\": %d,\n"
                   "%*s\"folder\": \"%s\",\n"
                   "%*s\"lifetime\": %d,\n"
