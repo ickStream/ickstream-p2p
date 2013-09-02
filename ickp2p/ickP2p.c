@@ -89,7 +89,7 @@ Remarks         : -
 \*=========================================================================*/
 const char *ickP2pGetVersion( int *major, int *minor )
 {
-  static char buffer[8];
+  static char buffer[20];
 
 /*------------------------------------------------------------------------*\
     Store numerical versions to pointers, if given
@@ -102,8 +102,12 @@ const char *ickP2pGetVersion( int *major, int *minor )
 /*------------------------------------------------------------------------*\
     Build version strong only once
 \*------------------------------------------------------------------------*/
-  if( !*buffer )
-    sprintf( buffer, "%d.%d", ICK_VERSION_MAJOR, ICK_VERSION_MINOR );
+  if( !*buffer ) {
+    char *gitver = ickP2pGitVersion();
+    if( strlen(gitver)>10 )
+      gitver += strlen(gitver)-10;
+    sprintf( buffer, "%d.%d %s", ICK_VERSION_MAJOR, ICK_VERSION_MINOR, gitver );
+  }
 
 /*------------------------------------------------------------------------*\
     That's it

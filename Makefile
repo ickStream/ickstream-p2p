@@ -77,7 +77,7 @@ $(ICKLIB): $(LIBOBJ)
 $(TESTEXEC): $(INCLUDEDIR) $(TESTSRC) $(ICKLIB) Makefile
 	@echo '*************************************************************'
 	@echo "Building test executable:"
-	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(TESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -ljansson -lpthread -luuid -o $(TESTEXEC)
+	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(TESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -lpthread -luuid -o $(TESTEXEC)
 
 # Provide public headers
 $(INCLUDEDIR): $(PUBLICHEADERS)

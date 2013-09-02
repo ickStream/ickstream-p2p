@@ -62,10 +62,6 @@ Remarks         : Library needs to be compiled with ICK_P2PENABLEDEBUGAPI
 #include "ickP2pCom.h"
 #include "ickP2pDebug.h"
 
-#ifdef ICK_P2PENABLEDEBUGAPI
-#include <jansson.h>
-#endif
-
 
 /*=========================================================================*\
   Global symbols
@@ -76,18 +72,21 @@ Remarks         : Library needs to be compiled with ICK_P2PENABLEDEBUGAPI
 /*=========================================================================*\
   Private definitions and symbols
 \*=========================================================================*/
-// none
+#define JSON_INDENT     2
+#define JSON_BOOL(a)    ((a)?"true":"false")
+#define JSON_STRING(s)  ((s)?(s):"(nil)")
+#define JSON_OBJECT(o)  ((o)?(o):"null")
+#define JSON_REAL(r)    ((double)(r))
+#define JSON_INTEGER(i) ((int)(i))
 
 
 /*=========================================================================*\
   Private prototypes
 \*=========================================================================*/
 #ifdef ICK_P2PENABLEDEBUGAPI
-static json_t *_ickP2pGetLocalDebugInfoForContext( ickP2pContext_t *ictx );
-static json_t *_ickContextStateJson( ickP2pContext_t *ictx );
-static json_t *_ickDeviceStateJson( ickDevice_t *device );
-// static json_t *_ickWsiStateJson( _ickLwsP2pData_t *psd );
-static json_t *_ickMessageStateJson( ickMessage_t *message );
+static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent );
+static char *_ickDeviceStateJson( ickDevice_t *device, int indent );
+static char *_ickMessageStateJson( ickMessage_t *message, int indent );
 #endif
 
 
@@ -127,13 +126,12 @@ char *ickP2pGetLocalDebugInfo( ickP2pContext_t *ictx, const char *uuid )
   logwarn( "ickP2pGetLocalDebugInfoForDevice: p2plib not compiled with debugging API support." );
 #else
   ickDevice_t *device;
-  json_t      *jDebugInfo;
 
 /*------------------------------------------------------------------------*\
     Get complete context info?
 \*------------------------------------------------------------------------*/
   if( !uuid )
-    jDebugInfo = _ickP2pGetLocalDebugInfoForContext( ictx );
+    result = _ickContextStateJson( ictx, 0 );
 
 /*------------------------------------------------------------------------*\
     Get info for specific device identified by UUID
@@ -149,24 +147,12 @@ char *ickP2pGetLocalDebugInfo( ickP2pContext_t *ictx, const char *uuid )
       return NULL;
     }
 
-    // Get debug info as JSON container
-    jDebugInfo = _ickDeviceStateJson( device );
-    if( !jDebugInfo ) {
-      _ickLibDeviceListUnlock( ictx );
-      return NULL;
-    }
+    // Get debug info as JSON object string
+    result = _ickDeviceStateJson( device, 2 );
 
     // Unlock device list
     _ickLibDeviceListUnlock( ictx );
   }
-
-/*------------------------------------------------------------------------*\
-    Convert JSON result to string
-\*------------------------------------------------------------------------*/
-  result = json_dumps( jDebugInfo, JSON_PRESERVE_ORDER|JSON_INDENT(2) );
-  json_decref( jDebugInfo );
-  if( !result )
-    logerr( "ickP2pGetLocalDebugInfoForDevice: out of memory or JSON error", uuid );
 
 #endif
 
@@ -331,136 +317,151 @@ char *_ickP2pGetDebugFile( ickP2pContext_t *ictx, const char *uri )
 
 
 /*=========================================================================*\
-  Get debug info for a context
-    the returned string is allocated and must be freed by caller
-    returns NULL on error or if debugging is not enabled
-\*=========================================================================*/
-static json_t *_ickP2pGetLocalDebugInfoForContext( ickP2pContext_t *ictx )
-{
-  ickDevice_t *device;
-  json_t      *jResult;
-  json_t      *jDeviceArray;
-  debug( "_ickP2pGetLocalDebugInfoForContext (%p): ", ictx );
-
-/*------------------------------------------------------------------------*\
-    Get context info
-\*------------------------------------------------------------------------*/
-  jResult = _ickContextStateJson( ictx );
-  if( !jResult )
-    return NULL;
-
-/*------------------------------------------------------------------------*\
-    Allocate array for device infos
-\*------------------------------------------------------------------------*/
-  jDeviceArray = json_array();
-  if( !jDeviceArray ) {
-    logerr( "_ickP2pGetLocalDebugInfoForContext: out of memory or JSON error" );
-    json_decref( jResult );
-    return NULL;
-  }
-
-/*------------------------------------------------------------------------*\
-    Lock device list and loop over all devices
-\*------------------------------------------------------------------------*/
-  _ickLibDeviceListLock( ictx );
-  for( device=ictx->deviceList; device; device=device->next ) {
-    json_t *jDeviceInfo;
-
-    // Get debug info
-    jDeviceInfo = _ickDeviceStateJson( device );
-    if( !jDeviceInfo )
-      continue;
-
-    // Add to list
-    if( json_array_append_new(jDeviceArray,jDeviceInfo) ) {
-      logerr( "_ickP2pGetLocalDebugInfoForContext: out of memory or JSON error" );
-      continue;
-    }
-  }
-
-/*------------------------------------------------------------------------*\
-    Unlock device list
-\*------------------------------------------------------------------------*/
-  _ickLibDeviceListUnlock( ictx );
-
-/*------------------------------------------------------------------------*\
-    Append device info to context info
-\*------------------------------------------------------------------------*/
-  if( json_object_set_new(jResult,"devices",jDeviceArray) ) {
-    logerr( "_ickP2pGetLocalDebugInfoForContext: out of memory or JSON error" );
-    json_decref( jResult );
-    json_decref( jDeviceArray );
-    return NULL;
-  }
-
-/*------------------------------------------------------------------------*\
-    That's all
-\*------------------------------------------------------------------------*/
-  return jResult;
-}
-
-
-/*=========================================================================*\
-  Get context info as JSON container
-    this will not include the device list
+  Get context info as allocated JSON object string including device list
+    (no unicode escaping of strings)
+    caller must free result
     returns NULL on error
 \*=========================================================================*/
-static json_t *_ickContextStateJson( ickP2pContext_t *ictx )
+static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
 {
-  json_t *jResult;
+  ickDevice_t *device;
+  char        *devices = NULL;
+  int          i;
+  int          rc;
+  char        *result;
   debug( "_ickContextStateJson (%p): %s", ictx->deviceUuid );
+  indent += JSON_INDENT;
 
 /*------------------------------------------------------------------------*\
-    Compile all debug info
+    Compile array of devices
 \*------------------------------------------------------------------------*/
-  jResult = json_pack( "{ss ss si ss si si so si si sb sb sf sf ss ss ss ss ss si ss si si}",
-                       "uuid",                 ictx->deviceUuid,
-                       "name",                 ictx->deviceName,
-                       "services",        (int)ictx->ickServices,
-                       "hostname",             ictx->hostName,
-                       "upnpPort",             ictx->upnpPort,
-                       "wsPort",               ictx->lwsPort,
-                       "folder",               ictx->upnpFolder?json_string(ictx->upnpFolder):json_null(),
-                       "lifetime",             ictx->lifetime,
-                       "state",                ictx->state,
-                       "loopback",             ictx->upnpLoopback,
-                       "customConnectMatrix",  ictx->lwsConnectMatrixCb==ickP2pDefaultConnectMatrixCb,
-                       "tCreation",            ictx->tCreation,
-                       "tResume",              ictx->tResume,
-                       "mainInterface",        ictx->interface,
-                       "locationRoot",         ictx->locationRoot,
-                       "osName",               ictx->osName,
-                       "p2pVersion",           ickP2pGetVersion( NULL, NULL ),
-                       "gitVersion",           ickP2pGitVersion(),
-                       "p2pLevel",        (int)ICKP2PLEVEL_SUPPORTED,
-                       "lwsVersion",           lws_get_library_version(),
-                       "bootId",          (int)ictx->upnpBootId,
-                       "configId",        (int)ictx->upnpConfigId
-                     );
+  _ickLibDeviceListLock( ictx );
+  devices = strdup( "[" );
+  for( i=0,device=ictx->deviceList; device&&devices; i++,device=device->next ) {
+    char *deviceInfo;
+
+    // Get debug info
+    deviceInfo = _ickDeviceStateJson( device, indent+JSON_INDENT );
+    if( !deviceInfo ) {
+      Sfree( devices );
+      break;
+    }
+
+    // Add to list
+    rc = asprintf( &result, "%s%s\n%*s%s", devices, i?",":"", indent+JSON_INDENT, "", deviceInfo );
+    Sfree( devices );
+    Sfree( deviceInfo );
+    if( rc<0 )
+      break;
+    else
+      devices = result;
+
+  }
+  _ickLibDeviceListUnlock( ictx );
+
+  // Close list
+  if( devices ) {
+    rc = asprintf( &result, "%s\n%*s]", devices, indent, "" );
+    Sfree( devices );
+    if( rc>0 )
+      devices = result;
+  }
+
+  // Error ?
+  if( !devices ) {
+    logerr( "_ickContextStateJson: out of memory" );
+    return NULL;
+  }
+
+/*------------------------------------------------------------------------*\
+    Compile all context debug info
+\*------------------------------------------------------------------------*/
+  rc = asprintf( &result,
+                  "{\n"
+                  "%*s\"uuid\": \"%s\",\n"
+                  "%*s\"name\": \"%s\",\n"
+                  "%*s\"services\": %d,\n"
+                  "%*s\"hostname\": \"%s\",\n"
+                  "%*s\"upnpPort\": \"%d\",\n"
+                  "%*s\"wsPort\": %d,\n"
+                  "%*s\"folder\": \"%s\",\n"
+                  "%*s\"lifetime\": %d,\n"
+                  "%*s\"state\": %d,\n"
+                  "%*s\"loopback\": %s,\n"
+                  "%*s\"customConnectMatrix\": %s,\n"
+                  "%*s\"tCreation\": %f,\n"
+                  "%*s\"tResume\": %f,\n"
+                  "%*s\"mainInterface\": \"%s\",\n"
+                  "%*s\"locationRoot\": \"%s\",\n"
+                  "%*s\"osName\": \"%s\",\n"
+                  "%*s\"p2pVersion\": \"%s\",\n"
+                  "%*s\"p2pLevel\": %d,\n"
+                  "%*s\"lwsVersion\": \"%s\",\n"
+                  "%*s\"bootId\": %d,\n"
+                  "%*s\"configId\": %d,\n"
+                  "%*s\"devices\": %s\n"
+                  "%*s}\n",
+                  indent, "", JSON_STRING( ictx->deviceUuid ),
+                  indent, "", JSON_STRING( ictx->deviceName ),
+                  indent, "", JSON_INTEGER( ictx->ickServices ),
+                  indent, "", JSON_STRING( ictx->hostName ),
+                  indent, "", JSON_INTEGER( ictx->upnpPort ),
+                  indent, "", JSON_INTEGER( ictx->lwsPort ),
+                  indent, "", JSON_STRING( ictx->upnpFolder),
+                  indent, "", JSON_INTEGER( ictx->lifetime ),
+                  indent, "", JSON_INTEGER( ictx->state ),
+                  indent, "", JSON_BOOL( ictx->upnpLoopback ),
+                  indent, "", JSON_BOOL( ictx->lwsConnectMatrixCb==ickP2pDefaultConnectMatrixCb ),
+                  indent, "", JSON_REAL( ictx->tCreation ),
+                  indent, "", JSON_REAL( ictx->tResume ),
+                  indent, "", JSON_STRING( ictx->interface ),
+                  indent, "", JSON_STRING( ictx->locationRoot ),
+                  indent, "", JSON_STRING( ictx->osName ),
+                  indent, "", JSON_STRING( ickP2pGetVersion(NULL,NULL) ),
+                  indent, "", JSON_INTEGER( ICKP2PLEVEL_SUPPORTED ),
+                  indent, "", JSON_STRING( lws_get_library_version() ),
+                  indent, "", JSON_INTEGER(ictx->upnpBootId ),
+                  indent, "", JSON_INTEGER(ictx->upnpConfigId ),
+                  indent, "", JSON_OBJECT( devices ),
+                  indent-JSON_INDENT, ""
+                );
+  Sfree( devices );
 
 /*------------------------------------------------------------------------*\
     Error
 \*------------------------------------------------------------------------*/
-  if( !jResult )
-    logerr( "_ickContextStateJson: out of memory or JSON error" );
+  if( rc<0 ) {
+    logerr( "_ickContextStateJson: out of memory" );
+    return NULL;
+  }
 
 /*------------------------------------------------------------------------*\
     Return result
 \*------------------------------------------------------------------------*/
-  return jResult;
+  return result;
 }
 
+
 /*=========================================================================*\
-  Get device info as JSON container
-    caller should lock the device
+  Get device info as allocated JSON object string
+    (no unicode escaping of strings)
+    caller must free result and should lock the device
     returns NULL on error
 \*=========================================================================*/
-static json_t *_ickDeviceStateJson( ickDevice_t *device )
+static char *_ickDeviceStateJson( ickDevice_t *device, int indent )
 {
-  json_t *jResult;
-  json_t *jWsi;
-  json_t *jMessage;
+  int   rc;
+  char *result;
+  char *wsi;
+  char *message;
   debug( "_ickDeviceStateJson: %s", device->uuid );
+  indent += JSON_INDENT;
+
+/*------------------------------------------------------------------------*\
+    Empty data?
+\*------------------------------------------------------------------------*/
+  if( !device )
+    return strdup( "null" );
 
 /*------------------------------------------------------------------------*\
     Create websocket information (if any)
@@ -469,138 +470,136 @@ static json_t *_ickDeviceStateJson( ickDevice_t *device )
   psd  = // no way to get user data from a wsi outside a lws callback scope
   jWsi = _ickWsiStateJson( psd );
   */
-  jWsi = device->wsi ? json_true() : json_false();
-  if( !jWsi ) {
-    logerr( "_ickDeviceStateJson: out of memory or JSON error" );
+  wsi = strdup( JSON_BOOL(device->wsi) );
+  if( !wsi ) {
+    logerr( "_ickDeviceStateJson: out of memory" );
     return NULL;
   }
 
 /*------------------------------------------------------------------------*\
     Create message information (if any)
 \*------------------------------------------------------------------------*/
-  jMessage = _ickMessageStateJson( device->outQueue );
-  if( !jMessage ) {
-    logerr( "_ickDeviceStateJson: out of memory or JSON error" );
-    json_decref( jWsi );
+  message = _ickMessageStateJson( device->outQueue, indent+JSON_INDENT );
+  if( !message ) {
+    Sfree( wsi );
+    logerr( "_ickDeviceStateJson: out of memory" );
     return NULL;
   }
 
 /*------------------------------------------------------------------------*\
     Compile all debug info
 \*------------------------------------------------------------------------*/
-  jResult = json_pack( "{ss si sf ss ss si si si si sf sb sf sf sb si si si si sf sf sb so}",
-                       "name",            device->friendlyName,
-                       "type",            device->type,
-                       "tCreation",       device->tCreation,
-                       "UUID",            device->uuid,
-                       "location",        device->location,
-                       "upnpVersion",     device->ickUpnpVersion,
-                       "p2pLevel",        device->ickP2pLevel,
-                       "lifetime",        device->lifetime,
-                       "services",        device->services,
-                       "tXmlComplete",    device->tXmlComplete,
-                       "doConnect",       device->doConnect,
-                       "tConnect",        device->tConnect,
-                       "tDisconnect",     device->tDisconnect,
-                       "localIsServer",   device->localIsServer,
-                       "rx",              device->nRx,
-                       "rxSegmented",     device->nRxSegmented,
-                       "tx",              device->nTx,
-                       "txPending",       _ickDevicePendingMessages(device),
-                       "rxLast",          device->tLastRx,
-                       "txLast",          device->tLastTx,
-                       "wsi",             jWsi,
-                       "message",         jMessage );
+  rc = asprintf( &result,
+                  "{\n"
+                  "%*s\"name\": \"%s\",\n"
+                  "%*s\"type\": %d,\n"
+                  "%*s\"tCreation\": %f,\n"
+                  "%*s\"UUID\": \"%s\",\n"
+                  "%*s\"location\": \"%s\",\n"
+                  "%*s\"upnpVersion\": %d,\n"
+                  "%*s\"p2pLevel\": %d,\n"
+                  "%*s\"lifetime\": %d,\n"
+                  "%*s\"services\": %d,\n"
+                  "%*s\"tXmlComplete\": %f,\n"
+                  "%*s\"doConnect\": %s,\n"
+                  "%*s\"tConnect\": %f,\n"
+                  "%*s\"tDisconnect\": %f,\n"
+                  "%*s\"localIsServer\": %s,\n"
+                  "%*s\"rx\": %d,\n"
+                  "%*s\"rxSegmented\": %d,\n"
+                  "%*s\"tx\": %d,\n"
+                  "%*s\"txPending\": %d,\n"
+                  "%*s\"rxLast\": %f,\n"
+                  "%*s\"txLast\": %f,\n"
+                  "%*s\"wsi\": %s,\n"
+                  "%*s\"message\": %s\n"
+                  "%*s}",
+                  indent, "", JSON_STRING( device->friendlyName ),
+                  indent, "", JSON_INTEGER( device->type ),
+                  indent, "", JSON_REAL( device->tCreation ),
+                  indent, "", JSON_STRING( device->uuid ),
+                  indent, "", JSON_STRING( device->location ),
+                  indent, "", JSON_INTEGER( device->ickUpnpVersion ),
+                  indent, "", JSON_INTEGER( device->ickP2pLevel ),
+                  indent, "", JSON_INTEGER( device->lifetime ),
+                  indent, "", JSON_INTEGER( device->services ),
+                  indent, "", JSON_REAL( device->tXmlComplete ),
+                  indent, "", JSON_BOOL( device->doConnect ),
+                  indent, "", JSON_REAL( device->tConnect ),
+                  indent, "", JSON_REAL( device->tDisconnect ),
+                  indent, "", JSON_BOOL( device->localIsServer ),
+                  indent, "", JSON_INTEGER( device->nRx ),
+                  indent, "", JSON_INTEGER( device->nRxSegmented ),
+                  indent, "", JSON_INTEGER( device->nTx ),
+                  indent, "", JSON_INTEGER( _ickDevicePendingMessages(device) ),
+                  indent, "", JSON_REAL( device->tLastRx ),
+                  indent, "", JSON_REAL( device->tLastTx ),
+                  indent, "", JSON_OBJECT( wsi ),
+                  indent, "", JSON_OBJECT( message ),
+                  indent-JSON_INDENT, ""
+                );
+  Sfree( wsi );
+  Sfree( message );
 
 /*------------------------------------------------------------------------*\
     Error
 \*------------------------------------------------------------------------*/
-  if( !jResult ) {
-    logerr( "_ickDeviceStateJson: out of memory or JSON error" );
-    json_decref( jWsi );
-    json_decref( jMessage );
+  if( rc<0 ) {
+    logerr( "_ickDeviceStateJson: out of memory" );
     return NULL;
   }
 
 /*------------------------------------------------------------------------*\
     Return result
 \*------------------------------------------------------------------------*/
-  return jResult;
+  return result;
 }
 
 
 /*=========================================================================*\
-  Get wsi info as JSON container
-    caller should lock the device
+  Get message info as allocated JSON object string
+    (fixed indent of 6, no unicode escaping of strings)
+    caller must free result
     returns NULL on error
 \*=========================================================================*/
-#if 0
-static json_t *_ickWsiStateJson( _ickLwsP2pData_t *psd )
+static char *_ickMessageStateJson( ickMessage_t *message, int indent )
 {
-  json_t           *jResult;
-  debug( "_ickWsiStateJson (%p)", psd );
-
-/*------------------------------------------------------------------------*\
-    Empty data?
-\*------------------------------------------------------------------------*/
-  if( !psd )
-    return json_null();
-
-/*------------------------------------------------------------------------*\
-    Compile wsi debug info
-\*------------------------------------------------------------------------*/
-  jResult = json_pack( "{ss ss si}",
-      "UUID",            psd->uuid,
-      "host",            psd->host,
-      "inBufferSize",    (int)psd->inBufferSize );
-
-/*------------------------------------------------------------------------*\
-    Error
-\*------------------------------------------------------------------------*/
-  if( !jResult )
-    logerr( "_ickWsiStateJson: out of memory or JSON error" );
-
-/*------------------------------------------------------------------------*\
-    Return result
-\*------------------------------------------------------------------------*/
-  return jResult;
-}
-#endif
-
-/*=========================================================================*\
-  Get message info as JSON container
-    caller should lock the device
-    returns NULL on error
-\*=========================================================================*/
-static json_t *_ickMessageStateJson( ickMessage_t *message )
-{
-  json_t *jResult;
+  int   rc;
+  char *result;
   debug( "_ickMessageStateJson (%p): ", message );
+  indent += JSON_INDENT;
 
 /*------------------------------------------------------------------------*\
     Empty data?
 \*------------------------------------------------------------------------*/
   if( !message )
-    return json_null();
+    return strdup( "null" );
 
 /*------------------------------------------------------------------------*\
     Compile message debug info
 \*------------------------------------------------------------------------*/
-  jResult = json_pack( "{sf si si}",
-      "tCreated",        message->tCreated,
-      "size",       (int)message->size,
-      "issued",     (int)message->issued );
+  rc = asprintf( &result,
+                  "{\n"
+                  "%*s\"tCreated\": %f,\n"
+                  "%*s\"size\": %d,\n"
+                  "%*s\"issued\": %d\n"
+                  "%*s}",
+                  indent, "", JSON_REAL( message->tCreated ),
+                  indent, "", JSON_INTEGER( message->size ),
+                  indent, "", JSON_INTEGER( message->issued ),
+                  indent-JSON_INDENT, ""
+                );
 
 /*------------------------------------------------------------------------*\
     Error
 \*------------------------------------------------------------------------*/
-  if( !jResult )
-    logerr( "_ickMessageStateJson: out of memory or JSON error" );
+  if( rc<0 )
+    logerr( "_ickMessageStateJson: out of memory" );
 
 /*------------------------------------------------------------------------*\
     Return result
 \*------------------------------------------------------------------------*/
-  return jResult;
+  return result;
 }
 
 #endif
