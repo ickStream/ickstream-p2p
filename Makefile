@@ -23,6 +23,7 @@ LIBNAME         = libickp2p
 TESTEXEC        = ickp2ptest
 
 ICKLIB          = $(LIBDIR)/$(LIBNAME).a
+OS             := $(shell uname)
 
 #GITVERSION      = $(shell git rev-list HEAD --count)
 GITVERSION      = $(shell git rev-list HEAD --max-count=1)
@@ -45,12 +46,20 @@ TESTOBJ         = $(TESTSRC:.c=.o)
 LIBSRC          = $(addprefix ickp2p/,$(ICKP2PSRCS)) $(MINIUPNPSRCS)
 LIBOBJ          = $(LIBSRC:.c=.o)
 
-
 # Include directories and special headers
 PUBLICHEADERS    = ickp2p/ickP2p.h
 INTERNALINCLUDES = -Iminiupnp/minissdpd -Iminiupnp/miniupnpc
 INCLUDES         =
 GENHEADERS	 = miniupnp/miniupnpc/miniupnpcstrings.h
+
+
+# OS specific settings
+ifeq ($(OS),Linux)
+EXTRALIBS	= -luuid
+endif
+ifeq ($(OS),Darwin)
+endif
+
 
 
 # Default rule: make all
@@ -84,7 +93,7 @@ $(ICKLIB): $(LIBOBJ)
 $(TESTEXEC): $(GENHEADERS) $(INCLUDEDIR) $(TESTSRC) $(ICKLIB) Makefile
 	@echo '*************************************************************'
 	@echo "Building test executable:"
-	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(LFLAGS) $(TESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -lpthread -o $(TESTEXEC)
+	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(LFLAGS) $(TESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -lpthread $(EXTRALIBS) -o $(TESTEXEC)
 
 # Provide public headers
 $(INCLUDEDIR): $(PUBLICHEADERS)
