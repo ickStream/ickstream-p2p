@@ -214,9 +214,9 @@ char *ickP2pGetRemoteDebugInfo( ickP2pContext_t *ictx, const char *remoteUuid, c
     Construct target url
 \*------------------------------------------------------------------------*/
   if( !uuid )
-    rc = asprintf( &url, "%.*s%s", ptr-device->location, device->location, ICK_P2PDEBUGURI );
+    rc = asprintf( &url, "%.*s%s", (int)(ptr-device->location), device->location, ICK_P2PDEBUGURI );
   else
-    rc = asprintf( &url, "%.*s%s/%s", ptr-device->location, device->location, ICK_P2PDEBUGURI, uuid );
+    rc = asprintf( &url, "%.*s%s/%s", (int)(ptr-device->location), device->location, ICK_P2PDEBUGURI, uuid );
   _ickLibDeviceListUnlock( ictx );
   if( rc<0 ) {
     logerr( "ickP2pGetRemoteDebugInfo: out of memory" );

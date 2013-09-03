@@ -85,9 +85,6 @@ typedef enum {
 } ickWGetState_t;
 
 
-struct _ickWGetContext;
-typedef struct _ickWGetContext ickWGetContext_t;
-
 /*------------------------------------------------------------------------*\
   Signatures for function pointers
 \*------------------------------------------------------------------------*/

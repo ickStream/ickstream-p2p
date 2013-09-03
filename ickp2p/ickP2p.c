@@ -200,9 +200,10 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
   ictx->ickServices        = services;
 
 /*------------------------------------------------------------------------*\
-    Init mutexes
+    Init mutexes and conditions
 \*------------------------------------------------------------------------*/
   pthread_mutex_init( &ictx->mutex, NULL );
+  pthread_cond_init( &ictx->condIsReady, NULL );
   pthread_mutex_init( &ictx->discoveryCbsMutex, NULL );
   pthread_mutex_init( &ictx->messageCbsMutex, NULL );
   pthread_mutex_init( &ictx->timersMutex, NULL );

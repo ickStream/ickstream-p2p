@@ -90,8 +90,6 @@ typedef enum {
 //
 // An ickstream device
 //
-struct _ickDevice;
-typedef struct _ickDevice ickDevice_t;
 struct _ickDevice {
   ickDevice_t         *prev;
   ickDevice_t         *next;

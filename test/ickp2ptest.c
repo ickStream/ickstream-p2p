@@ -52,6 +52,7 @@ Remarks         : -
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>
 #include <uuid/uuid.h>
 
 #include "ickP2p.h"
@@ -69,7 +70,9 @@ Remarks         : -
 #define LOGLEVEL    7
 #define DEVICENAME  "ickp2plibtester"
 #define UUID        "3fe109ad-aa4c-4b0e-a089-3e30f5fc1afe"
-#define IFNAME      "wlan0"
+//#define IFNAME      "wlan0"
+#define IFNAME      "en1"
+#define IF1NAME     "lo0"
 
 #define VLP_SIZE    23456L
 #define VLP_MODUL   251
@@ -163,11 +166,13 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Add interface
 \*------------------------------------------------------------------------*/
-  irc = ickP2pAddInterface( ictx, "lo" );
+#ifdef IF1NAME
+  irc = ickP2pAddInterface( ictx, IF1NAME );
   if( irc ) {
     printf( "ickP2pAddInterface: %s\n", ickStrError(irc) );
     goto end;
   }
+#endif
 
 /*------------------------------------------------------------------------*\
     Allow remote access to debuggig information

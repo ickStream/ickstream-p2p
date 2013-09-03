@@ -137,11 +137,11 @@ typedef struct _ickP2pContext ickP2pContext_t;
 /*------------------------------------------------------------------------*\
   Signatures for function pointers
 \*------------------------------------------------------------------------*/
-typedef void         (*ickP2pEndCb_t)( ickP2pContext_t *ictx );
-typedef void         (*ickP2pDiscoveryCb_t)( ickP2pContext_t *ictx, const char *uuid, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type );
-typedef ickErrcode_t (*ickP2pMessageCb_t)( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices, const char* message, size_t mSize );
-typedef int          (*ickP2pConnectMatrixCb_t)( ickP2pContext_t *ictx, ickP2pServicetype_t localServices, ickP2pServicetype_t remoteServices );
-typedef void         (*ickP2pLogFacility_t)( const char *file, int line, int prio, const char * format, ... );
+typedef void  (*ickP2pEndCb_t)( ickP2pContext_t *ictx );
+typedef void  (*ickP2pDiscoveryCb_t)( ickP2pContext_t *ictx, const char *uuid, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type );
+typedef void  (*ickP2pMessageCb_t)( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices, const char* message, size_t mSize );
+typedef int   (*ickP2pConnectMatrixCb_t)( ickP2pContext_t *ictx, ickP2pServicetype_t localServices, ickP2pServicetype_t remoteServices );
+typedef void  (*ickP2pLogFacility_t)( const char *file, int line, int prio, const char * format, ... );
 
 
 /*=========================================================================*\
@@ -179,8 +179,8 @@ ickErrcode_t         ickP2pSetConnectMatrix( ickP2pContext_t *ictx, ickP2pConnec
 // ickErrcode_t         ickP2pSetName( ickP2pContext_t *ictx, const char *name );
 ickErrcode_t         ickP2pRegisterDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDiscoveryCb_t callback );
 ickErrcode_t         ickP2pRemoveDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDiscoveryCb_t callback );
-ickErrcode_t         ickP2pDiscoveryRegisterMessageCallback( ickP2pContext_t *ictx, ickP2pMessageCb_t callback );
-ickErrcode_t         ickDeviceRemoveMessageCallback( ickP2pContext_t *ictx,ickP2pMessageCb_t callback );
+ickErrcode_t         ickP2pRegisterMessageCallback( ickP2pContext_t *ictx, ickP2pMessageCb_t callback );
+ickErrcode_t         ickP2pRemoveMessageCallback( ickP2pContext_t *ictx,ickP2pMessageCb_t callback );
 
 // Get context features
 ickP2pLibState_t     ickP2pGetState( const ickP2pContext_t *ictx );

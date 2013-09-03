@@ -30,7 +30,8 @@ GITVERSION      = $(shell git rev-list HEAD --max-count=1)
 
 AR              = ar
 CC              = cc
-CFLAGS          = -Wall -rdynamic -DLWS_NO_FORK -DGIT_VERSION=$(GITVERSION) -D_GNU_SOURCE
+CFLAGS          = -Wall -DLWS_NO_FORK -DGIT_VERSION=$(GITVERSION) -D_GNU_SOURCE
+LFLAGS		= -rdynamic
 MKDEPFLAGS	= -Y
 
 # Source files to process
@@ -49,21 +50,27 @@ LIBOBJ          = $(LIBSRC:.c=.o)
 PUBLICHEADERS    = ickp2p/ickP2p.h
 INTERNALINCLUDES = -Iminiupnp/minissdpd -Iminiupnp/miniupnpc
 INCLUDES         =
+GENHEADERS	 = miniupnp/miniupnpc/miniupnpcstrings.h
+
 
 # Default rule: make all
-all: $(INCLUDEDIR) $(ICKLIB) 
+all: $(GENHEADERS) $(INCLUDEDIR) $(ICKLIB) 
 
 # Variant: make for debugging
 debug: DEBUGFLAGS = -g -DICK_DEBUG
-debug: $(INCLUDEDIR) $(ICKLIB)
+debug: $(GENHEADERS) $(INCLUDEDIR) $(ICKLIB)
 
 # Variant: make test executable in debug mode
 test: DEBUGFLAGS = -g -DICK_DEBUG
 test: $(TESTEXEC)
 
 # How to compile c source files
-%.o: %.c Makefile
+%.o: %.c Makefile 
 	$(CC) $(INTERNALINCLUDES) $(INCLUDES) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
+
+# Minimal configuration of miniupnp
+miniupnp/miniupnpc/miniupnpcstrings.h: miniupnp/miniupnpc/miniupnpcstrings.h.in
+	cd miniupnp/miniupnpc;$(MAKE) miniupnpcstrings.h
 
 # How to build the static library
 $(ICKLIB): $(LIBOBJ)
@@ -74,10 +81,10 @@ $(ICKLIB): $(LIBOBJ)
 	ar ts >/dev/null $@
  
 # make test executable
-$(TESTEXEC): $(INCLUDEDIR) $(TESTSRC) $(ICKLIB) Makefile
+$(TESTEXEC): $(GENHEADERS) $(INCLUDEDIR) $(TESTSRC) $(ICKLIB) Makefile
 	@echo '*************************************************************'
 	@echo "Building test executable:"
-	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(TESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -lpthread -luuid -o $(TESTEXEC)
+	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(LFLAGS) $(TESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -lpthread -o $(TESTEXEC)
 
 # Provide public headers
 $(INCLUDEDIR): $(PUBLICHEADERS)
@@ -156,7 +163,6 @@ ickp2p/ickIpTools.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h
 ickp2p/ickIpTools.o: ickp2p/logutils.h ickp2p/ickIpTools.h
 ickp2p/logutils.o: ickp2p/logutils.h ickp2p/ickP2p.h
 miniupnp/miniupnpc/connecthostport.o: miniupnp/miniupnpc/connecthostport.h
-miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/miniupnpcstrings.h
 miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/miniwget.h
 miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/declspec.h
 miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/connecthostport.h

@@ -621,7 +621,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     if( device->ickUpnpVersion==1 ) {
       char *ptr=strrchr(ssdp->location,'/');
       if( ptr )
-        asprintf( &device->location, "%.*s/Root.xml", ptr-ssdp->location, ssdp->location );
+        asprintf( &device->location, "%.*s/Root.xml", (int)(ptr-ssdp->location), ssdp->location );
     }
     if( !device->location )
       device->location   = strdup( ssdp->location );
@@ -1535,7 +1535,7 @@ static void _ickSsdpNotifyCb( const ickTimer_t *timer, void *data, int tag )
 /*------------------------------------------------------------------------*\
     Try to send packet via discovery socket
 \*------------------------------------------------------------------------*/
-  n = sendto( note->socket, note->message, len, 0, &note->sockname, note->socknamelen );
+  n = sendto( note->socket, note->message, len, 0, (struct sockaddr *)&note->sockname, note->socknamelen );
   if( n<0 ) {
     logerr( "_ickSsdpNotifyCb: could not send to %s (%s)",
             addrstr, strerror(errno) );
