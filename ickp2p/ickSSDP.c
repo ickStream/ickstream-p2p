@@ -1615,7 +1615,7 @@ static int _ssdpVercmp( const char *req, const char *adv )
   rVersion = strtol( ptr+1, &ptr, 10 );
   if( *ptr=='.' )
     logwarn( "_ssdpVercmp: ignoring minor version in requested service (%s).", req );
-  else if( ptr )
+  else if( *ptr )
     logwarn( "_ssdpVercmp: malformed requested service (%s).", req );
 
 /*------------------------------------------------------------------------*\
@@ -1639,7 +1639,7 @@ static int _ssdpVercmp( const char *req, const char *adv )
   aVersion = strtol( ptr+1, &ptr, 10 );
   if( *ptr=='.' )
     logwarn( "_ssdpVercmp: ignoring minor version in advertised service (%s).", req );
-  else if( ptr )
+  else if( *ptr )
     logwarn( "_ssdpVercmp: malformed advertised service (%s).", req );
 
 /*------------------------------------------------------------------------*\
