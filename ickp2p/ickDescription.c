@@ -356,7 +356,7 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
       memset( &_xmlUserData, 0, sizeof(_xmlUserData) );
       _xmlUserData.protocolLevel = ICKP2PLEVEL_GENERIC;
       _xmlUserData.services      = ICKP2P_SERVICE_GENERIC;
-      _xmlUserData.lifetime      = ICKSSDP_DEFAULTLIFETIME;
+      _xmlUserData.lifetime      = 0;
       _xmlParser.xmlstart        = _ickWGetPayload( context );
       _xmlParser.xmlsize         = _ickWGetPayloadSize( context );
       _xmlParser.data            = &_xmlUserData;
@@ -381,11 +381,15 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
       device->ickP2pLevel  = _xmlUserData.protocolLevel;
       if( device->services&~_xmlUserData.services )
         logwarn( "_ickWGetXmlCb (%s): found superset of already known services", uri );
-      else if( ~device->services&_xmlUserData.services )
+      else if( device->services&_xmlUserData.services )
         logwarn( "_ickWGetXmlCb (%s): found subset of already known services", uri );
       device->services |= _xmlUserData.services;
+      if( !_xmlUserData.lifetime ) {
+        logwarn( "_ickWGetXmlCb (%s): no lifetime, using default", uri );
+        _xmlUserData.lifetime = ICKSSDP_DEFAULTLIFETIME;
+      }
       if( !device->lifetime )
-        device->lifetime  = _xmlUserData.lifetime;
+         device->lifetime  = _xmlUserData.lifetime;
       _ickDeviceUnlock( device );
 
       //Evaluate connection matrix
@@ -576,8 +580,8 @@ static void _ickParsexmlProcessData( void *data, const char *content, int len )
 \*------------------------------------------------------------------------*/
   if( !_strmcmp("lifetime",xmlUserData->eltPtr,xmlUserData->eltLen)) {
     debug( "_ickParsexmlProcessData: found lifetime \"%.*s\"", len, content );
-    if( xmlUserData->services ) {
-      logwarn( "_ickParsexmlProcessData: found more then one service vector (ignoring)" );
+    if( xmlUserData->lifetime ) {
+      logwarn( "_ickParsexmlProcessData: found more then one lifetime (ignoring)" );
       return;
     }
     // should be terminated by non-digit, so it's safe to ignore len here

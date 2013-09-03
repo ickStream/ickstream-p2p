@@ -607,14 +607,14 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       psd->host = _ickLwsDupToken( wsi, WSI_TOKEN_HOST );
       if( !psd->host ) {
         logwarn( "_lwsP2pCb: Incoming connection rejected (no HOST).");
-        return 1;
+        return -1;
       }
 
       // Get origin
       psd->uuid = _ickLwsDupToken( wsi, WSI_TOKEN_ORIGIN );
       if( !psd->uuid ) {
         logwarn( "_lwsP2pCb: Incoming connection rejected (no UUID).");
-        return 1;
+        return -1;
       }
 
       // Lock device list and try to find device
@@ -627,7 +627,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
                   device->uuid, device->location, device->wsi, wsi);
         psd->device = device;
         _ickLibDeviceListUnlock( ictx );
-        return 1;
+        return -1;
       }
 
       // Device unknown (i.e. was not (yet) discovered by SSDP)
@@ -639,7 +639,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         if( !psd->host ) {
           logwarn( "_lwsP2pCb: Incoming connection rejected (no HOST).");
           _ickLibDeviceListUnlock( ictx );
-          return 1;
+          return -1;
         }
         debug( "_lwsP2pCb (%s): Discovered new device via incoming ws connection from \"%s\".",
                psd->uuid, psd->host );
@@ -649,7 +649,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         if( !device ) {
           logerr( "_lwsP2pCb: out of memory" );
           _ickLibDeviceListUnlock( ictx );
-          return 1;
+          return -1;
         }
         _ickDeviceSetLocation( device, psd->host );
         psd->device = device;
@@ -659,7 +659,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         if( asprintf(&dscrPath,"http://%s/%s.xml",psd->host,ICKDEVICE_STRING_ROOT)<0 ) {
           logerr( "_lwsP2pCb: out of memory" );
           _ickLibDeviceListUnlock( ictx );
-          return 1;
+          return -1;
         }
         wget = _ickWGetInit( ictx, dscrPath, _ickWGetXmlCb, device, &irc );
         Sfree( dscrPath );

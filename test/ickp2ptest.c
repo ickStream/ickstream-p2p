@@ -53,8 +53,10 @@ Remarks         : -
 #include <unistd.h>
 #include <signal.h>
 #include <time.h>
+#include <syslog.h>
 #include <uuid/uuid.h>
 
+#include "config.h"
 #include "ickP2p.h"
 
 
@@ -67,12 +69,9 @@ Remarks         : -
 /*=========================================================================*\
   Private definitions and symbols
 \*=========================================================================*/
-#define LOGLEVEL    7
+#define TESTVERSION "0.2"
 #define DEVICENAME  "ickp2plibtester"
-#define UUID        "3fe109ad-aa4c-4b0e-a089-3e30f5fc1afe"
-//#define IFNAME      "wlan0"
-#define IFNAME      "en1"
-#define IF1NAME     "lo0"
+#define IFNAME      "wlan0"
 
 #define VLP_SIZE    23456L
 #define VLP_MODUL   251
@@ -94,29 +93,95 @@ static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pS
 \*=========================================================================*/
 int main( int argc, char *argv[] )
 {
+  int                  help_flag;
+  int                  vers_flag;
+  const char          *cfg_fname;
+  char                *uuidStr = NULL;
+  const char          *name = DEVICENAME;
+  const char          *ifname = IFNAME;
+  const char          *verb_arg = "4";
+
   ickErrcode_t         irc;
   ickP2pContext_t     *ictx;
   uuid_t               uuid;
-  char                 uuidStr[37];
   ickP2pServicetype_t  service;
   int                  cntr;
   char                *vlp;
   long                 i;
 
+/*-------------------------------------------------------------------------*\
+        Set up command line switches (leading * flags availability in config file)
+\*-------------------------------------------------------------------------*/
+  addarg( "help",     "-?",  &help_flag,   NULL,        "Show this help message and quit" );
+  addarg( "version",  "-V",  &vers_flag,   NULL,        "Show version and quit" );
+  addarg( "config",   "-c",  &cfg_fname,   "filename",  "Set name of configuration file" );
+  addarg( "uuid",     "-u",  &uuidStr,     "uuid",      "Use UUID for this device (default: random)" );
+  addarg( "name",     "-n",  &name,        "name",      "Use Name for this device" );
+  addarg( "idev",     "-i",  &ifname,      "interface", "Main network interface" );
+  addarg( "verbose",  "-v",  &verb_arg,    "level",     "Set ickp2p logging level (0-7)" );
+
+/*-------------------------------------------------------------------------*\
+        Parse the arguments
+\*-------------------------------------------------------------------------*/
+  if( getargs(argc,argv) ) {
+    usage( argv[0], 1 );
+    return 1;
+  }
+
+/*-------------------------------------------------------------------------*\
+    Show version and/or help
+\*-------------------------------------------------------------------------*/
+  if( vers_flag ) {
+    printf( "%s version %s\n", argv[0], TESTVERSION );
+    printf( "ickstream p2p library version %s\n", ickP2pGetVersion(NULL,NULL) );
+    printf( "<c> 2013 by //MAF, ickStream GmbH\n\n" );
+    return 0;
+  }
+  if( help_flag ) {
+    usage( argv[0], 0 );
+    return 0;
+  }
 
 /*------------------------------------------------------------------------*\
-    Hello world and setting loglevel
+    Read configuration
 \*------------------------------------------------------------------------*/
-  printf( "%s: starting (pid %d)...\n", argv[0], (int)getpid() );
-  printf( "ickP2pSetLogLevel: %d\n", LOGLEVEL );
-  ickP2pSetLogLevel( LOGLEVEL );
+  if( cfg_fname && readconfig(cfg_fname) )
+    return -1;
 
 /*------------------------------------------------------------------------*\
-    Use random uuid and service
+    Set verbosity level
 \*------------------------------------------------------------------------*/
-  srandom( (unsigned int)time(NULL) );
-  uuid_generate( uuid );
-  uuid_unparse( uuid, uuidStr );
+  if( verb_arg ) {
+    char *eptr;
+    int   level = (int)strtol( verb_arg, &eptr, 10 );
+    while( isspace(*eptr) )
+      eptr++;
+    if( *eptr || level<0 || level>7 ) {
+      fprintf( stderr, "Bad verbosity level: '%s'\n", verb_arg );
+      return 1;
+    }
+    ickP2pSetLogLevel( level );
+#ifndef ICK_DEBUG
+    if( level>=LOG_DEBUG ) {
+       fprintf( stderr, "%s: binary not compiled for debugging, loglevel %d might be too high!\n",
+                        argv[0], level );
+    }
+#endif
+  }
+
+/*------------------------------------------------------------------------*\
+    Use random uuid?
+\*------------------------------------------------------------------------*/
+  if( !uuidStr ) {
+    uuidStr = malloc( 37 );
+    srandom( (unsigned int)time(NULL) );
+    uuid_generate( uuid );
+    uuid_unparse( uuid, uuidStr );
+  }
+
+/*------------------------------------------------------------------------*\
+    Use random service?
+\*------------------------------------------------------------------------*/
   service = 1<<random()%4;
 
 /*------------------------------------------------------------------------*\
@@ -143,7 +208,7 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Create context
 \*------------------------------------------------------------------------*/
-  ictx = ickP2pCreate( DEVICENAME, uuidStr, "./httpFolder", 100, NULL, IFNAME, 1900, service, &irc  );
+  ictx = ickP2pCreate( DEVICENAME, uuidStr, "./httpFolder", 100, NULL, ifname, 1900, service, &irc  );
   if( !ictx ) {
     fprintf( stderr, "ickP2pCreate: %s\n", ickStrError(irc) );
     return -1;
@@ -204,6 +269,7 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Report status
 \*------------------------------------------------------------------------*/
+  printf( "%s: starting pid %d\n", argv[0], (int)getpid() );
   printf( "ickP2pGetOsName:        \"%s\"\n", ickP2pGetOsName(ictx) );
   printf( "ickP2pGetDeviceName:    \"%s\"\n", ickP2pGetName(ictx) );
   printf( "ickP2pGetDeviceUuid:    \"%s\"\n", ickP2pGetDeviceUuid(ictx) );

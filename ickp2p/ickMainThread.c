@@ -768,9 +768,10 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
         break;
       }
 
+      //printf( "_lwsHttpCb %d: writable, size=%d, remain=%d, sent =%d\n", socket, (int)psd->psize, (int)remain, sent );
       // Everything transmitted?
-      if( sent==remain ) {
-        retval = 1;
+      if( sent>=remain ) {
+        retval = -1;
         break;
       }
 
@@ -828,7 +829,7 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
       debug( "_lwsHttpCb: adding socket %d (mask 0x%02x)",
              fd, (int)(long)len );
       if( _ickPolllistAdd(&ictx->lwsPolllist,fd,(int)(long)len) )
-        retval = 1;
+        retval = -1;
       break;
 
 /*------------------------------------------------------------------------*\
@@ -838,7 +839,7 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
       fd = (int)(long)in;
       debug( "_lwsHttpCb: removing socket %d", fd );
       if( _ickPolllistRemove(&ictx->lwsPolllist,fd) )
-        retval = 1;
+        retval = -1;
       break;
 
 /*------------------------------------------------------------------------*\
@@ -848,14 +849,14 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
       fd = (int)(long)in;
       debug( "_lwsHttpCb: set events for socket %d (mask 0x%02x)", fd, (int)(long)len );
       if( _ickPolllistSet(&ictx->lwsPolllist,fd,(int)(long)len) )
-        retval = 1;
+        retval = -1;
       break;
 
     case LWS_CALLBACK_CLEAR_MODE_POLL_FD:
       fd = (int)(long)in;
       debug( "_lwsHttpCb: clear events for socket %d (mask 0x%02x)", fd, (int)(long)len );
       if( _ickPolllistUnset(&ictx->lwsPolllist,fd,(int)(long)len) )
-        retval = 1;
+        retval = -1;
       break;
 
 /*------------------------------------------------------------------------*\

@@ -40,7 +40,7 @@ ICKP2PSRCS      = ickP2p.c ickMainThread.c ickDevice.c ickSSDP.c ickDescription.
 MINIUPNPSRCS    = miniupnp/miniupnpc/connecthostport.c miniupnp/miniupnpc/miniwget.c \
                   miniupnp/miniupnpc/minixml.c miniupnp/miniupnpc/receivedata.c
 MINISSDPDSRCS   = miniupnp/minissdpd/openssdpsocket.c miniupnp/minissdpd/upnputils.c                  
-TESTSRC         = test/ickp2ptest.c
+TESTSRC         = test/ickp2ptest.c test/config.c
 TESTOBJ         = $(TESTSRC:.c=.o)
 
 LIBSRC          = $(addprefix ickp2p/,$(ICKP2PSRCS)) $(MINIUPNPSRCS)
@@ -56,8 +56,10 @@ GENHEADERS	 = miniupnp/miniupnpc/miniupnpcstrings.h
 # OS specific settings
 ifeq ($(OS),Linux)
 EXTRALIBS	= -luuid
+TESTFALGS = -DIF1NAME="lo"
 endif
 ifeq ($(OS),Darwin)
+TESTFALGS = -DIF1NAME="lo0"
 endif
 
 
@@ -93,7 +95,7 @@ $(ICKLIB): $(LIBOBJ)
 $(TESTEXEC): $(GENHEADERS) $(INCLUDEDIR) $(TESTSRC) $(ICKLIB) Makefile
 	@echo '*************************************************************'
 	@echo "Building test executable:"
-	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(LFLAGS) $(TESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -lpthread $(EXTRALIBS) -o $(TESTEXEC)
+	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(TESTFLAGS) $(LFLAGS) $(TESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -lpthread $(EXTRALIBS) -o $(TESTEXEC)
 
 # Provide public headers
 $(INCLUDEDIR): $(PUBLICHEADERS)
