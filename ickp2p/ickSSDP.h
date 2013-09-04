@@ -50,9 +50,8 @@ Remarks         : -
   Includes required by definitions from this file
 \*=========================================================================*/
 #include <pthread.h>
-#include <sys/types.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
+#include <arpa/inet.h>
 #include "ickDescription.h"
 
 
