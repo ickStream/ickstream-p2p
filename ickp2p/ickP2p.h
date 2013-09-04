@@ -200,8 +200,8 @@ ickP2pServicetype_t  ickP2pGetServices( const ickP2pContext_t *ictx );
 
 // Dynamic service management is depricated
 #ifdef ICKP2P_DYNAMICSERVICES
-ickErrcode_t         ickP2pDiscoveryAddService( ickP2pContext_t *ictx, ickP2pServicetype_t type );
-ickErrcode_t         ickDiscoveryRemoveService( ickP2pContext_t *ictx, ickP2pServicetype_t type );
+ickErrcode_t         ickP2pAddService( ickP2pContext_t *ictx, ickP2pServicetype_t type );
+ickErrcode_t         ickP2pRemoveService( ickP2pContext_t *ictx, ickP2pServicetype_t type );
 #endif
 
 // Get device features (allowed only in callbacks!)

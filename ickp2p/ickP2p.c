@@ -195,8 +195,8 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
   ictx->state              = ICKLIB_CREATED;
   ictx->tCreation          = _ickTimeNow();
   ictx->lwsConnectMatrixCb = ickP2pDefaultConnectMatrixCb;
-  ictx->upnpPort           = port;
-  ictx->lifetime           = lifetime;
+  ictx->upnpPort           = port>0?port:ICKSSDP_MCASTPORT;
+  ictx->lifetime           = lifetime>0?lifetime:ICKSSDP_DEFAULTLIFETIME;
   ictx->ickServices        = services;
 
 /*------------------------------------------------------------------------*\
