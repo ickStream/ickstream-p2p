@@ -39,7 +39,6 @@ MKDEPFLAGS	= -Y
 ICKP2PSRCS      = ickP2p.c ickMainThread.c ickDevice.c ickSSDP.c ickDescription.c ickP2pCom.c ickP2pDebug.c ickErrors.c ickWGet.c ickIpTools.c logutils.c
 MINIUPNPSRCS    = miniupnp/miniupnpc/connecthostport.c miniupnp/miniupnpc/miniwget.c \
                   miniupnp/miniupnpc/minixml.c miniupnp/miniupnpc/receivedata.c
-MINISSDPDSRCS   = miniupnp/minissdpd/openssdpsocket.c miniupnp/minissdpd/upnputils.c                  
 TESTSRC         = test/ickp2ptest.c test/config.c
 TESTOBJ         = $(TESTSRC:.c=.o)
 
@@ -48,7 +47,7 @@ LIBOBJ          = $(LIBSRC:.c=.o)
 
 # Include directories and special headers
 PUBLICHEADERS    = ickp2p/ickP2p.h
-INTERNALINCLUDES = -Iminiupnp/minissdpd -Iminiupnp/miniupnpc
+INTERNALINCLUDES = -Iminiupnp/miniupnpc
 INCLUDES         =
 GENHEADERS	 = miniupnp/miniupnpc/miniupnpcstrings.h
 
