@@ -194,9 +194,9 @@ char *ickP2pGetDebugPath( ickP2pContext_t *ictx, const char *uuid )
     Construct target url
 \*------------------------------------------------------------------------*/
   if( !uuid )
-    rc = asprintf( &url, "http://%s%s", ictx->hostName, ICK_P2PDEBUGURI );
+    rc = asprintf( &url, "http://%s:%d%s", ictx->hostName, ictx->lwsPort, ICK_P2PDEBUGURI );
   else
-    rc = asprintf( &url, "http://%s%s/%s", ictx->hostName, ICK_P2PDEBUGURI, uuid );
+    rc = asprintf( &url, "http://%s:%d%s/%s", ictx->hostName, ictx->lwsPort, ICK_P2PDEBUGURI, uuid );
   if( rc<0 ) {
     logerr( "ickP2pGetDebugPath: out of memory" );
     return NULL;

@@ -376,6 +376,9 @@ static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDevice
     case ICKP2P_TERMINATE:
       cstr = "terminating";
       break;
+    case ICKP2P_ERROR:
+      cstr = "error";
+      break;
   }
 
   *tstr = 0;
@@ -414,6 +417,24 @@ static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid,
           mSize>30?"...":"", (long)mSize );
 
 /*------------------------------------------------------------------------*\
+    Respond to messages
+\*------------------------------------------------------------------------*/
+  if( !strncmp(message,"Message #",strlen("Message #")) ) {
+    char *response;
+    ickErrcode_t irc;
+    asprintf( &response, "Response from %s for %s", ickP2pGetDeviceUuid(ictx), message );
+
+    // Broadcast message as string
+    printf( "Sending %s\n", response );
+    irc = ickP2pSendMsg( ictx, sourceUuid, ICKP2P_SERVICE_ANY, targetServices, response, 0 );
+    if( irc ) {
+      printf( "ickP2pSendMsg: %s\n", ickStrError(irc) );
+      return;
+    }
+    free( response );
+  }
+
+/*------------------------------------------------------------------------*\
     Check integrity of VLP
 \*------------------------------------------------------------------------*/
   if( mSize>VLP_SIZE-10 ) {
@@ -423,6 +444,8 @@ static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid,
     if( i<VLP_SIZE )
       printf( "VLP is corrupt at position %ld", i );
   }
+
+
 }
 
 
