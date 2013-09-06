@@ -135,7 +135,7 @@ ickP2pServicetype_t _ickDescrFindServiceByUsn( const char *usn )
     return ICKP2P_SERVICE_SERVER_GENERIC;
   if( strstr(usn, ICKSERVICE_TYPESTR_CONTROLLER) )
     return ICKP2P_SERVICE_CONTROLLER;
-  if( strstr(usn, ICKSERVICE_TYPESTR_CONTROLLER) )
+  if( strstr(usn, ICKSERVICE_TYPESTR_DEBUG) )
     return ICKP2P_SERVICE_DEBUG;
 #endif
 
@@ -383,6 +383,7 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
         logwarn( "_ickWGetXmlCb (%s): found superset of already known services", uri );
       else if( device->services&_xmlUserData.services )
         logwarn( "_ickWGetXmlCb (%s): found subset of already known services", uri );
+      debug( "_ickWGetXmlCb (%s): adding services 0x%02x.", device->uuid, _xmlUserData.services );
       device->services |= _xmlUserData.services;
       if( !_xmlUserData.lifetime ) {
         logwarn( "_ickWGetXmlCb (%s): no lifetime, using default", uri );
@@ -428,6 +429,8 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
 
       // Signal device readiness to user code
       _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_NEW, device->services );
+      if( /* device->doConnect && */ device->localIsServer )
+        _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
 
       break;
 

@@ -207,7 +207,7 @@ ickDevice_t *_ickLibDeviceFindByWsi( const ickP2pContext_t *ictx,struct libwebso
 
 
 void _ickLibExecDiscoveryCallback( ickP2pContext_t *ictx,
-             const ickDevice_t *dev, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type );
+             const ickDevice_t *dev, ickP2pDeviceState_t change, ickP2pServicetype_t type );
 
 void _ickLibWGettersLock( ickP2pContext_t *ictx );
 void _ickLibWGettersUnlock( ickP2pContext_t *ictx  );

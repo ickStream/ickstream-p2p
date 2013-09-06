@@ -548,9 +548,13 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
       socket = libwebsocket_get_socket_fd( wsi );
+      device = psd->device;
       logwarn( "_lwsP2pCb %d: connection error", socket );
 
-      // fixme: mark device descriptor
+      // Execute discovery callback
+      if( device )
+        _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_ERROR, device->services );
+
       break;
 
 /*------------------------------------------------------------------------*\
@@ -586,6 +590,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
       // Timestamp for connection
       device->tConnect = _ickTimeNow();
+
+      // Execute discovery callback
+      _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
 
       break;
 
@@ -701,7 +708,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       // Check wsi
       if( wsi!=device->wsi ) {
         logerr( "_lwsP2pCb %d: wsi mismatch for \"%s\"", socket, device->uuid );
-        // fixme: mark device descriptor
+        _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_ERROR, device->services );
         return -1;
       }
 
@@ -737,7 +744,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       // Error handling
       if( remainder<0 ) {
         logerr( "_lwsP2pCb %d: error writing to \"%s\"", socket, device->uuid );
-        // fixme: callback and mark device descriptor
+        // Execute discovery callback
+        _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_ERROR, device->services );
         _ickDeviceRemoveAndFreeMessage( device, message );
         if( _ickDeviceOutQueue(device) )
           libwebsocket_callback_on_writable( context, wsi );
@@ -799,7 +807,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       ptr = realloc( psd->inBuffer, psd->inBufferSize+len );
       if( !ptr ) {
         logerr( "_lwsP2pCb: out of memory" );
-        // fixme: mark device descriptor
+        _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_ERROR, device->services );
         return -1;
       }
       psd->inBuffer  = ptr;
@@ -826,14 +834,18 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       device = psd->device;
       debug( "_lwsP2pCb %d: connection closed", socket );
 
-      // Remove heartbeat and delayed write handler for this device
-      _ickTimerDeleteAll( ictx, _ickDeviceHeartbeatTimerCb, device, 0 );
-      _ickTimerDeleteAll( ictx, _ickWriteTimerCb, device, 0 );
 
-      //fixme: mark devices descriptor
+      // Mark devices descriptor
       if( device ) {
-        device->wsi = NULL;
+
+        // Remove heartbeat and delayed write handler for this device
+        _ickTimerDeleteAll( ictx, _ickDeviceHeartbeatTimerCb, device, 0 );
+        _ickTimerDeleteAll( ictx, _ickWriteTimerCb, device, 0 );
+
+        // Set timestamp
         device->tDisconnect = _ickTimeNow();
+
+        device->wsi = NULL;
       }
 
       // Free per session data

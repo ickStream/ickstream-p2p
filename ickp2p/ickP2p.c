@@ -779,7 +779,7 @@ ickErrcode_t ickP2pRemoveMessageCallback( ickP2pContext_t *ictx, ickP2pMessageCb
 /*=========================================================================*\
   Execute a discovery callback
 \*=========================================================================*/
-void _ickLibExecDiscoveryCallback( ickP2pContext_t *ictx, const ickDevice_t *dev, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type )
+void _ickLibExecDiscoveryCallback( ickP2pContext_t *ictx, const ickDevice_t *dev, ickP2pDeviceState_t change, ickP2pServicetype_t type )
 {
   struct _cblist *walk;
   debug( "_ickLibExecDiscoveryCallback (%p): \"%s\" change=%d services=%d",

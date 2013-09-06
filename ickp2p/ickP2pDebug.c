@@ -94,12 +94,12 @@ static char *_ickMessageStateJson( ickMessage_t *message, int indent );
 /*=========================================================================*\
   Permit or deny access for remote debugging via API or HTTP
 \*=========================================================================*/
-ickErrcode_t ickP2pRemoteDebugApi( ickP2pContext_t *ictx, int enable )
+ickErrcode_t ickP2pSetHttpDebugging( ickP2pContext_t *ictx, int enable )
 {
   debug( "ickP2pRemoteDebugApi (%p): %s", ictx, enable?"enable":"disable" );
 
 #ifndef ICK_P2PENABLEDEBUGAPI
-  logwarn( "ickP2pRemoteDebugApi: p2plib not compiled with debugging API support." );
+  logwarn( "ickP2pSetHttpDebugging: p2plib not compiled with debugging API support." );
   return ICKERR_NOTIMPLEMENTED;
 #else
   ictx->debugApiEnabled = enable;
@@ -117,13 +117,13 @@ ickErrcode_t ickP2pRemoteDebugApi( ickP2pContext_t *ictx, int enable )
     the returned string is allocated and must be freed by caller
     returns NULL on error or if debugging is not enabled
 \*=========================================================================*/
-char *ickP2pGetLocalDebugInfo( ickP2pContext_t *ictx, const char *uuid )
+char *ickP2pGetDebugInfo( ickP2pContext_t *ictx, const char *uuid )
 {
   char *result = NULL;
-  debug( "ickP2pGetLocalDebugInfoForDevice (%p): \"%s\"", ictx, uuid );
+  debug( "ickP2pGetDebugInfo (%p): \"%s\"", ictx, uuid );
 
 #ifndef ICK_P2PENABLEDEBUGAPI
-  logwarn( "ickP2pGetLocalDebugInfoForDevice: p2plib not compiled with debugging API support." );
+  logwarn( "ickP2pGetDebugInfo: p2plib not compiled with debugging API support." );
 #else
   ickDevice_t *device;
 
@@ -142,7 +142,7 @@ char *ickP2pGetLocalDebugInfo( ickP2pContext_t *ictx, const char *uuid )
     _ickLibDeviceListLock( ictx );
     device = _ickLibDeviceFindByUuid( ictx, uuid );
     if( !device ) {
-      logwarn( "ickP2pGetLocalDebugInfoForDevice: no such device (%s)", uuid );
+      logwarn( "ickP2pGetDebugInfo: no such device (%s)", uuid );
       _ickLibDeviceListUnlock( ictx );
       return NULL;
     }
@@ -164,90 +164,53 @@ char *ickP2pGetLocalDebugInfo( ickP2pContext_t *ictx, const char *uuid )
 
 
 /*=========================================================================*\
-  Get debug info from a remote device for a device registered there
+  Get path for debugging interface of the context or a device therein
     ictx       - the ickstream context
-    remoteUuid - the remote device to be queried
-    uuid       - the device of interest or NULL for complete debugging info
-                 of remoteUuid
-    this will engage a HTTP connection and block until the result was received
+    uuid       - the device (might be NULL for context info)
     the returned string is allocated and must be freed by caller
     returns NULL on error
 \*=========================================================================*/
-char *ickP2pGetRemoteDebugInfo( ickP2pContext_t *ictx, const char *remoteUuid, const char *uuid )
+char *ickP2pGetDebugPath( ickP2pContext_t *ictx, const char *uuid )
 {
   ickDevice_t *device;
-  char        *ptr;
   char        *url;
   int          rc;
-  int          size;
-  void        *data;
-  char        *result;
-  debug( "ickP2pGetRemoteDebugInfo (%p): remote=%s device=%s", ictx, remoteUuid, uuid );
+  debug( "ickP2pGetDebugPath (%p): \"%s\"", ictx, uuid?uuid:"<context>" );
 
 /*------------------------------------------------------------------------*\
     Lock device list and try to find device
 \*------------------------------------------------------------------------*/
-  _ickLibDeviceListLock( ictx );
-  device = _ickLibDeviceFindByUuid( ictx, remoteUuid );
-  if( !device ) {
-    logwarn( "ickP2pGetRemoteDebugInfo: no such device (%s)", remoteUuid );
+  if( uuid ) {
+    _ickLibDeviceListLock( ictx );
+    device = _ickLibDeviceFindByUuid( ictx, uuid );
     _ickLibDeviceListUnlock( ictx );
-    return NULL;
-  }
-
-/*------------------------------------------------------------------------*\
-    Get root for target url
-\*------------------------------------------------------------------------*/
-  if( strncmp(device->location,"http://",strlen("http://")) ) {
-    logerr( "ickP2pGetRemoteDebugInfo (%s): Bad location URI \"%s\"", device->uuid, device->location );
-    _ickLibDeviceListUnlock( ictx );
-    return NULL;
-  }
-  ptr = strchr( device->location+strlen("http://"), '/' );
-  if( !ptr ) {
-    logerr( "ickP2pGetRemoteDebugInfo (%s): Bad location URI \"%s\"", device->uuid, device->location );
-    _ickLibDeviceListUnlock( ictx );
-    return NULL;
+    if( !device ) {
+      logwarn( "ickP2pGetDebugPath: no such device (%s)", uuid );
+      return NULL;
+    }
   }
 
 /*------------------------------------------------------------------------*\
     Construct target url
 \*------------------------------------------------------------------------*/
   if( !uuid )
-    rc = asprintf( &url, "%.*s%s", (int)(ptr-device->location), device->location, ICK_P2PDEBUGURI );
+    rc = asprintf( &url, "http://%s%s", ictx->hostName, ICK_P2PDEBUGURI );
   else
-    rc = asprintf( &url, "%.*s%s/%s", (int)(ptr-device->location), device->location, ICK_P2PDEBUGURI, uuid );
-  _ickLibDeviceListUnlock( ictx );
+    rc = asprintf( &url, "http://%s%s/%s", ictx->hostName, ICK_P2PDEBUGURI, uuid );
   if( rc<0 ) {
-    logerr( "ickP2pGetRemoteDebugInfo: out of memory" );
+    logerr( "ickP2pGetDebugPath: out of memory" );
     return NULL;
   }
 
 /*------------------------------------------------------------------------*\
-    Get data - this will block
+    That's all
 \*------------------------------------------------------------------------*/
-  data = miniwget( url, &size, 5 );
-  if( size<0 ) {
-    logerr( "ickP2pGetRemoteDebugInfo (%s): could not get data", url );
-    Sfree( url );
-    return NULL;
-  }
-  Sfree( url );
-
-/*------------------------------------------------------------------------*\
-    Terminate string
-\*------------------------------------------------------------------------*/
-  result = strndup( data, size );
-  if( !result ) {
-    Sfree( data );
-    logerr( "ickP2pGetRemoteDebugInfo: out of memory" );
-    return NULL;
-  }
+  debug( "ickP2pGetDebugPath (%p): \"%s\"", ictx, url );
 
 /*------------------------------------------------------------------------*\
     That's it
 \*------------------------------------------------------------------------*/
-   return result;
+   return url;
 }
 
 
@@ -282,7 +245,7 @@ char *_ickP2pGetDebugFile( ickP2pContext_t *ictx, const char *uri )
 /*------------------------------------------------------------------------*\
     Get debug info
 \*------------------------------------------------------------------------*/
-  debugContent = ickP2pGetLocalDebugInfo( ictx, uuid );
+  debugContent = ickP2pGetDebugInfo( ictx, uuid );
 
 /*------------------------------------------------------------------------*\
     Not found or error?

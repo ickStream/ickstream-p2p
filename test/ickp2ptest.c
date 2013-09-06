@@ -84,7 +84,7 @@ static volatile int stop_signal;
   Private prototypes
 \*=========================================================================*/
 static void sigHandler( int sig, siginfo_t *siginfo, void *context );
-static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type );
+static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDeviceState_t change, ickP2pServicetype_t type );
 static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices, const char* message, size_t mSize );
 
 
@@ -101,6 +101,7 @@ int main( int argc, char *argv[] )
   const char          *name = DEVICENAME;
   const char          *ifname = IFNAME;
   const char          *verb_arg = "4";
+  const char          *service_arg = NULL;
 
   ickErrcode_t         irc;
   ickP2pContext_t     *ictx;
@@ -119,6 +120,7 @@ int main( int argc, char *argv[] )
   addarg( "uuid",     "-u",  &uuidStr,     "uuid",      "Use UUID for this device (default: random)" );
   addarg( "name",     "-n",  &name,        "name",      "Use Name for this device" );
   addarg( "idev",     "-i",  &ifname,      "interface", "Main network interface" );
+  addarg( "services", "-s",  &service_arg, "bitvector", "Announce services (default: random)" );
   addarg( "verbose",  "-v",  &verb_arg,    "level",     "Set ickp2p logging level (0-7)" );
 
 /*-------------------------------------------------------------------------*\
@@ -183,7 +185,18 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Use random service?
 \*------------------------------------------------------------------------*/
-  service = 1<<random()%4;
+  if( service_arg ) {
+    char *eptr;
+    service = (int)strtol( service_arg, &eptr, 0 );
+    while( isspace(*eptr) )
+      eptr++;
+    if( *eptr || service<0 || service>ICKP2P_SERVICE_ANY ) {
+      fprintf( stderr, "Bad service vector: '%s'\n", service_arg );
+      return 1;
+    }
+  }
+  else
+    service = 1<<random()%4;
 
 /*------------------------------------------------------------------------*\
     Create a very large payload message
@@ -243,7 +256,7 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Allow remote access to debuggig information
 \*------------------------------------------------------------------------*/
-  irc = ickP2pRemoteDebugApi( ictx, 1 );
+  irc = ickP2pSetHttpDebugging( ictx, 1 );
   if( irc ) {
     printf( "ickP2pRemoteDebugApi: %s\n", ickStrError(irc) );
     goto end;
@@ -282,6 +295,7 @@ int main( int argc, char *argv[] )
   printf( "ickP2pGetHostname:      %s\n",     ickP2pGetHostname(ictx) );
   printf( "ickP2pGetServices:      0x%02x\n", ickP2pGetServices(ictx) );
   printf( "ickP2pGetUpnpLoopback:  %d\n",     ickP2pGetUpnpLoopback(ictx) );
+  printf( "ickP2pGetDebugPath:     \"%s\"\n", ickP2pGetDebugPath(ictx, NULL) );
 
 /*------------------------------------------------------------------------*\
     Main loop: wait for termination
@@ -335,12 +349,18 @@ end:
 /*=========================================================================*\
     Called when devices or services are found or terminated
 \*=========================================================================*/
-static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type )
+static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDeviceState_t change, ickP2pServicetype_t type )
 {
   char *cstr = "???";
   char  tstr[128];
 
   switch( change ) {
+    case   ICKP2P_CONNECTED:
+      cstr = "connected";
+      break;
+    case   ICKP2P_DISCONNECTED:
+      cstr = "disconnected";
+      break;
     case   ICKP2P_LEGACY:
       cstr = "adding (legacy)";
       break;

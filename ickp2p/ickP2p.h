@@ -96,12 +96,15 @@ typedef enum {
 
 // Modes of device discovery callback
 typedef enum {
-  ICKP2P_LEGACY,
-  ICKP2P_NEW,
-  ICKP2P_REMOVED,
-  ICKP2P_EXPIRED,
-  ICKP2P_TERMINATE
-} ickP2pDiscoveryCommand_t;
+  ICKP2P_CONNECTED      = 0x0001,
+  ICKP2P_DISCONNECTED   = 0x0002,
+  ICKP2P_ERROR          = 0x0004,
+  ICKP2P_LEGACY         = 0x0010,
+  ICKP2P_NEW            = 0x0020,
+  ICKP2P_REMOVED        = 0x0040,
+  ICKP2P_EXPIRED        = 0x0080,
+  ICKP2P_TERMINATE      = 0x0100
+} ickP2pDeviceState_t;
 
 // Service types
 typedef enum {
@@ -138,7 +141,7 @@ typedef struct _ickP2pContext ickP2pContext_t;
   Signatures for function pointers
 \*------------------------------------------------------------------------*/
 typedef void  (*ickP2pEndCb_t)( ickP2pContext_t *ictx );
-typedef void  (*ickP2pDiscoveryCb_t)( ickP2pContext_t *ictx, const char *uuid, ickP2pDiscoveryCommand_t change, ickP2pServicetype_t type );
+typedef void  (*ickP2pDiscoveryCb_t)( ickP2pContext_t *ictx, const char *uuid, ickP2pDeviceState_t change, ickP2pServicetype_t type );
 typedef void  (*ickP2pMessageCb_t)( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices, const char* message, size_t mSize );
 typedef int   (*ickP2pConnectMatrixCb_t)( ickP2pContext_t *ictx, ickP2pServicetype_t localServices, ickP2pServicetype_t remoteServices );
 typedef void  (*ickP2pLogFacility_t)( const char *file, int line, int prio, const char * format, ... );
@@ -217,15 +220,14 @@ int                  ickP2pGetDeviceMessagesReceived( const ickP2pContext_t *ict
 double               ickP2pGetDeviceTimeCreated( const ickP2pContext_t *ictx, const char *uuid );
 double               ickP2pGetDeviceTimeConnected( const ickP2pContext_t *ictx, const char *uuid );
 
-
 // Messaging
 ickErrcode_t         ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid, ickP2pServicetype_t targetServices,
                                     ickP2pServicetype_t sourceService, const char *payload, size_t pSize );
 
 // Debugging API - needs to be selected at compile time
-ickErrcode_t         ickP2pRemoteDebugApi( ickP2pContext_t *ictx, int enable );
-char                *ickP2pGetLocalDebugInfo( ickP2pContext_t *ictx, const char *uuid );
-char                *ickP2pGetRemoteDebugInfo( ickP2pContext_t *ictx, const char *remoteUuid, const char *uuid );
+ickErrcode_t         ickP2pSetHttpDebugging( ickP2pContext_t *ictx, int enable );
+char                *ickP2pGetDebugInfo( ickP2pContext_t *ictx, const char *uuid );
+char                *ickP2pGetDebugPath( ickP2pContext_t *ictx, const char *uuid );
 
 // Default connection matrix
 int                 ickP2pDefaultConnectMatrixCb( ickP2pContext_t *ictx, ickP2pServicetype_t localServices, ickP2pServicetype_t remoteServices );

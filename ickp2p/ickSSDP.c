@@ -613,6 +613,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
       _ickTimerListUnlock( ictx );
       return -1;
     }
+    debug( "_ickDeviceUpdate (%s): New device with service 0x%02x.", device->uuid, stype );
     device->services       = stype;
     device->lifetime       = ssdp->lifetime;
     device->ickUpnpVersion = _ssdpGetVersion( ssdp->usn );
@@ -727,6 +728,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 
   // New service: Execute callbacks registered with discovery handler
   if( (stype&~device->services) ) {
+    debug( "_ickDeviceUpdate (%s): added service 0x%02x", device->uuid, stype );
     device->services |= stype;
     _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_NEW, stype );
   }
@@ -790,6 +792,7 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     A service is terminated
 \*------------------------------------------------------------------------*/
   if( (device->services&stype) || stype!=ICKP2P_SERVICE_GENERIC ) {
+    debug( "_ickDeviceRemove (%s): removing service 0x%02x.", ssdp->usn, stype );
     device->services &= ~stype;
     _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_REMOVED, stype );
   }
@@ -1306,12 +1309,12 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
           nst  = ICKSERVICE_TYPESTR_PLAYER;
           break;
         case ICKP2P_SERVICE_CONTROLLER:
-          sstr = ICKSERVICE_STRING_SERVER;
-          nst  = ICKSERVICE_TYPESTR_SERVER;
-          break;
-        case ICKP2P_SERVICE_SERVER_GENERIC:
           sstr = ICKSERVICE_STRING_CONTROLLER;
           nst  = ICKSERVICE_TYPESTR_CONTROLLER;
+          break;
+        case ICKP2P_SERVICE_SERVER_GENERIC:
+          sstr = ICKSERVICE_STRING_SERVER;
+          nst  = ICKSERVICE_TYPESTR_SERVER;
           break;
         case ICKP2P_SERVICE_DEBUG:
           sstr = ICKSERVICE_STRING_DEBUG;
