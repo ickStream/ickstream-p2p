@@ -56,7 +56,6 @@ Remarks         : -
 #include <time.h>
 #include <sys/time.h>
 #include <sys/utsname.h>
-//#include <sys/socket.h>
 #include <arpa/inet.h>
 
 #include "ickP2p.h"

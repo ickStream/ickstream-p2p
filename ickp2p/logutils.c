@@ -122,7 +122,6 @@ static void __icklog( const char *file, int line,  int prio, const char *fmt, ..
   if( prio<=ickp2ploglevel ) {
     struct timeval tv;
 
-
     // print timestamp and thread info
     gettimeofday( &tv, NULL );
     fprintf( stderr, "%.4f %d [%p]", tv.tv_sec+tv.tv_usec*1E-6, prio, (void*)pthread_self() );

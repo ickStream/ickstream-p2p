@@ -21,6 +21,7 @@ LIBDIR          = lib
 INCLUDEDIR      = include
 LIBNAME         = libickp2p
 TESTEXEC        = ickp2ptest
+SSDPLOGEXEC     = ssdplog
 
 ICKLIB          = $(LIBDIR)/$(LIBNAME).a
 OS             := $(shell uname)
@@ -32,8 +33,8 @@ GITVERSION      = $(shell git rev-list HEAD --max-count=1)
 AR              = ar
 CC              = cc
 CFLAGS          = -Wall -DLWS_NO_FORK -DGIT_VERSION=$(GITVERSION) -D_GNU_SOURCE
-LFLAGS		= -rdynamic
-MKDEPFLAGS	= -Y
+LFLAGS          = -rdynamic
+MKDEPFLAGS      = -Y
 
 # Source files to process
 ICKP2PSRCS      = ickP2p.c ickMainThread.c ickDevice.c ickSSDP.c ickDescription.c ickP2pCom.c ickP2pDebug.c ickErrors.c ickWGet.c ickIpTools.c logutils.c
@@ -41,6 +42,8 @@ MINIUPNPSRCS    = miniupnp/miniupnpc/connecthostport.c miniupnp/miniupnpc/miniwg
                   miniupnp/miniupnpc/minixml.c miniupnp/miniupnpc/receivedata.c
 TESTSRC         = test/ickp2ptest.c test/config.c
 TESTOBJ         = $(TESTSRC:.c=.o)
+SSDPLOGSRC      = test/ssdplog.c test/config.c
+SSDPLOGOBJ      = $(SSDPLOGSRC:.c=.o)
 
 LIBSRC          = $(addprefix ickp2p/,$(ICKP2PSRCS)) $(MINIUPNPSRCS)
 LIBOBJ          = $(LIBSRC:.c=.o)
@@ -72,7 +75,7 @@ debug: $(GENHEADERS) $(INCLUDEDIR) $(ICKLIB)
 
 # Variant: make test executable in debug mode
 test: DEBUGFLAGS = -g -DICK_DEBUG
-test: $(TESTEXEC)
+test: $(TESTEXEC) $(SSDPLOGEXEC)
 
 # How to compile c source files
 %.o: %.c Makefile 
@@ -95,6 +98,12 @@ $(TESTEXEC): $(GENHEADERS) $(INCLUDEDIR) $(TESTSRC) $(ICKLIB) Makefile
 	@echo '*************************************************************'
 	@echo "Building test executable:"
 	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(TESTFLAGS) $(LFLAGS) $(TESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -lpthread $(EXTRALIBS) -o $(TESTEXEC)
+
+# make ssdp logger
+$(SSDPLOGEXEC): $(SSDPLOGSRC) Makefile
+	@echo '*************************************************************'
+	@echo "Building ssdp logger executable:"
+	$(CC) $(DEBUGFLAGS) $(SSDPLOGSRC) -o $(SSDPLOGEXEC)
 
 # Provide public headers
 $(INCLUDEDIR): $(PUBLICHEADERS)
@@ -123,14 +132,14 @@ depend:
 clean:
 	@echo '*************************************************************'
 	@echo "Deleting intermediate files:"
-	rm -f $(LIBOBJ) $(TESTOBJ)
+	rm -f $(LIBOBJ) $(TESTOBJ) $(SSDPLOGOBJ)
 
 
 # How to clean all
 cleanall: clean
 	@echo '*************************************************************'
 	@echo "Clean all:"
-	rm -rf $(LIBDIR) $(INCLUDEDIR) $(TESTEXEC)
+	rm -rf $(LIBDIR) $(INCLUDEDIR) $(TESTEXEC) $(SSDPLOGEXEC)
 
 # End of Makefile -- makedepend output might follow ...
 
@@ -173,6 +182,7 @@ ickp2p/ickIpTools.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h
 ickp2p/ickIpTools.o: ickp2p/logutils.h ickp2p/ickIpTools.h
 ickp2p/logutils.o: ickp2p/logutils.h ickp2p/ickP2p.h
 miniupnp/miniupnpc/connecthostport.o: miniupnp/miniupnpc/connecthostport.h
+miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/miniupnpcstrings.h
 miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/miniwget.h
 miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/declspec.h
 miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/connecthostport.h
@@ -180,4 +190,5 @@ miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/receivedata.h
 miniupnp/miniupnpc/minixml.o: miniupnp/miniupnpc/minixml.h
 miniupnp/miniupnpc/receivedata.o: miniupnp/miniupnpc/receivedata.h
 
-test/ickp2ptest.o: include/ickP2p.h
+test/ickp2ptest.o: test/config.h include/ickP2p.h
+test/config.o: test/config.h
