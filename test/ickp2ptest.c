@@ -94,8 +94,8 @@ static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pS
 \*=========================================================================*/
 int main( int argc, char *argv[] )
 {
-  int                  help_flag;
-  int                  vers_flag;
+  int                  help_flag   = 0;
+  int                  vers_flag   = 0;
   const char          *cfg_fname   = NULL;
   char                *uuidStr     = NULL;
   const char          *name        = DEVICENAME;

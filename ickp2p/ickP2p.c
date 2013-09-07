@@ -103,11 +103,9 @@ const char *ickP2pGetVersion( int *major, int *minor )
     Build version strong only once
 \*------------------------------------------------------------------------*/
   if( !*buffer ) {
-#ifdef GIT_VERSION
     const char *gitver = ickP2pGitVersion();
-    if( strlen(gitver)>8 )
-      gitver += strlen(gitver)-8;
-    sprintf( buffer, "%d.%d %s", ICK_VERSION_MAJOR, ICK_VERSION_MINOR, gitver );
+#ifdef GIT_VERSION
+    sprintf( buffer, "%d.%d %.7s", ICK_VERSION_MAJOR, ICK_VERSION_MINOR, gitver );
 #else
     sprintf( buffer, "%d.%d %s", ICK_VERSION_MAJOR, ICK_VERSION_MINOR, gitver );
 #endif
