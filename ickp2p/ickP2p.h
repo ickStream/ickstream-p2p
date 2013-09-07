@@ -142,7 +142,7 @@ typedef struct _ickP2pContext ickP2pContext_t;
 \*------------------------------------------------------------------------*/
 typedef void  (*ickP2pEndCb_t)( ickP2pContext_t *ictx );
 typedef void  (*ickP2pDiscoveryCb_t)( ickP2pContext_t *ictx, const char *uuid, ickP2pDeviceState_t change, ickP2pServicetype_t type );
-typedef void  (*ickP2pMessageCb_t)( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices, const char* message, size_t mSize );
+typedef void  (*ickP2pMessageCb_t)( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices, const char *message, size_t mSize );
 typedef int   (*ickP2pConnectMatrixCb_t)( ickP2pContext_t *ictx, ickP2pServicetype_t localServices, ickP2pServicetype_t remoteServices );
 typedef void  (*ickP2pLogFacility_t)( const char *file, int line, int prio, const char * format, ... );
 

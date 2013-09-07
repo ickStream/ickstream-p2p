@@ -96,11 +96,11 @@ int main( int argc, char *argv[] )
 {
   int                  help_flag;
   int                  vers_flag;
-  const char          *cfg_fname;
-  char                *uuidStr = NULL;
-  const char          *name = DEVICENAME;
-  const char          *ifname = IFNAME;
-  const char          *verb_arg = "4";
+  const char          *cfg_fname   = NULL;
+  char                *uuidStr     = NULL;
+  const char          *name        = DEVICENAME;
+  const char          *ifname      = IFNAME;
+  const char          *verb_arg    = "4";
   const char          *service_arg = NULL;
 
   ickErrcode_t         irc;
@@ -112,16 +112,17 @@ int main( int argc, char *argv[] )
   long                 i;
 
 /*-------------------------------------------------------------------------*\
-        Set up command line switches (leading * flags availability in config file)
+        Set up command line switches
+        (leading * flags availability in config file)
 \*-------------------------------------------------------------------------*/
-  addarg( "help",     "-?",  &help_flag,   NULL,        "Show this help message and quit" );
-  addarg( "version",  "-V",  &vers_flag,   NULL,        "Show version and quit" );
-  addarg( "config",   "-c",  &cfg_fname,   "filename",  "Set name of configuration file" );
-  addarg( "uuid",     "-u",  &uuidStr,     "uuid",      "Use UUID for this device (default: random)" );
-  addarg( "name",     "-n",  &name,        "name",      "Use Name for this device" );
-  addarg( "idev",     "-i",  &ifname,      "interface", "Main network interface" );
-  addarg( "services", "-s",  &service_arg, "bitvector", "Announce services (default: random)" );
-  addarg( "verbose",  "-v",  &verb_arg,    "level",     "Set ickp2p logging level (0-7)" );
+  addarg( "help",      "-?",  &help_flag,   NULL,        "Show this help message and quit" );
+  addarg( "version",   "-V",  &vers_flag,   NULL,        "Show version and quit" );
+  addarg( "config",    "-c",  &cfg_fname,   "filename",  "Set name of configuration file" );
+  addarg( "*uuid",     "-u",  &uuidStr,     "uuid",      "Use UUID for this device (default: random)" );
+  addarg( "*name",     "-n",  &name,        "name",      "Use Name for this device" );
+  addarg( "*idev",     "-i",  &ifname,      "interface", "Main network interface" );
+  addarg( "*services", "-s",  &service_arg, "bitvector", "Announce services (default: random)" );
+  addarg( "*verbose",  "-v",  &verb_arg,    "level",     "Set ickp2p logging level (0-7)" );
 
 /*-------------------------------------------------------------------------*\
         Parse the arguments
