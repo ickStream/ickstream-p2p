@@ -157,7 +157,7 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
 
   debug( "ickP2pCreate: \"%s\" (%s) lt=%ds folder=\"%s\"",
          deviceName, deviceUuid, lifetime, upnpFolder  );
-  debug( "ickP2pCreate: wost=\"%s\" if=\"%s\" port=%d services=0x%02x",
+  debug( "ickP2pCreate: host=\"%s\" if=\"%s\" port=%d services=0x%02x",
          hostname, ifname, port, services );
 
 /*------------------------------------------------------------------------*\
@@ -245,7 +245,7 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
 /*------------------------------------------------------------------------*\
     Create and init SSDP listener socket with primary interface
 \*------------------------------------------------------------------------*/
-  ictx->upnpSocket = _ickSsdpCreateListener( ifaddr, port );
+  ictx->upnpSocket = _ickSsdpCreateListener( ifaddr, ictx->upnpPort );
   if( ictx->upnpSocket<0 ){
     logerr( "ickP2pInit: could not create socket (%s).", strerror(errno) );
     _ickLibDestruct( ictx );

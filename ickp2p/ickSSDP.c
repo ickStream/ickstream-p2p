@@ -140,6 +140,12 @@ int _ickSsdpCreateListener( in_addr_t ifaddr, int port )
   int rc;
   int opt;
 
+#ifdef ICK_DEBUG
+  char _buf[64];
+  inet_ntop( AF_INET, &ifaddr, _buf, sizeof(_buf) );
+  debug( "_ickSsdpCreateListener: %s:%d", _buf, port );
+#endif
+
 /*------------------------------------------------------------------------*\
     Try to create socket
 \*------------------------------------------------------------------------*/

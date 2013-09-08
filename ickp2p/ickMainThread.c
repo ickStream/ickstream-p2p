@@ -398,7 +398,6 @@ void *_ickMainThread( void *arg )
         continue;
 
       // receive data
-      memset( buffer, 0, ICKDISCOVERY_HEADER_SIZE_MAX );
       len = recvfrom( ictx->upnpSocket, buffer, ICKDISCOVERY_HEADER_SIZE_MAX, 0, &address, &addrlen );
       if( len<0 ) {
         logwarn( "ickp2p main thread: recvfrom failed (%s).", strerror(errno) );

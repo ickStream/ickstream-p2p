@@ -88,6 +88,12 @@ int _ickIpBind( int socket, in_addr_t addr, int port )
   socklen_t           sockname_len = sizeof(struct sockaddr_in);
   int                 rc;
 
+#ifdef ICK_DEBUG
+  char _buf[64];
+  inet_ntop( AF_INET, &addr, _buf, sizeof(_buf) );
+  debug( "_ickIpBind (%d): %s:%d", socket, _buf, port );
+#endif
+
 /*------------------------------------------------------------------------*\
     Fill sockaddr structure
 \*------------------------------------------------------------------------*/
@@ -116,6 +122,13 @@ int _ickIpAddMcast( int socket, in_addr_t ifaddr, in_addr_t maddr )
 {
   struct ip_mreq  mgroup;
   int             rc;
+
+#ifdef ICK_DEBUG
+  char _buf1[64], _buf2[64];
+  inet_ntop( AF_INET, &ifaddr, _buf1, sizeof(_buf1) );
+  inet_ntop( AF_INET, &maddr,  _buf2, sizeof(_buf2) );
+  debug( "_ickIpAddMcast (%d): in: %s mc: %s", socket, _buf1, _buf2 );
+#endif
 
 /*------------------------------------------------------------------------*\
     Construct request
