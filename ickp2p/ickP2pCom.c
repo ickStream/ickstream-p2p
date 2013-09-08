@@ -658,16 +658,18 @@ int _lwsP2pCb( struct libwebsocket_context *context,
           _ickLibDeviceListUnlock( ictx );
           return -1;
         }
-        _ickDeviceSetLocation( device, psd->host );
         psd->device = device;
         device->wsi = wsi;
 
-        // Start retrieval of unpn descriptor, use ickstream root device
+        // Get URL of ickstream root device
         if( asprintf(&dscrPath,"http://%s/%s.xml",psd->host,ICKDEVICE_STRING_ROOT)<0 ) {
           logerr( "_lwsP2pCb: out of memory" );
           _ickLibDeviceListUnlock( ictx );
           return -1;
         }
+        _ickDeviceSetLocation( device, dscrPath );
+
+        // Start retrieval of unpn descriptor
         wget = _ickWGetInit( ictx, dscrPath, _ickWGetXmlCb, device, &irc );
         Sfree( dscrPath );
         if( !wget ) {
@@ -844,6 +846,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
         // Set timestamp
         device->tDisconnect = _ickTimeNow();
+
+        // Execute discovery callback
+        _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_DISCONNECTED, device->services );
 
         device->wsi = NULL;
       }

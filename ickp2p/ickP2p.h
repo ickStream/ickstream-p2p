@@ -96,14 +96,14 @@ typedef enum {
 
 // Modes of device discovery callback
 typedef enum {
-  ICKP2P_CONNECTED      = 0x0001,
-  ICKP2P_DISCONNECTED   = 0x0002,
-  ICKP2P_ERROR          = 0x0004,
-  ICKP2P_LEGACY         = 0x0010,
-  ICKP2P_NEW            = 0x0020,
-  ICKP2P_REMOVED        = 0x0040,
-  ICKP2P_EXPIRED        = 0x0080,
-  ICKP2P_TERMINATE      = 0x0100
+  ICKP2P_CONNECTED    = 1,
+  ICKP2P_DISCONNECTED,
+  ICKP2P_ERROR,
+  ICKP2P_LEGACY,
+  ICKP2P_NEW,
+  ICKP2P_REMOVED,
+  ICKP2P_EXPIRED,
+  ICKP2P_TERMINATE
 } ickP2pDeviceState_t;
 
 // Service types

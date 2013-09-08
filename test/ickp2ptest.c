@@ -398,6 +398,7 @@ static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDevice
   }
 
   printf( "%s: %s -- %s %s\n", ickP2pGetIf(ictx), uuid, cstr, tstr );
+  printf( "%s: %s -- Location: %s\n", ickP2pGetIf(ictx), uuid, ickP2pGetDeviceLocation(ictx,uuid) );
 }
 
 
