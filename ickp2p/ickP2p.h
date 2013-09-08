@@ -124,6 +124,7 @@ typedef struct {
   const char *manufacturerUrl;
   const char *modelDescriptor;
   const char *modelName;
+  const char *productAndVersion;
 } ickUpnpNames_t;
 
 

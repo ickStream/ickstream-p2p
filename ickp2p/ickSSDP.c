@@ -1359,14 +1359,14 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
         "LOCATION: %s/%s.xml\r\n"
         "NT: %s\r\n"
         "NTS: ssdp:alive\r\n"
-        "SERVER: %s\r\n"
+        "SERVER: %s UPnP/1.1 %s\r\n"
         "USN: %s\r\n"
         "BOOTID.UPNP.ORG: %ld\r\n"
         "CONFIGID.UPNP.ORG: %ld\r\n"
         "\r\n",
         ICKSSDP_MCASTADDR, ictx->upnpPort, ictx->lifetime,
         ictx->locationRoot, sstr,
-        nst, ictx->osName, usn,
+        nst, ictx->osName, ickUpnpNames.productAndVersion, usn,
         ictx->upnpBootId, ictx->upnpConfigId );
       break;
 
@@ -1393,10 +1393,10 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
           "MAN: \"ssdp:discover\"\r\n"
           "MX: %d\r\n"
           "ST: %s\r\n"
-          "USER-AGENT: %s\r\n"
+          "USER-AGENT: %s UPnP/1.1 %s\r\n"
           "\r\n",
           ICKSSDP_MCASTADDR, ictx->upnpPort, ICKSSDP_MSEARCH_MX,
-          nst, ictx->osName );
+          nst, ictx->osName, ickUpnpNames.productAndVersion );
         break;
 
     // See "UPnP Device Architecture 1.1": chapter 1.3.3
@@ -1414,7 +1414,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
         "DATE: %s\r\n"
         "EXT:\r\n"
         "LOCATION: %s/%s.xml\r\n"
-        "SERVER: %s\r\n"
+        "SERVER: %s UPnP/1.1 %s\r\n"
         "ST: %s\r\n"
         "USN: %s\r\n"
         "BOOTID.UPNP.ORG: %ld\r\n"
@@ -1422,7 +1422,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
         "\r\n",
         ictx->lifetime, timestr,
         ictx->locationRoot, sstr,
-        ictx->osName, nst, usn,
+        ictx->osName, ickUpnpNames.productAndVersion, nst, usn,
         ictx->upnpBootId, ictx->upnpConfigId );
       break;
 

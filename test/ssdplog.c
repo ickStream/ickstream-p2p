@@ -61,6 +61,8 @@ Remarks         : -
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
+#include <sys/utsname.h>
+
 
 #include "config.h"
 
@@ -106,10 +108,16 @@ int main( int argc, char *argv[] )
   const char          *port_arg    = SSDPPORT;
   const char          *addr_arg    = SSDPADDR;
   char                *ignore_arg  = NULL;
+  const char          *msearch_arg = NULL;
   in_addr_t            ifaddr;
+  in_addr_t            mcaddr;
   char                *buffer;
   int                  port;
   struct _addrlist    *ignore_list = NULL;
+  int                  minterval   = 0;
+  char                *eptr;
+  struct utsname       utsname;
+  char                *msearchstr  = NULL;
   int                  sd;
   int                  rc;
   int                  opt;
@@ -123,13 +131,14 @@ int main( int argc, char *argv[] )
         Set up command line switches
         (leading * flags availability in config file)
 \*-------------------------------------------------------------------------*/
-  addarg( "help",      "-?",  &help_flag,   NULL,            "Show this help message and quit" );
-  addarg( "version",   "-V",  &vers_flag,   NULL,            "Show version and quit" );
-  addarg( "config",    "-c",  &cfg_fname,   "filename",      "Set name of configuration file" );
-  addarg( "*idev",     "-i",  &ifname,      "interface",     "Network interface" );
-  addarg( "*port",     "-p",  &port_arg,    "port",          "Listening port" );
-  addarg( "*maddr",    "-m",  &addr_arg,    "address",       "Mcast group address" );
-  addarg( "*ignore",   "-I",  &ignore_arg,  "address[,...]", "Ignore senders" );
+  addarg( "help",       "-?",  &help_flag,   NULL,            "Show this help message and quit" );
+  addarg( "version",    "-V",  &vers_flag,   NULL,            "Show version and quit" );
+  addarg( "config",     "-c",  &cfg_fname,   "filename",      "Set name of configuration file" );
+  addarg( "*idev",      "-i",  &ifname,      "interface",     "Network interface" );
+  addarg( "*port",      "-p",  &port_arg,    "port",          "Listening port" );
+  addarg( "*maddr",     "-m",  &addr_arg,    "address",       "Mcast group address" );
+  addarg( "*ignore",    "-I",  &ignore_arg,  "address[,...]", "Ignore senders" );
+  addarg( "*broadcast", "-b",  &msearch_arg, "interval",      "Broadcast M-Search packets (dafault: off)" );
 
 /*-------------------------------------------------------------------------*\
         Parse the arguments
@@ -161,13 +170,25 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Get port
 \*------------------------------------------------------------------------*/
-  char *eptr;
   port = (int)strtol( port_arg, &eptr, 10 );
   while( isspace(*eptr) )
     eptr++;
   if( *eptr || port<0 || port>65365 ) {
     fprintf( stderr, "Bad port number: '%s'\n", port_arg );
     return 1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Get msearch interval (if any)
+\*------------------------------------------------------------------------*/
+  if( msearch_arg ) {
+    minterval = (int)strtol( msearch_arg, &eptr, 10 );
+    while( isspace(*eptr) )
+      eptr++;
+    if( *eptr || minterval<30 ) {
+      fprintf( stderr, "Bad interval: '%s' (should be >=30)\n", msearch_arg );
+      return 1;
+    }
   }
 
 /*------------------------------------------------------------------------*\
@@ -200,6 +221,41 @@ int main( int argc, char *argv[] )
     fprintf( stderr, "Could not get IP address of interface \"%s\"\n",
              ifname );
     return 1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Get multicast address
+\*------------------------------------------------------------------------*/
+  mcaddr = inet_addr( addr_arg );
+  if( mcaddr==INADDR_NONE ) {
+    fprintf( stderr, "Bad multicast address \"%s\"\n", addr_arg );
+    return 1;
+  }
+
+/*------------------------------------------------------------------------*\
+    Get msearch string
+\*------------------------------------------------------------------------*/
+  if( minterval ) {
+    char buf[64];
+    if( uname(&utsname) ) {
+      fprintf( stderr, "Could not get uname (%s)", strerror(errno) );
+      return 1;
+    }
+    inet_ntop( AF_INET, &mcaddr, buf, sizeof(buf) );
+    rc = asprintf( &msearchstr,
+                    "M-SEARCH * HTTP/1.1\r\n"
+                    "HOST: %s:%d\r\n"
+                    "MAN: \"ssdp:discover\"\r\n"
+                    "MX: %d\r\n"
+                    "ST: %s\r\n"
+                    "USER-AGENT: %s/%s UPnP/1.1 ssdplog/1.0\r\n"
+                    "\r\n",
+                    buf, port, 1, "ssdp:all",
+                    utsname.sysname, utsname.release );
+    if( rc<0 ) {
+      fprintf( stderr, "Out of memory\n" );
+      return 1;
+    }
   }
 
 /*------------------------------------------------------------------------*\
@@ -300,7 +356,7 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
   Add socket to multicast group on target interface
 \*------------------------------------------------------------------------*/
-  mgroup.imr_multiaddr.s_addr = inet_addr( addr_arg );
+  mgroup.imr_multiaddr.s_addr = mcaddr;
   mgroup.imr_interface.s_addr = ifaddr;
   rc = setsockopt( sd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mgroup, sizeof(mgroup) );
   if( rc<0 ) {
@@ -314,6 +370,7 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Main loop: wait for termination
 \*------------------------------------------------------------------------*/
+  long              last_msearch = 0;
   while( !stop_signal ) {
     fd_set            readSet;
     int               retval;
@@ -323,6 +380,43 @@ int main( int argc, char *argv[] )
     socklen_t         addrlen = sizeof(address);
     struct _addrlist *walk;
     struct timeval    tv;
+
+/*------------------------------------------------------------------------*\
+    Need to send M-Search?
+\*------------------------------------------------------------------------*/
+    gettimeofday( &tv, NULL );
+    if( minterval && tv.tv_sec>last_msearch ) {
+      struct sockaddr_in addr;
+      ssize_t            n;
+      size_t             len = strlen( msearchstr );
+
+      memset( &addr, 0, sizeof(struct sockaddr_in) );
+      addr.sin_family      = AF_INET;
+      addr.sin_addr.s_addr = mcaddr;
+      addr.sin_port        = htons( port );
+
+      printf( "\n***** %.4f ***** %ld bytes to %s:%d *****\n%s*****\n",
+             tv.tv_sec+tv.tv_usec*1E-6, (long)len,
+             inet_ntoa(addr.sin_addr), port, msearchstr );
+      fflush( stdout );
+
+      // Try to send packet via discovery socket
+      n = sendto( sd, msearchstr, len, 0, (const struct sockaddr*)&addr, sizeof(addr) );
+
+      // Any error ?
+      if( n<0 ) {
+        fprintf( stderr, "Could not send to %s:%d (%s)",
+                 inet_ntoa(addr.sin_addr), port, strerror(errno) );
+        break;
+      }
+      else if( n<len ) {
+        fprintf( stderr, "Could not send all data to %s:%d (%d of %d)",
+                 inet_ntoa(addr.sin_addr), port, n, len );
+        break;
+      }
+
+      last_msearch = tv.tv_sec+minterval;
+    }
 
 /*------------------------------------------------------------------------*\
     Set timeout to 500ms
@@ -380,6 +474,7 @@ int main( int argc, char *argv[] )
            inet_ntoa(((const struct sockaddr_in *)&address)->sin_addr),
            ntohs(((const struct sockaddr_in *)&address)->sin_port),
            rcv_size, buffer );
+    fflush( stdout );
     cntr++;
 
   }
@@ -388,12 +483,16 @@ int main( int argc, char *argv[] )
     Clean up
 \*------------------------------------------------------------------------*/
   free( buffer );
+  if( msearchstr )
+    free( msearchstr );
   close( sd );
 
 /*------------------------------------------------------------------------*\
     That's all
 \*------------------------------------------------------------------------*/
   printf( "\n##### Received %d packets, %d ignored\n", cntr, igncntr );
+  fflush( stdout );
+
   return 0;
 }
 

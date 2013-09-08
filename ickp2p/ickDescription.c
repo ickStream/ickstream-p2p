@@ -73,7 +73,8 @@ ickUpnpNames_t ickUpnpNames = {
   ICKDEVICE_MANUFACTURER,
   ICKDEVICE_MANUFACTURERURL,
   ICKDEVICE_MODELDESCRIPTION,
-  ICKDEVICE_MODELNAME
+  ICKDEVICE_MODELNAME,
+  ICKDEVICE_PRODUCTANDVERSION
 };
 
 
@@ -148,7 +149,7 @@ ickP2pServicetype_t _ickDescrFindServiceByUsn( const char *usn )
 
 /*=========================================================================*\
   Find discovery handler and ickstream service type for an
-  UPnp description request received over HTTP
+  UPnP description request received over HTTP
     caller must lock discovery handler list
     returns NULL if no match
 \*=========================================================================*/
