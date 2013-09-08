@@ -87,7 +87,7 @@ Remarks         : -
 #define ICKDEVICE_MANUFACTURERURL        "http://ickstream.com"
 #define ICKDEVICE_MODELDESCRIPTION       "ickStreamDevice"
 #define ICKDEVICE_MODELNAME              "ickStreamDevice"
-#define ICKDEVICE_PRODUCTANDVERSION      "ickStreamDevice:1.0"
+#define ICKDEVICE_PRODUCTANDVERSION      "ickStreamDevice/1.0"
 
 //
 // strings defining ickstream devices and services
