@@ -380,10 +380,12 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
       _ickDeviceLock( device );
       _ickDeviceSetName( device, _xmlUserData.deviceName );
       device->ickP2pLevel  = _xmlUserData.protocolLevel;
-      if( device->services&~_xmlUserData.services )
-        logwarn( "_ickWGetXmlCb (%s): found superset of already known services", uri );
-      else if( device->services&_xmlUserData.services )
-        logwarn( "_ickWGetXmlCb (%s): found subset of already known services", uri );
+      if( _xmlUserData.services&~device->services )
+        logwarn( "_ickWGetXmlCb (%s): found superset of already known services (was:0x%02x new:0x%02x)",
+                  uri, device->services, _xmlUserData.services );
+      else if( device->services!=_xmlUserData.services && (device->services&_xmlUserData.services) )
+        logwarn( "_ickWGetXmlCb (%s): found subset of already known services (was:0x%02x new:0x%02x)",
+                  uri, device->services, _xmlUserData.services );
       debug( "_ickWGetXmlCb (%s): adding services 0x%02x.", device->uuid, _xmlUserData.services );
       device->services |= _xmlUserData.services;
       if( !_xmlUserData.lifetime ) {

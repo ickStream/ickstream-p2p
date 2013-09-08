@@ -395,8 +395,11 @@ ickSsdp_t *_ickSsdpParse( const char *buffer, size_t length, const struct sockad
       if( strcasecmp(value,"239.255.255.250") &&
           strcasecmp(value,"239.255.255.250:1900") ) {
         logwarn("_ickSsdpParse (%s): Invalid HOST header value \"%s\"", peer, value );
-        _ickSsdpFree( ssdp );
-        return NULL;
+        // fixme: ignore bug of old ickp2plib
+        if( strcasecmp(value,"239.255.255.250:PORT") ) {
+          _ickSsdpFree( ssdp );
+          return NULL;
+        }
       }
     }
 
