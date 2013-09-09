@@ -337,6 +337,10 @@ int main( int argc, char *argv[] )
   rc = setsockopt( sd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt) );
   if( rc<0 )
     fprintf( stderr, "Could not set SO_REUSEADDR on socket (%s) \n", strerror(errno) );
+  rc = setsockopt( sd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt) );
+  if( rc<0 )
+    fprintf( stderr, "Could not set SO_REUSEPORT on socket (%s) \n", strerror(errno) );
+
 
 /*------------------------------------------------------------------------*\
     Bind socket to requested port
@@ -349,7 +353,7 @@ int main( int argc, char *argv[] )
   if( rc<0 ) {
     free( buffer );
     close( sd );
-    fprintf( stderr, "Could not bind socket to port %d (%s).", port, strerror(errno) );
+    fprintf( stderr, "Could not bind socket to port %d (%s)\n", port, strerror(errno) );
     return -1;
   }
 
@@ -410,8 +414,8 @@ int main( int argc, char *argv[] )
         break;
       }
       else if( n<len ) {
-        fprintf( stderr, "Could not send all data to %s:%d (%d of %d)",
-                 inet_ntoa(addr.sin_addr), port, n, len );
+        fprintf( stderr, "Could not send all data to %s:%d (%ld of %ld)",
+                 inet_ntoa(addr.sin_addr), port, (long)n, (long)len );
         break;
       }
 
@@ -473,7 +477,7 @@ int main( int argc, char *argv[] )
            tv.tv_sec+tv.tv_usec*1E-6, (long)rcv_size,
            inet_ntoa(((const struct sockaddr_in *)&address)->sin_addr),
            ntohs(((const struct sockaddr_in *)&address)->sin_port),
-           rcv_size, buffer );
+           (int)rcv_size, buffer );
     fflush( stdout );
     cntr++;
 
