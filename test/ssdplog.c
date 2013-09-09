@@ -337,10 +337,11 @@ int main( int argc, char *argv[] )
   rc = setsockopt( sd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt) );
   if( rc<0 )
     fprintf( stderr, "Could not set SO_REUSEADDR on socket (%s) \n", strerror(errno) );
+#ifdef ICK_USE_SO_REUSEPORT
   rc = setsockopt( sd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt) );
   if( rc<0 )
     fprintf( stderr, "Could not set SO_REUSEPORT on socket (%s) \n", strerror(errno) );
-
+#endif
 
 /*------------------------------------------------------------------------*\
     Bind socket to requested port

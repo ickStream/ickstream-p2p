@@ -58,10 +58,11 @@ GENHEADERS	 = miniupnp/miniupnpc/miniupnpcstrings.h
 # OS specific settings
 ifeq ($(OS),Linux)
 EXTRALIBS	= -luuid
-TESTFALGS = -DIF1NAME="lo"
+TESTFALGS       = -DIF1NAME="lo"
 endif
 ifeq ($(OS),Darwin)
-TESTFALGS = -DIF1NAME="lo0"
+TESTFALGS       = -DIF1NAME="lo0"
+CFLAGS          += -DICK_USE_SO_REUSEPORT
 endif
 
 
@@ -97,13 +98,13 @@ $(ICKLIB): $(LIBOBJ)
 $(TESTEXEC): $(GENHEADERS) $(INCLUDEDIR) $(TESTSRC) $(ICKLIB) Makefile
 	@echo '*************************************************************'
 	@echo "Building test executable:"
-	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(TESTFLAGS) $(LFLAGS) $(TESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -lpthread $(EXTRALIBS) -o $(TESTEXEC)
+	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(TESTFLAGS) $(CFLAGS) $(LFLAGS) $(TESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -lpthread $(EXTRALIBS) -o $(TESTEXEC)
 
 # make ssdp logger
 $(SSDPLOGEXEC): $(SSDPLOGSRC) Makefile
 	@echo '*************************************************************'
 	@echo "Building ssdp logger executable:"
-	$(CC) $(DEBUGFLAGS) $(SSDPLOGSRC) -o $(SSDPLOGEXEC)
+	$(CC) $(DEBUGFLAGS) $(SSDPLOGSRC) $(CFLAGS) -o $(SSDPLOGEXEC)
 
 # Provide public headers
 $(INCLUDEDIR): $(PUBLICHEADERS)

@@ -173,6 +173,12 @@ int _ickSsdpCreateListener( in_addr_t ifaddr, int port )
   if( rc<0 )
     logwarn( "_ickSsdpCreateListener: could not set SO_REUSEADDR on socket (%s).",
         strerror(errno) );
+#ifdef ICK_USE_SO_REUSEPORT
+  rc = setsockopt( sd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt) );
+  if( rc<0 )
+    logwarn( "_ickSsdpCreateListener: could not set SO_REUSEPORT on socket (%s).",
+        strerror(errno) );
+#endif
 
 /*------------------------------------------------------------------------*\
     Bind socket to requested port
