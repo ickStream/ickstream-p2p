@@ -1082,6 +1082,10 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 {
   int                  retcode = 0;
 
+  // fixme: need dedicated socket for mcasts
+  ((struct sockaddr_in *)&ssdp->addr)->sin_addr.s_addr = inet_addr(ICKSSDP_MCASTADDR);
+  ((struct sockaddr_in *)&ssdp->addr)->sin_port        = htons( ICKSSDP_MCASTPORT );
+
   debug( "_ssdpProcessMSearch: from %s:%d ST:%s",
          inet_ntoa(((const struct sockaddr_in *)&ssdp->addr)->sin_addr),
          ntohs(((const struct sockaddr_in *)&ssdp->addr)->sin_port), ssdp->st );
