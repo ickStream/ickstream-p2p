@@ -378,8 +378,7 @@ void *_ickMainThread( void *arg )
     _ickLibLock( ictx );
     for( interface=ictx->interfaces; interface; interface=interface->next ) {
       if( _ickPolllistCheck(&plist,interface->upnpComSocket,POLLIN)>0 )
-        continue;
-      _ickServiceSsdpSocket( ictx, buffer, interface->upnpComSocket );
+        _ickServiceSsdpSocket( ictx, buffer, interface->upnpComSocket );
     }
     if( _ickPolllistCheck(&plist,ictx->upnpListenerSocket,POLLIN)>0 )
       _ickServiceSsdpSocket( ictx, buffer, ictx->upnpListenerSocket );
@@ -496,7 +495,7 @@ static void _ickServiceSsdpSocket( ickP2pContext_t *ictx, char *buffer, int sd )
 /*------------------------------------------------------------------------*\
     Receive data
 \*------------------------------------------------------------------------*/
-  len = recvfrom( ictx->upnpListenerSocket, buffer, ICKDISCOVERY_HEADER_SIZE_MAX, 0, &address, &addrlen );
+  len = recvfrom( sd, buffer, ICKDISCOVERY_HEADER_SIZE_MAX, 0, &address, &addrlen );
   if( len<0 ) {
     logwarn( "_ickServiceSsdpSocket (%d): recvfrom failed (%s).", sd, strerror(errno) );
     return;
@@ -1180,7 +1179,6 @@ static int _ickPolllistUnset( ickPolllist_t *plist, int fd, int events )
 static int _ickPolllistCheck( const ickPolllist_t *plist, int fd, int events )
 {
   int idx;
-  debug( "_ickPolllistCheck (%p): fd=%d, events=%d", plist, fd, events );
 
 /*------------------------------------------------------------------------*\
     Get list entry
@@ -1194,6 +1192,8 @@ static int _ickPolllistCheck( const ickPolllist_t *plist, int fd, int events )
 /*------------------------------------------------------------------------*\
     Return result
 \*------------------------------------------------------------------------*/
+  debug( "_ickPolllistCheck (%p): fd=%d, events=0x%02x (have: 0x%02x)", 
+         plist, fd, events, plist->fds[idx].revents );
   return plist->fds[idx].revents & events;
 }
 

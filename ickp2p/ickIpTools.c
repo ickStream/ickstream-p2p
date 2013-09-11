@@ -246,7 +246,7 @@ ickErrcode_t _ickIpGetIfAddr( const char *ifname, in_addr_t *addr, in_addr_t *ne
         irc = ICKERR_NOINTERFACE;
         break;
       }
-      *netmask = ((struct sockaddr_in *)(&ifr->ifr_netmask))->sin_addr.s_addr;
+      *netmask = ((struct sockaddr_in *)(&ifr->ifr_addr))->sin_addr.s_addr;
     }
 
     // Duplicate real interface name
