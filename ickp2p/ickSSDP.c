@@ -112,8 +112,8 @@ typedef struct {
 /*=========================================================================*\
   Private prototypes
 \*=========================================================================*/
-static int   _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
-static int   _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
+static int          _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
+static int          _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
 
 static void         _ickSsdpAnnounceCb( const ickTimer_t *timer, void *data, int tag );
 static void         _ickSsdpSearchCb( const ickTimer_t *timer, void *data, int tag );
@@ -130,11 +130,8 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
                                             int repeat );
 static void         _ickSsdpNotifyCb( const ickTimer_t *timer, void *data, int tag );
 
-static int                 _ssdpGetVersion( const char *dscr );
-static int                 _ssdpVercmp( const char *user, const char *adv );
-
-
-
+static int          _ssdpGetVersion( const char *dscr );
+static int          _ssdpVercmp( const char *user, const char *adv );
 
 
 /*=========================================================================*\
@@ -502,7 +499,7 @@ void _ickSsdpFree( ickSsdp_t *ssdp )
 /*=========================================================================*\
   Interpret a SSDP packet,
   call add/modify/remove devices as needed or initiate an M-Search
-    dh   - the discovery handler to be used
+    ictx - the ickstream context
     ssdp - the ssdp packet
   return values:
    -1 : error (SSDP packet corrupted)
@@ -562,8 +559,8 @@ int _ickSsdpExecute( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 
 /*=========================================================================*\
   Adds or update the device to/in the list
+    ictx - the ickstream context
     ssdp - a parsed SSDP packet
-    dh   - the related discovery handler
   return values:
    -1 : error
     0 : device was updated
@@ -616,16 +613,6 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   device = _ickLibDeviceFindByUuid( ictx, ssdp->uuid );
   if( !device ) {
     debug ( "_ickDeviceUpdate (%s): adding new device (%s).", ssdp->usn, ssdp->location );
-
-/*
-    // Fixme: This is for backward compatibility
-    // add new devices only via root descriptor
-    if( stype!=ICKP2P_SERVICE_GENERIC ) {
-      _ickDiscoveryDeviceListUnlock( dh );
-      _ickTimerListUnlock( icklib );
-       return 0;
-    }
-*/
 
     // Allocate and initialize descriptor
     device = _ickDeviceNew( ssdp->uuid, ICKDEVICE_SSDP );
@@ -764,8 +751,8 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 
 /*=========================================================================*\
   Remove a device or service from a discovery context
+    ictx - the ickstream context
     ssdp - a parsed SSDP packet
-    dh   - the related discovery handler
   return values:
    -1 : error
     0 : no device removed
@@ -1081,17 +1068,13 @@ static void _ickSsdpSearchCb( const ickTimer_t *timer, void *data, int tag )
 /*=========================================================================*\
   Process M-SEARCH requests
     See "UPnP Device Architecture 1.1": chapter 1.3.3
+    ictx - the ickstream context
     ssdp - the ssdp packet
-    dh   - the discovery handler to be used
   returns -1 on error, 0 on success
 \*=========================================================================*/
 static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 {
   int                  retcode = 0;
-
-  // fixme: need dedicated socket for mcasts
-  // ((struct sockaddr_in *)&ssdp->addr)->sin_addr.s_addr = inet_addr(ICKSSDP_MCASTADDR);
-  // ((struct sockaddr_in *)&ssdp->addr)->sin_port        = htons( ICKSSDP_MCASTPORT );
 
   debug( "_ssdpProcessMSearch: from %s:%d ST:%s",
          inet_ntoa(((const struct sockaddr_in *)&ssdp->addr)->sin_addr),
@@ -1173,7 +1156,8 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     (also used for M-Search answers to "ssdp:all")
     See "UPnP Device Architecture 1.1": chapter 1.2.2 and 1.3.3
     ictx    - the ickstream context
-    addr    - NULL for mcast, else unicast target (for M-Search responses)
+    addr    - NULL for mcast,
+              else unicast target in network byte order (for M-Search responses)
     type    - message type (alive or m-search response)
     Caller should lock timer list (which is already the case in timer callbacks)
 \*=========================================================================*/
@@ -1249,7 +1233,8 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
 /*=========================================================================*\
   Queue an outgoing discovery message
     ictx    - the ickstream context to use
-    addr    - NULL for mcast (on all interfaces), else unicast target (for M-Search responses)
+    addr    - NULL for mcast (on all interfaces),
+              else unicast target in network byte order (for M-Search responses)
     type    - the message type (alive,byebye,M-Search,Response)
     level   - the message type (global,root,uuid,service)
     service - the ickstream service to announce (for type=SSDPMSG_SERVICE)

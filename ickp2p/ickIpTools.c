@@ -81,6 +81,8 @@ Remarks         : -
 
 /*=========================================================================*\
   Bind a socket to an addr:port
+    addr - IP address (network byte order)
+    port - port to bind to or 0 for free port selection
     return 0 on success or error code (errno)
 \*=========================================================================*/
 int _ickIpBind( int socket, in_addr_t addr, int port )
@@ -100,7 +102,7 @@ int _ickIpBind( int socket, in_addr_t addr, int port )
 \*------------------------------------------------------------------------*/
   memset( &sockname, 0, sockname_len );
   sockname.sin_family      = AF_INET;
-  sockname.sin_addr.s_addr = htonl( addr );
+  sockname.sin_addr.s_addr = addr;
   sockname.sin_port        = htons( port );
 
 /*------------------------------------------------------------------------*\
@@ -117,6 +119,9 @@ int _ickIpBind( int socket, in_addr_t addr, int port )
 
 /*=========================================================================*\
   Add a socket to a multicast group
+    ifaddr - interface
+    maddr  - multicast group
+    ifaddr and maddr are in network byte order
     return 0 on success or error code (errno)
 \*=========================================================================*/
 int _ickIpAddMcast( int socket, in_addr_t ifaddr, in_addr_t maddr )
@@ -155,6 +160,7 @@ int _ickIpAddMcast( int socket, in_addr_t ifaddr, in_addr_t maddr )
     addr    - pointer to addr of interface (might be NULL)
     netmask - pointer to network mask of interface (might be NULL)
     name    - pointer to name of interface, will be an allocated string (might be NULL)
+    *addr and *netmask are in network byte order
     return 0 on success or error code
 \*=========================================================================*/
 ickErrcode_t _ickIpGetIfAddr( const char *ifname, in_addr_t *addr, in_addr_t *netmask, char **name )

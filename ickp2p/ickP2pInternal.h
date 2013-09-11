@@ -76,8 +76,8 @@ struct  _ickInterface {
   ickInterface_t *next;
   ickInterface_t *prev;
   char           *name;          // strong
-  in_addr_t       addr;
-  in_addr_t       netmask;
+  in_addr_t       addr;          // network byte order
+  in_addr_t       netmask;       // network byte order
   char           *hostname;      // strong
   int             upnpComSocket;
   int             upnpComPort;

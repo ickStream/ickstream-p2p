@@ -944,10 +944,13 @@ static void _ickLibInterfaceDestruct( ickInterface_t *interface )
   Sfree( interface );
 }
 
+
 /*=========================================================================*\
     Get interface for an address
+      ictx - context
+      addr - address (network byte order)
       Caller should lock interface list
-      returns first interface or NULL, if not found
+      returns first matching interface or NULL, if not found
 \*=========================================================================*/
 ickInterface_t *_ickLibInterfaceForAddr( const ickP2pContext_t *ictx, in_addr_t addr )
 {
@@ -982,28 +985,17 @@ ickInterface_t *_ickLibInterfaceForAddr( const ickP2pContext_t *ictx, in_addr_t 
 /*=========================================================================*\
     Get interface for a hostname
       addr - pointer to resolved address of hostname (might be NULL)
+      *addr will be in network byte order
       Caller should lock interface list
       returns first interface or NULL, if not found
 \*=========================================================================*/
 ickInterface_t *_ickLibInterfaceForHost( const ickP2pContext_t *ictx, const char *hostname, in_addr_t *addr )
 {
-  in_addr_t       haddr;
   ickInterface_t *interface;
   struct hostent *hentries;
   int             i;
 
   debug( "_ickLibInterfaceForHost (%p): \"%s\"", ictx, hostname );
-
-/*------------------------------------------------------------------------*\
-    Hostname is already an address?
-\*------------------------------------------------------------------------*/
-/*  haddr = inet_addr( hostname );
-  if( haddr!=INADDR_NONE ) {
-    if( addr )
-      *addr = haddr;
-    return _ickLibInterfaceForAddr( ictx, haddr );
-  }
-*/
 
 /*------------------------------------------------------------------------*\
     Try to get address list for hostname

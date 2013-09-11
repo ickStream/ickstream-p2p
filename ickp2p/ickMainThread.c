@@ -312,12 +312,12 @@ void *_ickMainThread( void *arg )
       _ickPolllistAdd( &plist, interface->upnpComSocket, POLLIN );
 
 /*------------------------------------------------------------------------*\
-    Collect all http client instances from discovery handlers
+    Collect all http client instances context
 \*------------------------------------------------------------------------*/
 #if 0
     _ickLibWGettersLock( ictx );
     for( wget=ictx->wGetters; wget; wget=wget->next ) {
-      if( _ickPolllistAdd(&plist,_ickWGetSocket(dh),POLLIN) )
+      if( _ickPolllistAdd(&plist,_ickWGetSocket(wget),POLLIN) )
         break;
     }
     _ickLibWGettersUnock( ictx );
