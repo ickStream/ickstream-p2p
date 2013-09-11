@@ -21,29 +21,6 @@ Remarks         : -
 *************************************************************************
  * Copyright (c) 2013, ickStream GmbH
  * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in the
- *     documentation and/or other materials provided with the distribution.
- *   * Neither the name of ickStream nor the names of its contributors
- *     may be used to endorse or promote products derived from this software
- *     without specific prior written permission.
- *
- * this SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS for A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE for ANY DIRECT,
- * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF this SOFTWARE,
- * EVEN if ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 \************************************************************************/
 
 
@@ -632,12 +609,11 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
   ickP2pContext_t      *ictx = libwebsocket_context_user( context );
   _ickLwsHttpData_t    *psd = (_ickLwsHttpData_t*) user;
   int                   retval = 0;
-  int                   fd, socket;
+  int                   fd, sd;
   size_t                remain;
   int                   sent;
-  char                  clientName[160];
-  char                  clientIp[128];
-
+  struct sockaddr_in    sin;
+  socklen_t             sin_len;
 
 /*------------------------------------------------------------------------*\
     What to do?
@@ -662,8 +638,8 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
     Serve http content
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_HTTP:
-      socket = libwebsocket_get_socket_fd( wsi );
-      debug( "_lwsHttpCb %d: requesting \"%s\"", socket, in );
+      sd = libwebsocket_get_socket_fd( wsi );
+      debug( "_lwsHttpCb %d: requesting \"%s\"", sd, in );
 
       // reset session specific user data
       memset( psd, 0, sizeof(_ickLwsHttpData_t) );
@@ -677,7 +653,7 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
           return -1;
         psd->psize   = strlen( psd->payload );
         psd->nextptr = psd->payload;
-        debug( "_lwsHttpCb %d: sending upnp descriptor \"%s\"", socket, psd->payload );
+        debug( "_lwsHttpCb %d: sending upnp descriptor \"%s\"", sd, psd->payload );
 
         // Enqueue a LWS_CALLBACK_HTTP_WRITEABLE callback for the real work
         libwebsocket_callback_on_writable( context, wsi );
@@ -696,7 +672,7 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
           return -1;
         psd->psize   = strlen( psd->payload );
         psd->nextptr = psd->payload;
-        debug( "_lwsHttpCb %d: sending debug info \"%s\"", socket, psd->payload );
+        debug( "_lwsHttpCb %d: sending debug info \"%s\"", sd, psd->payload );
 
         // Enqueue a LWS_CALLBACK_HTTP_WRITEABLE callback for the real work
         libwebsocket_callback_on_writable( context, wsi );
@@ -721,7 +697,7 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
 
         // Get full path
         sprintf( resource, "%s%s", ictx->upnpFolder, (char*)in );
-        debug( "_lwsHttpCb %d: resource path is \"%s\"", socket, resource );
+        debug( "_lwsHttpCb %d: resource path is \"%s\"", sd, resource );
 
         if( stat(resource,&sbuffer) ) {
           void *response = HTTP_404;
@@ -758,14 +734,14 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
     Receiver is writable for payload chunk transmission
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_HTTP_WRITEABLE:
-      socket = libwebsocket_get_socket_fd( wsi );
+      sd = libwebsocket_get_socket_fd( wsi );
       remain = psd->psize - (psd->nextptr-psd->payload);
-      debug( "_lwsHttpCb %d: writable, %d bytes remaining", socket, remain );
+      debug( "_lwsHttpCb %d: writable, %d bytes remaining", sd, remain );
 
       // Try to send a chunk
       sent = libwebsocket_write( wsi, (unsigned char*)psd->nextptr, remain, LWS_WRITE_HTTP );
       if( sent<0 ) {
-        logerr( "_lwsHttpCb %d: lws write failed", socket );
+        logerr( "_lwsHttpCb %d: lws write failed", sd );
         retval = -1;
         break;
       }
@@ -778,7 +754,7 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
       }
 
       // Not ready: enqueue a new callback for leftover
-      debug( "_lwsHttpCb %d: truncated lws write (%d / %d / %d)", socket, len, remain, psd->psize );
+      debug( "_lwsHttpCb %d: truncated lws write (%d / %d / %d)", sd, len, remain, psd->psize );
       psd->nextptr += sent;
       libwebsocket_callback_on_writable( context, wsi );
       break;
@@ -787,8 +763,8 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
     File transfer is complete
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_HTTP_FILE_COMPLETION:
-      socket = libwebsocket_get_socket_fd( wsi );
-      debug( "_lwsHttpCb %d: file complete", socket );
+      sd = libwebsocket_get_socket_fd( wsi );
+      debug( "_lwsHttpCb %d: file complete", sd );
       // kill the connection after we sent one file
       retval = -1;
       break;
@@ -797,8 +773,8 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
     Http connection was closed
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_CLOSED_HTTP:
-      socket = libwebsocket_get_socket_fd( wsi );
-      debug( "_lwsHttpCb %d: connection closed", socket);
+      sd = libwebsocket_get_socket_fd( wsi );
+      debug( "_lwsHttpCb %d: connection closed", sd);
       Sfree( psd->payload );
       break;
 
@@ -806,11 +782,14 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
     Do IP filtering and logging
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_FILTER_NETWORK_CONNECTION:
-      socket = libwebsocket_get_socket_fd( wsi );
-      libwebsockets_get_peer_addresses( context, wsi, (int)(long)in,
-               clientName, sizeof(clientName), clientIp, sizeof(clientIp) );
-      loginfo( "_lwsHttpCb %d: Received network connect from \"%s\" (%s)",
-               socket, clientName, clientIp);
+      sd = libwebsocket_get_socket_fd( wsi );
+      sin_len = sizeof( sin );
+      if( getpeername((int)(long)in,(struct sockaddr *)&sin,&sin_len) )
+        logwarn( "_lwsHttpCb %d: getpeername failed (%s)", sd, strerror(errno) );
+      else
+        loginfo( "_lwsHttpCb %d: Received network connect from %s:%d",
+                 sd, inet_ntoa(sin.sin_addr), ntohs(sin.sin_port) );
+
       // Accept all connections
       retval = 0;
       break;
@@ -819,8 +798,8 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
     Append headers (not used)
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER:
-      socket = libwebsocket_get_socket_fd( wsi );
-      debug( "_lwsHttpCb %d: append handshake header", socket );
+      sd = libwebsocket_get_socket_fd( wsi );
+      debug( "_lwsHttpCb %d: append handshake header", sd );
       break;
 
 /*------------------------------------------------------------------------*\

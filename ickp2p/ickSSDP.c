@@ -25,29 +25,6 @@ Remarks         : refactored from ickDiscoverRegistry
 *************************************************************************
  * Copyright (c) 2013, ickStream GmbH
  * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in the
- *     documentation and/or other materials provided with the distribution.
- *   * Neither the name of ickStream nor the names of its contributors
- *     may be used to endorse or promote products derived from this software
- *     without specific prior written permission.
- *
- * this SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS for A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE for ANY DIRECT,
- * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF this SOFTWARE,
- * EVEN if ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 \************************************************************************/
 
 #include <stdio.h>
@@ -460,6 +437,15 @@ ickSsdp_t *_ickSsdpParse( const char *buffer, size_t length, const struct sockad
       {;}
 
     else if( !strcasecmp(name,"date") )
+      {;}
+
+    else if( !strcasecmp(name,"accept-ranges") )
+      {;}
+
+    else if( !strcasecmp(name,"x-user-agent") )
+      {;}
+
+    else if( !strcasecmp(name,"user-agent") )
       {;}
 
     else
@@ -1354,14 +1340,16 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
         "LOCATION: http://%s:%d/%s.xml\r\n"
         "NT: %s\r\n"
         "NTS: ssdp:alive\r\n"
-        "SERVER: %s UPnP/1.1 %s\r\n"
+        "SERVER: %s UPnP/%d.%d %s\r\n"
         "USN: %s\r\n"
         "BOOTID.UPNP.ORG: %ld\r\n"
         "CONFIGID.UPNP.ORG: %ld\r\n"
         "\r\n",
         ICKSSDP_MCASTADDR, ictx->upnpListenerPort, ictx->lifetime,
         interface->hostname, ictx->lwsPort, sstr,
-        nst, ictx->osName, ickUpnpNames.productAndVersion, usn,
+        nst, ictx->osName,
+        ICKDEVICE_UPNP_MAJOR, ICKDEVICE_UPNP_MINOR,
+        ickUpnpNames.productAndVersion, usn,
         ictx->upnpBootId, ictx->upnpConfigId );
       break;
 
@@ -1388,10 +1376,12 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
           "MAN: \"ssdp:discover\"\r\n"
           "MX: %d\r\n"
           "ST: %s\r\n"
-          "USER-AGENT: %s UPnP/1.1 %s\r\n"
+          "USER-AGENT: %s UPnP/%d.%d %s\r\n"
           "\r\n",
           ICKSSDP_MCASTADDR, ictx->upnpListenerPort, ICKSSDP_MSEARCH_MX,
-          nst, ictx->osName, ickUpnpNames.productAndVersion );
+          nst, ictx->osName,
+          ICKDEVICE_UPNP_MAJOR, ICKDEVICE_UPNP_MINOR,
+          ickUpnpNames.productAndVersion );
         break;
 
     // See "UPnP Device Architecture 1.1": chapter 1.3.3
@@ -1409,15 +1399,16 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
         "DATE: %s\r\n"
         "EXT:\r\n"
         "LOCATION: http://%s:%d/%s.xml\r\n"
-        "SERVER: %s UPnP/1.1 %s\r\n"
+        "SERVER: %s UPnP/%d.%d %s\r\n"
         "ST: %s\r\n"
         "USN: %s\r\n"
         "BOOTID.UPNP.ORG: %ld\r\n"
         "CONFIGID.UPNP.ORG: %ld\r\n"
         "\r\n",
         ictx->lifetime, timestr,
-        interface->hostname, ictx->lwsPort, sstr,
-        ictx->osName, ickUpnpNames.productAndVersion, nst, usn,
+        interface->hostname, ictx->lwsPort, sstr, ictx->osName,
+        ICKDEVICE_UPNP_MAJOR, ICKDEVICE_UPNP_MINOR,
+        ickUpnpNames.productAndVersion, nst, usn,
         ictx->upnpBootId, ictx->upnpConfigId );
       break;
 
