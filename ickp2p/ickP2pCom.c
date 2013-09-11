@@ -366,7 +366,7 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
   in_addr_t            ifaddr;
   int                  port;
   ickInterface_t      *interface;
-  char                *hostname;
+  char                *host;
   char                *ptr;
   _ickLwsP2pData_t    *psd;
 
@@ -419,7 +419,7 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
 /*------------------------------------------------------------------------*\
     Construct local address
 \*------------------------------------------------------------------------*/
-  if( asprintf(&hostname,"http://%s:%d",interface->hostname,ictx->lwsPort)<0 ) {
+  if( asprintf(&host,"%s:%d",interface->hostname,ictx->lwsPort)<0 ) {
     Sfree( address );
     logerr( "_ickWebSocketOpen: out of memory" );
     return ICKERR_NOMEM;
@@ -431,14 +431,14 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
   psd = calloc( 1, sizeof(_ickLwsP2pData_t) );
   if( !psd ) {
     Sfree( address );
-    Sfree( hostname );
+    Sfree( host );
     logerr( "_ickWebSocketOpen: out of memory" );
     return ICKERR_NOMEM;
   }
   psd->ictx   = device->ictx;
   psd->device = device;
 
-  debug( "_ickWebSocketOpen (%s): addr=%s:%d host=%s", device->uuid, address, port, hostname );
+  debug( "_ickWebSocketOpen (%s): addr=%s:%d host=%s", device->uuid, address, port, host );
 
 /*------------------------------------------------------------------------*\
     Initiate connection
@@ -449,7 +449,7 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
                     port,
                     0,                        // ssl_connection
                     "/",                      // path
-                    hostname,                 // hostname
+                    host,                     // host on server
                     ictx->deviceUuid,         // origin
                     ICKP2P_WS_PROTOCOLNAME,   // protocol
                     -1,                       // ietf_version_or_minus_one
@@ -464,7 +464,7 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
     Clean up, that's all
 \*------------------------------------------------------------------------*/
   Sfree( address );
-  Sfree( hostname );
+  Sfree( host );
   return irc;
 }
 
