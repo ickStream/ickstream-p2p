@@ -118,6 +118,8 @@ typedef struct {
   Private prototypes
 \*=========================================================================*/
 
+static void _ickServiceSsdpSocket( ickP2pContext_t *ictx, char *buffer, int sd );
+
 static int  _ickPolllistInit( ickPolllist_t *plist, int size, int increment );
 static void _ickPolllistClear( ickPolllist_t *plist );
 static void _ickPolllistFree( ickPolllist_t *plist );
@@ -173,7 +175,6 @@ static struct libwebsocket_protocols _lwsProtocols[] = {
 void *_ickMainThread( void *arg )
 {
   ickP2pContext_t     *ictx = *(ickP2pContext_t**)arg;
-  int                  rc;
   ickPolllist_t        plist;
   ickWGetContext_t    *wget, *wgetNext;
   char                *buffer;
@@ -215,7 +216,7 @@ void *_ickMainThread( void *arg )
 /*------------------------------------------------------------------------*\
     Init libwebsocket server
 \*------------------------------------------------------------------------*/
-  ictx->lwsContext = _ickCreateLwsContext( ictx, ictx->interface, &ictx->lwsPort );
+  ictx->lwsContext = _ickCreateLwsContext( ictx, NULL, &ictx->lwsPort );
   if( !ictx->lwsContext ) {
     Sfree( buffer );
     _ickPolllistFree( &plist );
@@ -224,22 +225,6 @@ void *_ickMainThread( void *arg )
     pthread_cond_signal( &ictx->condIsReady );
     return NULL;
   }
-
-/*------------------------------------------------------------------------*\
-    Construct root of location url
-\*------------------------------------------------------------------------*/
-  rc = asprintf( &ictx->locationRoot, "http://%s:%d", ictx->hostName, ictx->lwsPort );
-  if( rc<0 ) {
-    logerr( "ickP2pDiscoveryInit: out of memory." );
-    libwebsocket_context_destroy( ictx->lwsContext );
-    Sfree( buffer );
-    _ickPolllistFree( &plist );
-    _ickPolllistFree( &ictx->lwsPolllist );
-    ictx->error = ICKERR_NOMEM;
-    pthread_cond_signal( &ictx->condIsReady );
-    return NULL;
-  }
-  debug( "ickP2pDiscoveryInit: Using location root \"%s\".", ictx->locationRoot );
 
 /*------------------------------------------------------------------------*\
     We're up and running!
@@ -251,8 +236,7 @@ void *_ickMainThread( void *arg )
     Run while not terminating
 \*------------------------------------------------------------------------*/
   while( ictx->state<ICKLIB_TERMINATING ) {
-    struct sockaddr   address;
-    socklen_t         addrlen = sizeof(address);
+    ickInterface_t   *interface;
     int               timeout;
     int               retval;
     int               i;
@@ -321,9 +305,11 @@ void *_ickMainThread( void *arg )
     _ickPolllistAdd( &plist, ictx->pollBreakPipe[0], POLLIN );
 
 /*------------------------------------------------------------------------*\
-    Add SSDP socket
+    Add SSDP listener and communication sockets
 \*------------------------------------------------------------------------*/
-    _ickPolllistAdd( &plist, ictx->upnpSocket, POLLIN );
+    _ickPolllistAdd( &plist, ictx->upnpListenerSocket, POLLIN );
+    for( interface=ictx->interfaces; interface; interface=interface->next )
+      _ickPolllistAdd( &plist, interface->upnpComSocket, POLLIN );
 
 /*------------------------------------------------------------------------*\
     Collect all http client instances from discovery handlers
@@ -390,49 +376,13 @@ void *_ickMainThread( void *arg )
     Process incoming data from SSDP socket
 \*------------------------------------------------------------------------*/
     _ickLibLock( ictx );
-    do {
-      ssize_t len;
-
-      // Is this socket readable?
-      if( _ickPolllistCheck(&plist,ictx->upnpSocket,POLLIN)<=0 )
+    for( interface=ictx->interfaces; interface; interface=interface->next ) {
+      if( _ickPolllistCheck(&plist,interface->upnpComSocket,POLLIN)>0 )
         continue;
-
-      // receive data
-      len = recvfrom( ictx->upnpSocket, buffer, ICKDISCOVERY_HEADER_SIZE_MAX, 0, &address, &addrlen );
-      if( len<0 ) {
-        logwarn( "ickp2p main thread: recvfrom failed (%s).", strerror(errno) );
-        continue;
-      }
-      if( !len ) {  // ?? Not possible for udp
-        debug( "ickp2p main thread: disconnected." );
-        continue;
-      }
-
-      debug( "ickp2p main thread: received %ld bytes from %s:%d: \"%.*s\"",
-             (long)len,
-             inet_ntoa(((const struct sockaddr_in *)&address)->sin_addr),
-             ntohs(((const struct sockaddr_in *)&address)->sin_port),
-             len, buffer );
-
-      // Try to parse SSDP packet to internal representation
-      ickSsdp_t *ssdp = _ickSsdpParse( buffer, len, &address );
-      if( !ssdp )
-        continue;
-
-      // Ignore loop back messages from ourself
-      if( !ictx->upnpLoopback && ssdp->uuid && !strcasecmp(ssdp->uuid,ictx->deviceUuid) ) {
-        debug( "ickp2p main thread: ignoring message from myself" );
-        _ickSsdpFree( ssdp );
-        continue;
-      }
-
-      // Process data (lock handler while doing so)
-      _ickSsdpExecute( ictx, ssdp );
-
-      // Free internal SSDP representation
-      _ickSsdpFree( ssdp );
-
-    } while( 0 );
+      _ickServiceSsdpSocket( ictx, buffer, interface->upnpComSocket );
+    }
+    if( _ickPolllistCheck(&plist,ictx->upnpListenerSocket,POLLIN)>0 )
+      _ickServiceSsdpSocket( ictx, buffer, ictx->upnpListenerSocket );
     _ickLibUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
@@ -530,6 +480,63 @@ void *_ickMainThread( void *arg )
 \*------------------------------------------------------------------------*/
   _ickLibDestruct( ictx );
   return NULL;
+}
+
+
+/*=========================================================================*\
+  Hanlde a readable SSDP socket (mcast listener or unicast)
+\*=========================================================================*/
+static void _ickServiceSsdpSocket( ickP2pContext_t *ictx, char *buffer, int sd )
+{
+  ssize_t           len;
+  struct sockaddr   address;
+  socklen_t         addrlen = sizeof( address );
+  ickSsdp_t        *ssdp;
+
+/*------------------------------------------------------------------------*\
+    Receive data
+\*------------------------------------------------------------------------*/
+  len = recvfrom( ictx->upnpListenerSocket, buffer, ICKDISCOVERY_HEADER_SIZE_MAX, 0, &address, &addrlen );
+  if( len<0 ) {
+    logwarn( "_ickServiceSsdpSocket (%d): recvfrom failed (%s).", sd, strerror(errno) );
+    return;
+  }
+  if( !len ) {  // ?? Not possible for udp
+    debug( "_ickServiceSsdpSocket (%d): disconnected.", sd );
+    return;
+  }
+
+  debug( "_ickServiceSsdpSocket (%d): received %ld bytes from %s:%d: \"%.*s\"",
+         sd, (long)len,
+         inet_ntoa(((const struct sockaddr_in *)&address)->sin_addr),
+         ntohs(((const struct sockaddr_in *)&address)->sin_port),
+         len, buffer );
+
+/*------------------------------------------------------------------------*\
+    Try to parse SSDP packet to internal representation
+\*------------------------------------------------------------------------*/
+  ssdp = _ickSsdpParse( buffer, len, &address );
+  if( !ssdp )
+    return;
+
+/*------------------------------------------------------------------------*\
+    Ignore loop back messages from ourself
+\*------------------------------------------------------------------------*/
+  if( !ictx->upnpLoopback && ssdp->uuid && !strcasecmp(ssdp->uuid,ictx->deviceUuid) ) {
+    debug( "_ickServiceSsdpSocket (%d): ignoring message from myself", sd );
+    _ickSsdpFree( ssdp );
+    return;
+  }
+
+/*------------------------------------------------------------------------*\
+    Process data
+\*------------------------------------------------------------------------*/
+  _ickSsdpExecute( ictx, ssdp );
+
+/*------------------------------------------------------------------------*\
+    Free internal SSDP representation
+\*------------------------------------------------------------------------*/
+  _ickSsdpFree( ssdp );
 }
 
 

@@ -223,7 +223,7 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Create context
 \*------------------------------------------------------------------------*/
-  ictx = ickP2pCreate( DEVICENAME, uuidStr, "./httpFolder", 100, NULL, ifname, 1900, service, &irc  );
+  ictx = ickP2pCreate( DEVICENAME, uuidStr, "./httpFolder", 100, 1900, service, &irc  );
   if( !ictx ) {
     fprintf( stderr, "ickP2pCreate: %s\n", ickStrError(irc) );
     return -1;
@@ -244,12 +244,17 @@ int main( int argc, char *argv[] )
   }
 
 /*------------------------------------------------------------------------*\
-    Add interface
+    Add interfaces
 \*------------------------------------------------------------------------*/
-#ifdef IF1NAME
-  irc = ickP2pAddInterface( ictx, IF1NAME );
+  irc = ickP2pAddInterface( ictx, ifname, NULL );
   if( irc ) {
-    printf( "ickP2pAddInterface: %s\n", ickStrError(irc) );
+    printf( "ickP2pAddInterface (%s): %s\n", ifname, ickStrError(irc) );
+    goto end;
+  }
+#ifdef IF1NAME
+  irc = ickP2pAddInterface( ictx, IF1NAME, NULL );
+  if( irc ) {
+    printf( "ickP2pAddInterface (%s): %s\n", ifname, ickStrError(irc) );
     goto end;
   }
 #endif
@@ -293,10 +298,8 @@ int main( int argc, char *argv[] )
   printf( "ickP2pGetConfigId:      %ld\n",    ickP2pGetConfigId(ictx) );
   printf( "ickP2pGetUpnpPort:      %d\n",     ickP2pGetUpnpPort(ictx) );
   printf( "ickP2pGetLwsPort:       %d\n",     ickP2pGetLwsPort(ictx) );
-  printf( "ickP2pGetHostname:      %s\n",     ickP2pGetHostname(ictx) );
   printf( "ickP2pGetServices:      0x%02x\n", ickP2pGetServices(ictx) );
   printf( "ickP2pGetUpnpLoopback:  %d\n",     ickP2pGetUpnpLoopback(ictx) );
-  printf( "ickP2pGetDebugPath:     \"%s\"\n", ickP2pGetDebugPath(ictx, NULL) );
 
 /*------------------------------------------------------------------------*\
     Main loop: wait for termination
@@ -397,8 +400,8 @@ static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDevice
       strcat( tstr, " debugging" );
   }
 
-  printf( "%s: %s -- %s %s\n", ickP2pGetIf(ictx), uuid, cstr, tstr );
-  printf( "%s: %s -- Location: %s\n", ickP2pGetIf(ictx), uuid, ickP2pGetDeviceLocation(ictx,uuid) );
+  printf( "+++ %s -- %s %s\n", uuid, cstr, tstr );
+  printf( "+++ %s -- Location: %s\n", uuid, ickP2pGetDeviceLocation(ictx,uuid) );
 }
 
 
@@ -414,8 +417,8 @@ static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid,
 /*------------------------------------------------------------------------*\
     Print meta data and message snippet
 \*------------------------------------------------------------------------*/
-  printf( "%s: message from %s,0x%02x -> 0x%02x \"%.30s%s\" (%ld bytes)\n",
-          ickP2pGetIf(ictx), sourceUuid, sourceService, targetServices, message,
+  printf( ">>> message from %s,0x%02x -> 0x%02x \"%.30s%s\" (%ld bytes)\n",
+          sourceUuid, sourceService, targetServices, message,
           mSize>30?"...":"", (long)mSize );
 
 /*------------------------------------------------------------------------*\

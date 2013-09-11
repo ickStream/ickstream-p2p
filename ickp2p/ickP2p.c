@@ -52,10 +52,13 @@ Remarks         : -
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <time.h>
+#include <netdb.h>
 #include <sys/time.h>
 #include <sys/utsname.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 
 #include "ickP2p.h"
@@ -76,7 +79,8 @@ Remarks         : -
 /*=========================================================================*\
   Private prototypes
 \*=========================================================================*/
-// none
+static void _ickLibInterfaceDestruct( ickInterface_t *interface );
+
 
 
 #pragma mark -- Global functions not bound to an inckStream context
@@ -144,40 +148,20 @@ const char *ickP2pGitVersion( void )
   Create an ickstream contex
 \*=========================================================================*/
 ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
-                               const char *upnpFolder, int lifetime,
-                               const char *hostname, const char *ifname, int port,
-                               ickP2pServicetype_t services,
-                               ickErrcode_t *error )
+                               const char *upnpFolder, int lifetime, int port,
+                               ickP2pServicetype_t services, ickErrcode_t *error )
 {
   ickP2pContext_t *ictx;
   int              rc;
-  in_addr_t        ifaddr;
-  char             buffer[64];
   struct utsname   utsname;
 
-  debug( "ickP2pCreate: \"%s\" (%s) lt=%ds folder=\"%s\"",
-         deviceName, deviceUuid, lifetime, upnpFolder  );
-  debug( "ickP2pCreate: host=\"%s\" if=\"%s\" port=%d services=0x%02x",
-         hostname, ifname, port, services );
+  debug( "ickP2pCreate: \"%s\" (%s) services=0x%02x lt=%ds folder=\"%s\" port=%d",
+         deviceName, deviceUuid, services, lifetime, upnpFolder, port );
 
 /*------------------------------------------------------------------------*\
     (Re-)initialize random number generator
 \*------------------------------------------------------------------------*/
   srandom( (unsigned int)time(NULL) );
-
-/*------------------------------------------------------------------------*\
-    Get IP address from interface
-\*------------------------------------------------------------------------*/
-  ifaddr   = _ickIpGetIfAddr( ifname );
-  if( ifaddr==INADDR_NONE ) {
-    logwarn( "ickP2pInit: could not get IP address of interface \"%s\"",
-             ifname );
-    if( error )
-      *error = ICKERR_NOINTERFACE;
-    return NULL;
-  }
-  inet_ntop( AF_INET, &ifaddr, buffer, sizeof(buffer) );
-  debug( "ickP2pInit: Using addr %s for interface \"%s\".", buffer, ifname );
 
 /*------------------------------------------------------------------------*\
     Allocate and initialize context descriptor
@@ -192,9 +176,10 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
   ictx->state              = ICKLIB_CREATED;
   ictx->tCreation          = _ickTimeNow();
   ictx->lwsConnectMatrixCb = ickP2pDefaultConnectMatrixCb;
-  ictx->upnpPort           = port>0?port:ICKSSDP_MCASTPORT;
+  ictx->upnpListenerPort   = port>0?port:ICKSSDP_MCASTPORT;
   ictx->lifetime           = lifetime>0?lifetime:ICKSSDP_DEFAULTLIFETIME;
   ictx->ickServices        = services;
+  ictx->upnpListenerSocket = -1;
 
 /*------------------------------------------------------------------------*\
     Init mutexes and conditions
@@ -206,6 +191,7 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
   pthread_mutex_init( &ictx->timersMutex, NULL );
   pthread_mutex_init( &ictx->wGettersMutex, NULL );
   pthread_mutex_init( &ictx->deviceListMutex, NULL );
+  pthread_mutex_init( &ictx->interfaceListMutex, NULL );
 
 /*------------------------------------------------------------------------*\
     Get name and version of operating system
@@ -218,23 +204,14 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
   }
 
 /*------------------------------------------------------------------------*\
-    Get hostname
-\*------------------------------------------------------------------------*/
-  if( !hostname )
-    ictx->hostName = strdup( buffer );
-  else
-    ictx->hostName = strdup( hostname );
-
-/*------------------------------------------------------------------------*\
     Try to duplicate strings
 \*------------------------------------------------------------------------*/
   ictx->deviceName = strdup( deviceName );
   ictx->deviceUuid = strdup( deviceUuid );
-  ictx->interface  = strdup( ifname );
   if( upnpFolder )
     ictx->upnpFolder = strdup( upnpFolder );
-  if( !ictx->deviceName || !ictx->deviceName || !ictx->osName || !ictx->interface ||
-      !ictx->hostName || (upnpFolder&&!ictx->upnpFolder)) {
+  if( !ictx->deviceName || !ictx->deviceUuid || !ictx->osName ||
+      (upnpFolder&&!ictx->upnpFolder)) {
     logerr( "ickP2pInit: out of memory." );
     _ickLibDestruct( ictx );
     if( error )
@@ -243,11 +220,11 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
   }
 
 /*------------------------------------------------------------------------*\
-    Create and init SSDP listener socket with primary interface
+    Create and init SSDP listener socket bound to all interfaces
 \*------------------------------------------------------------------------*/
-  ictx->upnpSocket = _ickSsdpCreateListener( ifaddr, ictx->upnpPort );
-  if( ictx->upnpSocket<0 ){
-    logerr( "ickP2pInit: could not create socket (%s).", strerror(errno) );
+  ictx->upnpListenerSocket = _ickSsdpCreateListener( INADDR_ANY, ictx->upnpListenerPort );
+  if( ictx->upnpListenerSocket<0 ){
+    logerr( "ickP2pInit: could not create listener (%s).", strerror(errno) );
     _ickLibDestruct( ictx );
     if( error )
       *error = ICKERR_NOSOCKET;
@@ -476,7 +453,8 @@ void _ickLibUnlock( ickP2pContext_t *ictx )
 \*=========================================================================*/
 void _ickLibDestruct( ickP2pContext_t *ictx )
 {
-  struct _cblist *walk, *next;
+  struct _cblist *walkCb, *nextCb;
+  ickInterface_t *walkIf, *nextIf;
   int             i;
   debug( "_ickP2pDestruct: %p", ictx );
 
@@ -489,24 +467,33 @@ void _ickLibDestruct( ickP2pContext_t *ictx )
   }
 
 /*------------------------------------------------------------------------*\
-    Close SSDP socket (if any)
+    Close SSDP listener socket (if any)
 \*------------------------------------------------------------------------*/
-  if( ictx->upnpSocket>=0 )
-    close( ictx->upnpSocket );
+  if( ictx->upnpListenerSocket>=0 )
+    close( ictx->upnpListenerSocket );
 
-// lwsPolllist's livecycle is handled by main thread
+// lwsPolllist's lifecycle is handled by main thread
+
+/*------------------------------------------------------------------------*\
+    Free list of interfaces
+\*------------------------------------------------------------------------*/
+  for( walkIf=ictx->interfaces; walkIf; walkIf=nextIf ) {
+    nextIf = walkIf->next;
+    _ickLibInterfaceDestruct( walkIf );
+  }
+  ictx->interfaces = NULL;
 
 /*------------------------------------------------------------------------*\
     Free call back lists
 \*------------------------------------------------------------------------*/
-  for( walk=ictx->discoveryCbs; walk; walk=next ) {
-    next = walk->next;
-    Sfree( walk );
+  for( walkCb=ictx->discoveryCbs; walkCb; walkCb=nextCb ) {
+    nextCb = walkCb->next;
+    Sfree( walkCb );
   }
   ictx->discoveryCbs = NULL;
-  for( walk=ictx->messageCbs; walk; walk=next ) {
-    next = walk->next;
-    Sfree( walk );
+  for( walkCb=ictx->messageCbs; walkCb; walkCb=nextCb ) {
+    nextCb = walkCb->next;
+    Sfree( walkCb );
   }
   ictx->messageCbs = NULL;
 
@@ -517,8 +504,6 @@ void _ickLibDestruct( ickP2pContext_t *ictx )
   Sfree( ictx->deviceName );
   Sfree( ictx->deviceUuid );
   Sfree( ictx->upnpFolder );
-  Sfree( ictx->interface );
-  Sfree( ictx->locationRoot );
 
 /*------------------------------------------------------------------------*\
     Delete mutex and condition
@@ -530,6 +515,7 @@ void _ickLibDestruct( ickP2pContext_t *ictx )
   pthread_mutex_destroy( &ictx->timersMutex );
   pthread_mutex_destroy( &ictx->wGettersMutex );
   pthread_mutex_destroy( &ictx->deviceListMutex );
+  pthread_mutex_destroy( &ictx->interfaceListMutex );
 
 /*------------------------------------------------------------------------*\
     Close help pipe for breaking polls
@@ -798,50 +784,264 @@ void _ickLibExecDiscoveryCallback( ickP2pContext_t *ictx, const ickDevice_t *dev
 }
 
 
-
-
-#pragma mark -- Setters and getters
+#pragma mark -- Interfaces
 
 
 /*=========================================================================*\
     Add an interface
 \*=========================================================================*/
-ickErrcode_t ickP2pAddInterface( ickP2pContext_t *ictx, const char *ifname )
+ickErrcode_t ickP2pAddInterface( ickP2pContext_t *ictx, const char *ifname, const char *hostname )
 {
+  int              sd;
   int              rc;
+  ickErrcode_t     irc;
   in_addr_t        ifaddr;
-  char             buffer[64];
+  in_addr_t        ifmask;
+  char            *name = NULL;
+  ickInterface_t  *interface;
+  char             _buf1[64], _buf2[64];
 
   debug( "ickP2pAddInterface (%p): \"%s\"", ictx, ifname );
 
 /*------------------------------------------------------------------------*\
-    Get IP address from interface
+    Find interface configuration
 \*------------------------------------------------------------------------*/
-  ifaddr   = _ickIpGetIfAddr( ifname );
-  if( ifaddr==INADDR_NONE ) {
-    logwarn( "ickP2pAddInterface: could not get IP address of interface \"%s\"",
+  irc = _ickIpGetIfAddr( ifname, &ifaddr, &ifmask, &name );
+  if( irc ) {
+    logwarn( "ickP2pAddInterface (%s): not found",
              ifname );
-    return ICKERR_NOINTERFACE;
+    return irc;
   }
-  inet_ntop( AF_INET, &ifaddr, buffer, sizeof(buffer) );
-  debug( "ickP2pAddInterface (%p): Using addr %s for interface \"%s\".",
-         ictx, buffer, ifname );
+
+  inet_ntop( AF_INET, &ifaddr, _buf1, sizeof(_buf1) );
+  if( !hostname )
+    hostname = _buf1;
+  inet_ntop( AF_INET, &ifmask, _buf2, sizeof(_buf2) );
+  debug( "ickP2pAddInterface (%p): %s -> %s/%s (%s)",
+         ictx, ifname, _buf1, _buf2, name );
+
+/*------------------------------------------------------------------------*\
+    Create non blocking SSDP communications socket
+\*------------------------------------------------------------------------*/
+  sd = socket( PF_INET, SOCK_DGRAM, 0 );
+  if( sd<0 ) {
+    logerr( "ickP2pAddInterface: could not create socket (%s).", strerror(errno) );
+    return ICKERR_NOSOCKET;
+  }
+  rc = fcntl( sd, F_GETFL );
+  if( rc>=0 )
+    rc = fcntl( sd, F_SETFL, rc|O_NONBLOCK );
+  if( rc<0 )
+    logwarn( "ickP2pAddInterface: could not set O_NONBLOCK on socket (%s).",
+             strerror(errno) );
+
+/*------------------------------------------------------------------------*\
+    Bind socket to interface, any port
+\*------------------------------------------------------------------------*/
+  rc = _ickIpBind( sd, ifaddr, 0 );
+  if( rc<0 ) {
+    close( sd );
+    Sfree( name );
+    logerr( "ickP2pAddInterface: could not bind socket (%s)",
+            strerror(rc) );
+    return ICKERR_GENERIC;
+  }
+
+/*------------------------------------------------------------------------*\
+  Create and init interface descriptor
+\*------------------------------------------------------------------------*/
+  interface = calloc( 1, sizeof(ickInterface_t) );
+  if( !interface ) {
+    close( sd );
+    Sfree( name );
+    logerr( "ickP2pAddInterface: out of memory" );
+    return ICKERR_NOMEM;
+  }
+  interface->name          = name;
+  interface->addr          = ifaddr;
+  interface->netmask       = ifmask;
+  interface->upnpComSocket = sd;
+  interface->upnpComPort   = _ickIpGetSocketPort( sd );
+  interface->hostname      = strdup( hostname );
+  if( !interface->hostname ) {
+    close( sd );
+    Sfree( name );
+    Sfree( interface );
+    logerr( "ickP2pAddInterface: out of memory" );
+    return ICKERR_NOMEM;
+  }
 
 /*------------------------------------------------------------------------*\
   Add socket to multicast group on target interface
 \*------------------------------------------------------------------------*/
-  rc = _ickIpAddMcast( ictx->upnpSocket, ifaddr, inet_addr(ICKSSDP_MCASTADDR) );
+  rc = _ickIpAddMcast( ictx->upnpListenerSocket, ifaddr, inet_addr(ICKSSDP_MCASTADDR) );
   if( rc<0 ) {
-    logerr( "ickP2pAddInterface: could not add mcast membership for socket (%s).",
-             strerror(rc) );
+    close( sd );
+    Sfree( name );
+    Sfree( interface->hostname );
+    Sfree( interface );
+    logerr( "ickP2pAddInterface (%s): could not add mcast membership for listener socket (%s)",
+             ifname, strerror(rc) );
     return ICKERR_GENERIC;
   }
+
+/*------------------------------------------------------------------------*\
+  Link to context
+\*------------------------------------------------------------------------*/
+  _ickLibLock( ictx );
+  interface->next  = ictx->interfaces;
+  ictx->interfaces = interface;
+  _ickLibUnlock( ictx );
+
 
 /*------------------------------------------------------------------------*\
   That's all
 \*------------------------------------------------------------------------*/
   return ICKERR_SUCCESS;
 }
+
+
+/*=========================================================================*\
+  Lock device list
+\*=========================================================================*/
+void _ickLibInterfaceListLock( ickP2pContext_t *ictx )
+{
+  debug ( "_ickLibInterfaceListLock (%p): locking...", ictx );
+  pthread_mutex_lock( &ictx->interfaceListMutex );
+  debug ( "_ickLibInterfaceListLock (%p): locked", ictx );
+}
+
+
+/*=========================================================================*\
+  Unlock device list
+\*=========================================================================*/
+void _ickLibInterfaceListUnlock( ickP2pContext_t *ictx )
+{
+  debug ( "_ickLibInterfaceListUnlock (%p): unlocked", ictx );
+  pthread_mutex_unlock( &ictx->interfaceListMutex );
+}
+
+
+/*=========================================================================*\
+    Free an interface descriptor
+      This will not unlink the descriptor form the interface list
+\*=========================================================================*/
+static void _ickLibInterfaceDestruct( ickInterface_t *interface )
+{
+  debug( "_ickLibInterfaceDestruct (%p): %s", interface->name );
+
+/*------------------------------------------------------------------------*\
+    Close SSDP socket (if any)
+\*------------------------------------------------------------------------*/
+  if( interface->upnpComSocket>=0 )
+    close( interface->upnpComSocket );
+
+/*------------------------------------------------------------------------*\
+    Free strings and descriptor
+\*------------------------------------------------------------------------*/
+  Sfree( interface->name );
+  Sfree( interface->hostname );
+  Sfree( interface );
+}
+
+/*=========================================================================*\
+    Get interface for an address
+      Caller should lock interface list
+      returns first interface or NULL, if not found
+\*=========================================================================*/
+ickInterface_t *_ickLibInterfaceForAddr( const ickP2pContext_t *ictx, in_addr_t addr )
+{
+  ickInterface_t *interface;
+
+#ifdef ICK_DEBUG
+  char _buf[64];
+  inet_ntop( AF_INET, &addr, _buf, sizeof(_buf) );
+  debug( "_ickLibInterfaceForAddr (%p): %s", ictx, _buf );
+#endif
+
+/*------------------------------------------------------------------------*\
+    Loop over all interfaces
+\*------------------------------------------------------------------------*/
+  for( interface=ictx->interfaces; interface; interface=interface->next ) {
+
+    // Check for match of subnets
+    if( (interface->addr&interface->netmask) == (addr&interface->netmask) ) {
+      debug( "_ickLibInterfaceForAddr (%p): found \"%s\"", ictx, interface->name );
+      break;
+    }
+
+  }
+
+/*------------------------------------------------------------------------*\
+    Return result
+\*------------------------------------------------------------------------*/
+  return interface;
+}
+
+
+/*=========================================================================*\
+    Get interface for a hostname
+      addr - pointer to resolved address of hostname (might be NULL)
+      Caller should lock interface list
+      returns first interface or NULL, if not found
+\*=========================================================================*/
+ickInterface_t *_ickLibInterfaceForHost( const ickP2pContext_t *ictx, const char *hostname, in_addr_t *addr )
+{
+  in_addr_t       haddr;
+  ickInterface_t *interface;
+  struct hostent *hentries;
+  int             i;
+
+  debug( "_ickLibInterfaceForHost (%p): \"%s\"", ictx, hostname );
+
+/*------------------------------------------------------------------------*\
+    Hostname is already an address?
+\*------------------------------------------------------------------------*/
+/*  haddr = inet_addr( hostname );
+  if( haddr!=INADDR_NONE ) {
+    if( addr )
+      *addr = haddr;
+    return _ickLibInterfaceForAddr( ictx, haddr );
+  }
+*/
+
+/*------------------------------------------------------------------------*\
+    Try to get address list for hostname
+\*------------------------------------------------------------------------*/
+  hentries = gethostbyname( hostname );
+  if( !hentries ) {
+    logwarn( "_ickLibInterfaceForHost: \"%s\" not found (%s)",
+             hostname, hstrerror(h_errno) );
+    return NULL;
+  }
+  debug( "_ickLibInterfaceForHost (%p): \"%s\" -> \"%s\"",
+         ictx, hostname, hentries->h_name );
+
+/*------------------------------------------------------------------------*\
+    Loop over all addresses and interfaces
+\*------------------------------------------------------------------------*/
+  for( i=0; hentries->h_addr_list[i]; i++ ) {
+    in_addr_t raddr = ((struct in_addr*)(hentries->h_addr_list[i]))->s_addr;
+    for( interface=ictx->interfaces; interface; interface=interface->next ) {
+
+      // Check for match of addresses respecting subnets
+      if( (interface->addr&interface->netmask) == (raddr&interface->netmask) ) {
+        debug( "_ickLibInterfaceForHost (%p): found \"%s\"", ictx, interface->name );
+        if( addr )
+          *addr = raddr;
+        return interface;
+      }
+    }  // next interface
+  }  // next host entry
+
+/*------------------------------------------------------------------------*\
+    Not found
+\*------------------------------------------------------------------------*/
+  return NULL;
+}
+
+
+#pragma mark -- Setters and getters
 
 
 /*=========================================================================*\
@@ -949,29 +1149,11 @@ int ickP2pGetLifetime( const ickP2pContext_t *ictx )
 
 
 /*=========================================================================*\
-  Get hostname
-\*=========================================================================*/
-const char *ickP2pGetHostname( const ickP2pContext_t *ictx )
-{
-  return ictx->hostName;
-}
-
-
-/*=========================================================================*\
-  Get interface name
-\*=========================================================================*/
-const char *ickP2pGetIf( const ickP2pContext_t *ictx )
-{
-  return ictx->interface;
-}
-
-
-/*=========================================================================*\
   Get ssdp listener port of a context
 \*=========================================================================*/
 int ickP2pGetUpnpPort( const ickP2pContext_t *ictx )
 {
-  return ictx->upnpPort;
+  return ictx->upnpListenerPort;
 }
 
 

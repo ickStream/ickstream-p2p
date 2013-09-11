@@ -121,6 +121,13 @@ static void         _ickSsdpSearchCb( const ickTimer_t *timer, void *data, int t
 static int          _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
 static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx, const struct sockaddr *addr, ickSsdpMsgType_t type );
 static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx, const struct sockaddr *addr, ickSsdpMsgType_t type, ssdpMsgLevel_t level, ickP2pServicetype_t service, int repeat );
+static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
+                                            ickInterface_t *interface,
+                                            const struct sockaddr *addr,
+                                            ickSsdpMsgType_t type,
+                                            ssdpMsgLevel_t level,
+                                            ickP2pServicetype_t service,
+                                            int repeat );
 static void         _ickSsdpNotifyCb( const ickTimer_t *timer, void *data, int tag );
 
 static int                 _ssdpGetVersion( const char *dscr );
@@ -1083,8 +1090,8 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   int                  retcode = 0;
 
   // fixme: need dedicated socket for mcasts
-  ((struct sockaddr_in *)&ssdp->addr)->sin_addr.s_addr = inet_addr(ICKSSDP_MCASTADDR);
-  ((struct sockaddr_in *)&ssdp->addr)->sin_port        = htons( ICKSSDP_MCASTPORT );
+  // ((struct sockaddr_in *)&ssdp->addr)->sin_addr.s_addr = inet_addr(ICKSSDP_MCASTADDR);
+  // ((struct sockaddr_in *)&ssdp->addr)->sin_port        = htons( ICKSSDP_MCASTPORT );
 
   debug( "_ssdpProcessMSearch: from %s:%d ST:%s",
          inet_ntoa(((const struct sockaddr_in *)&ssdp->addr)->sin_addr),
@@ -1242,7 +1249,7 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
 /*=========================================================================*\
   Queue an outgoing discovery message
     ictx    - the ickstream context to use
-    addr    - NULL for mcast, else unicast target (for M-Search responses)
+    addr    - NULL for mcast (on all interfaces), else unicast target (for M-Search responses)
     type    - the message type (alive,byebye,M-Search,Response)
     level   - the message type (global,root,uuid,service)
     service - the ickstream service to announce (for type=SSDPMSG_SERVICE)
@@ -1259,6 +1266,58 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
                                            ickP2pServicetype_t service,
                                            int repeat )
 {
+  ickInterface_t *interface;
+  ickErrcode_t    irc = ICKERR_SUCCESS;
+
+/*------------------------------------------------------------------------*\
+    In broadcats mode loop over all interfaces
+\*------------------------------------------------------------------------*/
+  if( !addr ) {
+
+    _ickLibInterfaceListLock( ictx );
+    for( interface=ictx->interfaces; interface; interface=interface->next ) {
+      irc = __ssdpSendDiscoveryMsg( ictx, interface, NULL, type, level, service, repeat );
+      if( irc )
+        break;
+    }
+    _ickLibInterfaceListUnlock( ictx );
+
+    return irc;
+  }
+
+/*------------------------------------------------------------------------*\
+    In unicast mode find interface matching for target address
+\*------------------------------------------------------------------------*/
+  _ickLibInterfaceListLock( ictx );
+  interface = _ickLibInterfaceForAddr( ictx, ((const struct sockaddr_in *)addr)->sin_addr.s_addr );
+  if( !interface ) {
+    loginfo( "_ssdpSendDiscoveryMsg: no interface found for \"%s\"",
+             inet_ntoa(((const struct sockaddr_in *)addr)->sin_addr) );
+    irc = ICKERR_NOINTERFACE;
+  }
+
+/*------------------------------------------------------------------------*\
+    Do the unicasts
+\*------------------------------------------------------------------------*/
+  else
+    irc = __ssdpSendDiscoveryMsg( ictx, interface, addr, type, level, service, repeat );
+  _ickLibInterfaceListUnlock( ictx );
+
+/*------------------------------------------------------------------------*\
+    That's it
+\*------------------------------------------------------------------------*/
+  return irc ;
+}
+
+static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
+                                            ickInterface_t *interface,
+                                            const struct sockaddr *addr,
+                                            ickSsdpMsgType_t type,
+                                            ssdpMsgLevel_t level,
+                                            ickP2pServicetype_t service,
+                                            int repeat )
+{
+
   upnp_notification_t *note;
   struct sockaddr_in   sockname;
   socklen_t            addr_len = sizeof( struct sockaddr_in );
@@ -1377,7 +1436,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
         "NOTIFY * HTTP/1.1\r\n"
         "HOST: %s:%d\r\n"
         "CACHE-CONTROL: max-age=%d\r\n"
-        "LOCATION: %s/%s.xml\r\n"
+        "LOCATION: http://%s:%d/%s.xml\r\n"
         "NT: %s\r\n"
         "NTS: ssdp:alive\r\n"
         "SERVER: %s UPnP/1.1 %s\r\n"
@@ -1385,8 +1444,8 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
         "BOOTID.UPNP.ORG: %ld\r\n"
         "CONFIGID.UPNP.ORG: %ld\r\n"
         "\r\n",
-        ICKSSDP_MCASTADDR, ictx->upnpPort, ictx->lifetime,
-        ictx->locationRoot, sstr,
+        ICKSSDP_MCASTADDR, ictx->upnpListenerPort, ictx->lifetime,
+        interface->hostname, ictx->lwsPort, sstr,
         nst, ictx->osName, ickUpnpNames.productAndVersion, usn,
         ictx->upnpBootId, ictx->upnpConfigId );
       break;
@@ -1402,7 +1461,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
         "BOOTID.UPNP.ORG: %ld\r\n"
         "CONFIGID.UPNP.ORG: %ld\r\n"
         "\r\n",
-        ICKSSDP_MCASTADDR, ictx->upnpPort, nst, usn,
+        ICKSSDP_MCASTADDR, ictx->upnpListenerPort, nst, usn,
         ictx->upnpBootId, ictx->upnpConfigId );
       break;
 
@@ -1416,7 +1475,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
           "ST: %s\r\n"
           "USER-AGENT: %s UPnP/1.1 %s\r\n"
           "\r\n",
-          ICKSSDP_MCASTADDR, ictx->upnpPort, ICKSSDP_MSEARCH_MX,
+          ICKSSDP_MCASTADDR, ictx->upnpListenerPort, ICKSSDP_MSEARCH_MX,
           nst, ictx->osName, ickUpnpNames.productAndVersion );
         break;
 
@@ -1434,7 +1493,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
         "CACHE-CONTROL: max-age=%d\r\n"
         "DATE: %s\r\n"
         "EXT:\r\n"
-        "LOCATION: %s/%s.xml\r\n"
+        "LOCATION: http://%s:%d/%s.xml\r\n"
         "SERVER: %s UPnP/1.1 %s\r\n"
         "ST: %s\r\n"
         "USN: %s\r\n"
@@ -1442,7 +1501,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
         "CONFIGID.UPNP.ORG: %ld\r\n"
         "\r\n",
         ictx->lifetime, timestr,
-        ictx->locationRoot, sstr,
+        interface->hostname, ictx->lwsPort, sstr,
         ictx->osName, ickUpnpNames.productAndVersion, nst, usn,
         ictx->upnpBootId, ictx->upnpConfigId );
       break;
@@ -1470,8 +1529,8 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
     debug( "_ssdpSendDiscoveryMsg: immediately sending %ld bytes to %s: \"%s\"",
            (long)len, addrstr, message );
 
-    // Try to send packet via discovery socket
-    n = sendto( ictx->upnpSocket, message, len, 0, addr, addr_len );
+    // Try to send packet via communication socket
+    n = sendto( interface->upnpComSocket, message, len, 0, addr, addr_len );
 
     // Any error ?
     if( n<0 ) {
@@ -1506,7 +1565,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
     return ICKERR_NOMEM;
   }
   note->message  = message;
-  note->socket   = ictx->upnpSocket;
+  note->socket   = interface->upnpComSocket;
   note->refCntr  = repeat>0 ? repeat : 1;
   note->socknamelen = addr_len;
   memcpy( &note->sockname, addr, addr_len );

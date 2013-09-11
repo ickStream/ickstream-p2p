@@ -51,6 +51,7 @@ Remarks         : -
 \*=========================================================================*/
 #include <poll.h>
 #include <pthread.h>
+#include <netinet/in.h>
 #include <libwebsockets.h>
 #include "ickP2p.h"
 
@@ -67,6 +68,20 @@ Remarks         : -
 /*=========================================================================*\
   Macro and type definitions
 \*=========================================================================*/
+
+// An interface  (from ickP2p.c)
+struct _ickInterface;
+typedef struct _ickInterface ickInterface_t;
+struct  _ickInterface {
+  ickInterface_t *next;
+  ickInterface_t *prev;
+  char           *name;          // strong
+  in_addr_t       addr;
+  in_addr_t       netmask;
+  char           *hostname;      // strong
+  int             upnpComSocket;
+  int             upnpComPort;
+};
 
 // A timer managed by ickp2p (from ickMainThread.c)
 struct _ickTimer;
@@ -111,7 +126,6 @@ struct _ickP2pContext {
 
   char                        *osName;      // strong
   char                        *deviceName;  // strong
-  char                        *hostName;    // strong
 
   struct _cblist              *discoveryCbs;
   pthread_mutex_t              discoveryCbsMutex;
@@ -125,17 +139,19 @@ struct _ickP2pContext {
   ickTimer_t                  *timers;
   pthread_mutex_t              timersMutex;
 
+  // Networking
+  ickInterface_t              *interfaces;
+  pthread_mutex_t              interfaceListMutex;
+
   // Upnp/Ssdp layer
-  char                        *deviceUuid;  // strong
-  char                        *upnpFolder;  // strong
+  char                        *deviceUuid;        // strong
+  char                        *upnpFolder;        // strong
   int                          lifetime;
   long                         upnpBootId;
   long                         upnpConfigId;
-  char                        *interface;      // strong
-  int                          upnpPort;
-  int                          upnpSocket;
+  int                          upnpListenerPort;
+  int                          upnpListenerSocket;
   int                          upnpLoopback;
-  char                        *locationRoot;   // strong
 
   // List of remote devices seen by this interface
   ickDevice_t                 *deviceList;
@@ -197,6 +213,12 @@ struct _ickP2pContext {
 void _ickLibLock( ickP2pContext_t *ictx );
 void _ickLibUnlock( ickP2pContext_t *ictx );
 void _ickLibDestruct( ickP2pContext_t *ictx );
+
+ickInterface_t *_ickLibInterfaceForAddr( const ickP2pContext_t *ictx, in_addr_t addr );
+ickInterface_t *_ickLibInterfaceForHost( const ickP2pContext_t *ictx, const char *hostname, in_addr_t *addr );
+
+void _ickLibInterfaceListLock( ickP2pContext_t *ictx );
+void _ickLibInterfaceListUnlock( ickP2pContext_t *ictx );
 
 void _ickLibDeviceListLock( ickP2pContext_t *ictx );
 void _ickLibDeviceListUnlock( ickP2pContext_t *ictx );

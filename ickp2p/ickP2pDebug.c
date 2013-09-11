@@ -51,12 +51,14 @@ Remarks         : Library needs to be compiled with ICK_P2PENABLEDEBUGAPI
 #include <string.h>
 #include <stdlib.h>
 #include <libwebsockets.h>
+#include <arpa/inet.h>
 
 #include "miniwget.h"
 
 #include "ickP2p.h"
 #include "ickP2pInternal.h"
 #include "logutils.h"
+#include "ickIpTools.h"
 #include "ickDevice.h"
 #include "ickDescription.h"
 #include "ickP2pCom.h"
@@ -85,6 +87,7 @@ Remarks         : Library needs to be compiled with ICK_P2PENABLEDEBUGAPI
 \*=========================================================================*/
 #ifdef ICK_P2PENABLEDEBUGAPI
 static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent );
+static char *_ickInterfaceStateJson( ickInterface_t *interface, int indent );
 static char *_ickDeviceStateJson( ickDevice_t *device, int indent );
 static char *_ickMessageStateJson( ickMessage_t *message, int indent );
 #endif
@@ -163,57 +166,6 @@ char *ickP2pGetDebugInfo( ickP2pContext_t *ictx, const char *uuid )
 }
 
 
-/*=========================================================================*\
-  Get path for debugging interface of the context or a device therein
-    ictx       - the ickstream context
-    uuid       - the device (might be NULL for context info)
-    the returned string is allocated and must be freed by caller
-    returns NULL on error
-\*=========================================================================*/
-char *ickP2pGetDebugPath( ickP2pContext_t *ictx, const char *uuid )
-{
-  ickDevice_t *device;
-  char        *url;
-  int          rc;
-  debug( "ickP2pGetDebugPath (%p): \"%s\"", ictx, uuid?uuid:"<context>" );
-
-/*------------------------------------------------------------------------*\
-    Lock device list and try to find device
-\*------------------------------------------------------------------------*/
-  if( uuid ) {
-    _ickLibDeviceListLock( ictx );
-    device = _ickLibDeviceFindByUuid( ictx, uuid );
-    _ickLibDeviceListUnlock( ictx );
-    if( !device ) {
-      logwarn( "ickP2pGetDebugPath: no such device (%s)", uuid );
-      return NULL;
-    }
-  }
-
-/*------------------------------------------------------------------------*\
-    Construct target url
-\*------------------------------------------------------------------------*/
-  if( !uuid )
-    rc = asprintf( &url, "http://%s:%d%s", ictx->hostName, ictx->lwsPort, ICK_P2PDEBUGURI );
-  else
-    rc = asprintf( &url, "http://%s:%d%s/%s", ictx->hostName, ictx->lwsPort, ICK_P2PDEBUGURI, uuid );
-  if( rc<0 ) {
-    logerr( "ickP2pGetDebugPath: out of memory" );
-    return NULL;
-  }
-
-/*------------------------------------------------------------------------*\
-    That's all
-\*------------------------------------------------------------------------*/
-  debug( "ickP2pGetDebugPath (%p): \"%s\"", ictx, url );
-
-/*------------------------------------------------------------------------*\
-    That's it
-\*------------------------------------------------------------------------*/
-   return url;
-}
-
-
 #ifdef ICK_P2PENABLEDEBUGAPI
 
 /*=========================================================================*\
@@ -287,13 +239,55 @@ char *_ickP2pGetDebugFile( ickP2pContext_t *ictx, const char *uri )
 \*=========================================================================*/
 static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
 {
-  ickDevice_t *device;
-  char        *devices = NULL;
-  int          i;
-  int          rc;
-  char        *result;
+  ickDevice_t    *device;
+  char           *devices    = NULL;
+  ickInterface_t *interface;
+  char           *interfaces = NULL;
+  int             i;
+  int             rc;
+  char           *result;
   debug( "_ickContextStateJson (%p): %s", ictx->deviceUuid );
   indent += JSON_INDENT;
+
+/*------------------------------------------------------------------------*\
+    Compile array of interfaces
+\*------------------------------------------------------------------------*/
+  _ickLibInterfaceListLock( ictx );
+  interfaces = strdup( "[" );
+  for( i=0,interface=ictx->interfaces; interface&&interfaces; i++,interface=interface->next ) {
+    char *interfaceInfo;
+
+    // Get debug info
+    interfaceInfo = _ickInterfaceStateJson( interface, indent+JSON_INDENT );
+    if( !interfaceInfo ) {
+      Sfree( interfaces );
+      break;
+    }
+
+    // Add to list
+    rc = asprintf( &result, "%s%s\n%*s%s", interfaces, i?",":"", indent+JSON_INDENT, "", interfaceInfo );
+    Sfree( interfaces );
+    Sfree( interfaceInfo );
+    if( rc<0 )
+      break;
+    else
+      interfaces = result;
+  }
+  _ickLibInterfaceListUnlock( ictx );
+
+  // Close list
+  if( interfaces ) {
+    rc = asprintf( &result, "%s\n%*s]", interfaces, indent, "" );
+    Sfree( interfaces );
+    if( rc>0 )
+      interfaces = result;
+  }
+
+  // Error ?
+  if( !interfaces ) {
+    logerr( "_ickContextStateJson: out of memory" );
+    return NULL;
+  }
 
 /*------------------------------------------------------------------------*\
     Compile array of devices
@@ -332,6 +326,7 @@ static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
 
   // Error ?
   if( !devices ) {
+    Sfree( interfaces );
     logerr( "_ickContextStateJson: out of memory" );
     return NULL;
   }
@@ -344,8 +339,7 @@ static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
                   "%*s\"uuid\": \"%s\",\n"
                   "%*s\"name\": \"%s\",\n"
                   "%*s\"services\": %d,\n"
-                  "%*s\"hostname\": \"%s\",\n"
-                  "%*s\"upnpPort\": %d,\n"
+                  "%*s\"upnpListenerPort\": %d,\n"
                   "%*s\"wsPort\": %d,\n"
                   "%*s\"folder\": \"%s\",\n"
                   "%*s\"lifetime\": %d,\n"
@@ -354,21 +348,19 @@ static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
                   "%*s\"customConnectMatrix\": %s,\n"
                   "%*s\"tCreation\": %f,\n"
                   "%*s\"tResume\": %f,\n"
-                  "%*s\"mainInterface\": \"%s\",\n"
-                  "%*s\"locationRoot\": \"%s\",\n"
                   "%*s\"osName\": \"%s\",\n"
                   "%*s\"p2pVersion\": \"%s\",\n"
                   "%*s\"p2pLevel\": %d,\n"
                   "%*s\"lwsVersion\": \"%s\",\n"
                   "%*s\"bootId\": %d,\n"
                   "%*s\"configId\": %d,\n"
+                  "%*s\"interfaces\": %s\n"
                   "%*s\"devices\": %s\n"
-                  "%*s}\n",
+                        "%*s}\n",
                   indent, "", JSON_STRING( ictx->deviceUuid ),
                   indent, "", JSON_STRING( ictx->deviceName ),
                   indent, "", JSON_INTEGER( ictx->ickServices ),
-                  indent, "", JSON_STRING( ictx->hostName ),
-                  indent, "", JSON_INTEGER( ictx->upnpPort ),
+                  indent, "", JSON_INTEGER( ictx->upnpListenerPort ),
                   indent, "", JSON_INTEGER( ictx->lwsPort ),
                   indent, "", JSON_STRING( ictx->upnpFolder),
                   indent, "", JSON_INTEGER( ictx->lifetime ),
@@ -377,18 +369,19 @@ static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
                   indent, "", JSON_BOOL( ictx->lwsConnectMatrixCb==ickP2pDefaultConnectMatrixCb ),
                   indent, "", JSON_REAL( ictx->tCreation ),
                   indent, "", JSON_REAL( ictx->tResume ),
-                  indent, "", JSON_STRING( ictx->interface ),
-                  indent, "", JSON_STRING( ictx->locationRoot ),
                   indent, "", JSON_STRING( ictx->osName ),
                   indent, "", JSON_STRING( ickP2pGetVersion(NULL,NULL) ),
                   indent, "", JSON_INTEGER( ICKP2PLEVEL_SUPPORTED ),
                   indent, "", JSON_STRING( lws_get_library_version() ),
                   indent, "", JSON_INTEGER(ictx->upnpBootId ),
                   indent, "", JSON_INTEGER(ictx->upnpConfigId ),
+                  indent, "", JSON_OBJECT( interfaces ),
                   indent, "", JSON_OBJECT( devices ),
                   indent-JSON_INDENT, ""
                 );
   Sfree( devices );
+  Sfree( interfaces );
+
 
 /*------------------------------------------------------------------------*\
     Error
@@ -397,6 +390,61 @@ static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
     logerr( "_ickContextStateJson: out of memory" );
     return NULL;
   }
+
+/*------------------------------------------------------------------------*\
+    Return result
+\*------------------------------------------------------------------------*/
+  return result;
+}
+
+/*=========================================================================*\
+  Get interface info as allocated JSON object string
+    (no unicode escaping of strings)
+    caller must free result
+    returns NULL on error
+\*=========================================================================*/
+static char *_ickInterfaceStateJson( ickInterface_t *interface, int indent )
+{
+  int   rc;
+  char *result;
+  char _buf1[64], _buf2[64];
+
+  debug( "_ickInterfaceStateJson (%p): ", interface );
+  indent += JSON_INDENT;
+
+/*------------------------------------------------------------------------*\
+    Empty data?
+\*------------------------------------------------------------------------*/
+  if( !interface )
+    return strdup( "null" );
+
+  inet_ntop( AF_INET, &interface->addr,    _buf1, sizeof(_buf1) );
+  inet_ntop( AF_INET, &interface->netmask, _buf2, sizeof(_buf2) );
+
+/*------------------------------------------------------------------------*\
+    Compile message debug info
+\*------------------------------------------------------------------------*/
+  rc = asprintf( &result,
+                  "{\n"
+                  "%*s\"name\": \"%s\",\n"
+                  "%*s\"hostname\": \"%s\",\n"
+                  "%*s\"address\": \"%s\",\n"
+                  "%*s\"netmask\": \"%s\",\n"
+                  "%*s\"upnpComPort\": %d\n"
+                  "%*s}",
+                  indent, "", JSON_STRING( interface->name ),
+                  indent, "", JSON_STRING( interface->hostname ),
+                  indent, "", _buf1,
+                  indent, "", _buf2,
+                  indent, "", JSON_INTEGER( _ickIpGetSocketPort(interface->upnpComSocket) ),
+                  indent-JSON_INDENT, ""
+                );
+
+/*------------------------------------------------------------------------*\
+    Error
+\*------------------------------------------------------------------------*/
+  if( rc<0 )
+    logerr( "_ickMessageStateJson: out of memory" );
 
 /*------------------------------------------------------------------------*\
     Return result

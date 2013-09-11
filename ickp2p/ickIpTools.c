@@ -46,6 +46,7 @@ Remarks         : -
  * EVEN if ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 \************************************************************************/
 
+#include <stdlib.h>
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
@@ -149,44 +150,127 @@ int _ickIpAddMcast( int socket, in_addr_t ifaddr, in_addr_t maddr )
 
 
 /*=========================================================================*\
-  Get address of an interface
-    return 0 on success or error code (errno)
+  Get address and network mask of an interface
+    ifname  - be interface name or address
+    addr    - pointer to addr of interface (might be NULL)
+    netmask - pointer to network mask of interface (might be NULL)
+    name    - pointer to name of interface, will be an allocated string (might be NULL)
+    return 0 on success or error code
 \*=========================================================================*/
-in_addr_t _ickIpGetIfAddr( const char *ifname )
+ickErrcode_t _ickIpGetIfAddr( const char *ifname, in_addr_t *addr, in_addr_t *netmask, char **name )
 {
-  in_addr_t      inaddr;
-  struct ifreq   ifr;
-  int            ifrlen, s;
+  char          *buffer;
+  struct ifconf  ifc;
+  size_t         pos;
+  in_addr_t      ifaddr;
+  int            sd;
   int            rc;
+  ickErrcode_t   irc = ICKERR_NOINTERFACE;
+
+/*------------------------------------------------------------------------*\
+    Create virtual socket
+\*------------------------------------------------------------------------*/
+  sd = socket( PF_INET, SOCK_DGRAM, 0 );
+  if( sd<0 ) {
+    logerr( "_ickIpGetIfAddr: could not get socket (%s)", strerror(errno) );
+    return ICKERR_NOSOCKET;
+  }
 
 /*------------------------------------------------------------------------*\
     Is this already a valid IP address?
 \*------------------------------------------------------------------------*/
-  inaddr = inet_addr( ifname );
-  if( inaddr!=INADDR_NONE )
-    return inaddr;
+  ifaddr = inet_addr( ifname );
 
 /*------------------------------------------------------------------------*\
-    Get IP address via a virtual socket
+    Allocate buffer
 \*------------------------------------------------------------------------*/
-  s = socket( PF_INET, SOCK_DGRAM, 0 );
-  if( s<0 ) {
-    logerr( "_ickIpGetIfAddr: could not get socket (%s)", strerror(errno) );
-    return INADDR_NONE;
+  buffer = calloc( 1, ICK_IFRBUFFERSIZE );
+
+/*------------------------------------------------------------------------*\
+    Get all known interfaces
+\*------------------------------------------------------------------------*/
+  ifc.ifc_len = ICK_IFRBUFFERSIZE;
+  ifc.ifc_req = (struct ifreq *)buffer;
+  if( ioctl(sd,SIOCGIFCONF,&ifc)<0 ) {
+    close( sd );
+    logerr( "_ickIpGetIfAddr: ioctl(SIOCGIFCONF) failed (%s)", strerror(errno) );
+    return ICKERR_NOSOCKET;
   }
 
-  memset( &ifr, 0, sizeof(struct ifreq) );
-  strncpy( ifr.ifr_name, ifname, IFNAMSIZ );
+/*------------------------------------------------------------------------*\
+    Loop over interface list
+\*------------------------------------------------------------------------*/
+  size_t len;
+  for( pos=0; pos<ifc.ifc_len; pos+=len ) {
 
-  rc = ioctl( s, SIOCGIFADDR, &ifr, &ifrlen );
-  if( rc<0 ) {
-    logerr( "_ickIpGetIfAddr: ioctl(SIOCGIFADDR) failes (%s)", strerror(errno) );
-    close(s);
-    return INADDR_NONE;
+    // Get current interface descriptor
+    struct ifreq *ifr= (struct ifreq *)(buffer + pos );
+    debug( "_ickIpGetIfAddr: testing interface \"%s\"", ifr->ifr_name );
+
+    // Get actual size of interface descriptor
+#ifdef linux
+    len = sizeof( struct ifreq );
+#else
+    len = IFNAMSIZ + ifr->ifr_addr.sa_len;
+#endif
+
+    // We are looking for an internet interface
+    if( ifr->ifr_addr.sa_family!=AF_INET )
+      continue;
+
+    // If ifname is no address the interface name must match
+    if( ifaddr==INADDR_NONE && strcasecmp(ifname,ifr->ifr_name) )
+      continue;
+
+    // Get interface address
+    rc = ioctl( sd, SIOCGIFADDR, ifr );
+    if( rc<0 ) {
+      logerr( "_ickIpGetIfAddr: ioctl(SIOCGIFADDR) failed (%s)", strerror(errno) );
+      irc = ICKERR_NOINTERFACE;
+      break;
+    }
+
+    // If ifname is an address it must match
+    if( ifaddr!=INADDR_NONE && ifaddr!=((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr.s_addr )
+      continue;
+
+    // Store address
+    if( addr )
+      *addr = ((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr.s_addr;
+
+    // Get and store interface network mask
+    if( netmask ) {
+      rc = ioctl( sd, SIOCGIFNETMASK, ifr );
+      if( rc<0 ) {
+        logerr( "_ickIpGetIfAddr: ioctl(SIOCGIFNETMASK) failed (%s)", strerror(errno) );
+        irc = ICKERR_NOINTERFACE;
+        break;
+      }
+      *netmask = ((struct sockaddr_in *)(&ifr->ifr_netmask))->sin_addr.s_addr;
+    }
+
+    // Duplicate real interface name
+    if( name ) {
+      *name = strdup( ifr->ifr_name );
+      if( !*name ) {
+        logerr( "_ickIpGetIfAddr: out of memory" );
+        irc = ICKERR_NOMEM;
+        break;
+      }
+    }
+
+    // Found it!
+    debug( "_ickIpGetIfAddr (%s): found interface \"%s\"", ifname, ifr->ifr_name );
+    irc = ICKERR_SUCCESS;
+    break;
   }
-  close( s );
 
-  return ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr;
+/*------------------------------------------------------------------------*\
+    Clean up and return result
+\*------------------------------------------------------------------------*/
+  Sfree( buffer );
+  close( sd );
+  return irc;
 }
 
 
@@ -219,11 +303,9 @@ int _ickIpGetFreePort( const char *ifname )
   memset( &sockaddr, 0, sizeof(sockaddr) );
   sockaddr.sin_family      = AF_INET;
   sockaddr.sin_port        = 0;
-  if( ifname )
-    sockaddr.sin_addr.s_addr = _ickIpGetIfAddr( ifname );
-  else
+  if( !ifname )
     sockaddr.sin_addr.s_addr = INADDR_ANY;
-  if( sockaddr.sin_addr.s_addr==INADDR_NONE ) {
+  else if( _ickIpGetIfAddr(ifname,&sockaddr.sin_addr.s_addr,NULL,NULL) ) {
     logerr( "_ickIpGetFreePort: no address for interface \"%s\".", ifname?ifname:"(nil)" );
     close( s );
     return -1;
@@ -265,15 +347,16 @@ int _ickIpGetFreePort( const char *ifname )
 /*=========================================================================*\
   Get port a socket is bound to
 \*=========================================================================*/
-int _ickIpGetSocketPort( int s )
+int _ickIpGetSocketPort( int sd )
 {
   struct sockaddr_in sockaddr;
   socklen_t          sockaddr_len = sizeof(struct sockaddr_in);
+  int                port;
 
 /*------------------------------------------------------------------------*\
     Get port assigned by OS
 \*------------------------------------------------------------------------*/
-  if( getsockname(s,(struct sockaddr *)&sockaddr,&sockaddr_len) ) {
+  if( getsockname(sd,(struct sockaddr *)&sockaddr,&sockaddr_len) ) {
     logerr( "_ickIpGetSocketPort: could not get socket name (%s)", strerror(errno) );
     return -1;
   }
@@ -281,7 +364,9 @@ int _ickIpGetSocketPort( int s )
 /*------------------------------------------------------------------------*\
     Return port that got assigned to the probe socket
 \*------------------------------------------------------------------------*/
-  return ntohs( sockaddr.sin_port );
+  port = ntohs( sockaddr.sin_port );
+  debug( "_ickIpGetSocketPort (%d): %d", sd, port );
+  return port;
 }
 
 /*=========================================================================*\

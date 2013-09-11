@@ -363,12 +363,14 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
   ickP2pContext_t     *ictx = device->ictx;
   ickErrcode_t         irc = ICKERR_SUCCESS;
   char                *address;
-  char                *host;
+  in_addr_t            ifaddr;
   int                  port;
+  ickInterface_t      *interface;
+  char                *hostname;
   char                *ptr;
   _ickLwsP2pData_t    *psd;
 
-  debug( "_ickWebSocketOpen: \"%s\"", device->uuid );
+  debug( "_ickWebSocketOpen (%s): \"%s\"", device->uuid, device->location );
 
 /*------------------------------------------------------------------------*\
     Check status
@@ -404,9 +406,20 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
   port = atoi( ptr+1 );
 
 /*------------------------------------------------------------------------*\
+    Get interface for address
+\*------------------------------------------------------------------------*/
+  interface =_ickLibInterfaceForHost( ictx, address, &ifaddr );
+  if( !interface ) {
+    Sfree( address );
+    logerr( "_ickWebSocketOpen (%s): Found no interface for URI \"%s\"",
+            device->uuid, device->location );
+    return ICKERR_NOINTERFACE;
+  }
+
+/*------------------------------------------------------------------------*\
     Construct local address
 \*------------------------------------------------------------------------*/
-  if( asprintf(&host,"%s:%d",ictx->hostName,ictx->lwsPort)<0 ) {
+  if( asprintf(&hostname,"http://%s:%d",interface->hostname,ictx->lwsPort)<0 ) {
     Sfree( address );
     logerr( "_ickWebSocketOpen: out of memory" );
     return ICKERR_NOMEM;
@@ -418,14 +431,14 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
   psd = calloc( 1, sizeof(_ickLwsP2pData_t) );
   if( !psd ) {
     Sfree( address );
-    Sfree( host );
+    Sfree( hostname );
     logerr( "_ickWebSocketOpen: out of memory" );
     return ICKERR_NOMEM;
   }
   psd->ictx   = device->ictx;
   psd->device = device;
 
-  debug( "_ickWebSocketOpen (%s): addr=%s:%d host=%s", device->uuid, address, port, host );
+  debug( "_ickWebSocketOpen (%s): addr=%s:%d host=%s", device->uuid, address, port, hostname );
 
 /*------------------------------------------------------------------------*\
     Initiate connection
@@ -436,7 +449,7 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
                     port,
                     0,                        // ssl_connection
                     "/",                      // path
-                    host,                     // host
+                    hostname,                 // hostname
                     ictx->deviceUuid,         // origin
                     ICKP2P_WS_PROTOCOLNAME,   // protocol
                     -1,                       // ietf_version_or_minus_one
@@ -451,7 +464,7 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
     Clean up, that's all
 \*------------------------------------------------------------------------*/
   Sfree( address );
-  Sfree( host );
+  Sfree( hostname );
   return irc;
 }
 
