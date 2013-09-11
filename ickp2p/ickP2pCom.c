@@ -81,8 +81,9 @@ static void  _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_
                                          const void *message, size_t mSize );
 static int   _ickP2pComTransmit( struct libwebsocket *wsi, ickMessage_t *message );
 static char *_ickLwsDupToken( struct libwebsocket *wsi, enum lws_token_indexes h );
+#ifdef ICK_DEBUG
 static void  _ickLwsDumpHeaders( struct libwebsocket *wsi );
-
+#endif
 
 
 
@@ -164,13 +165,6 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
     if( p2pLevel&ICKP2PLEVEL_SOURCESERVICE )
       preambleLen++;
 
-/*  // fixme: not needed since a device has a unique uuid
-    if( p2pLevel&ICKP2PLEVEL_TARGETUUID )
-      preambleLen += strlen( device->uuid ) + 1;
-    if( p2pLevel&ICKP2PLEVEL_SOURCEUUID )
-      preambleLen += strlen( ickP2pGetDeviceUuid(dh->icklib) ) + 1;
-*/
-
 /*------------------------------------------------------------------------*\
     Allocate payload container, include LWS padding and trailing zero
 \*------------------------------------------------------------------------*/
@@ -194,18 +188,6 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
 
     if( p2pLevel&ICKP2PLEVEL_SOURCESERVICE )
       *ptr++ = (unsigned char)sourceService;
-
-/*  // fixme: not needed since a device has a unique uuid
-    if( p2pLevel&ICKP2PLEVEL_TARGETUUID ) {
-      strcpy( ptr, device->uuid );
-      ptr += strlen(device->uuid) + 1;
-    }
-
-    if( p2pLevel&ICKP2PLEVEL_SOURCEUUID ) {
-      strcpy( ptr, myUuid );
-      ptr += strlen(myUuid) + 1;
-    }
-*/
 
 /*------------------------------------------------------------------------*\
     Copy payload to container and add trailing zero
@@ -417,7 +399,7 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
   }
 
 /*------------------------------------------------------------------------*\
-    Construct local address
+    Use hostname to signal the origin address
 \*------------------------------------------------------------------------*/
   if( asprintf(&host,"%s:%d",interface->hostname,ictx->lwsPort)<0 ) {
     Sfree( address );
@@ -449,7 +431,7 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
                     port,
                     0,                        // ssl_connection
                     "/",                      // path
-                    host,                     // host on server
+                    host,                     // host on server (used to submit our server uri)
                     ictx->deviceUuid,         // origin
                     ICKP2P_WS_PROTOCOLNAME,   // protocol
                     -1,                       // ietf_version_or_minus_one
@@ -623,7 +605,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       // Reset per session data
       memset( psd, 0, sizeof(_ickLwsP2pData_t) );
 
-      // Get host
+      // Get remote host (we use the HOST field for transmission)
       psd->host = _ickLwsDupToken( wsi, WSI_TOKEN_HOST );
       if( !psd->host ) {
         logwarn( "_lwsP2pCb: Incoming connection rejected (no HOST).");
@@ -643,7 +625,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
       // Device already handled as connected or connecting client by openwebsocket?
       if( device /*&& device->wsi*/ ) {
-        debug( "_lwsP2pCb: Connection rejected, using present wsi for %s (%s:%d)",
+        debug( "_lwsP2pCb (%s): Connection rejected, using present wsi for \"%s\" (%p|%p)",
                   device->uuid, device->location, device->wsi, wsi);
         psd->device = device;
         _ickLibDeviceListUnlock( ictx );
@@ -931,16 +913,6 @@ static void _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t
 
   if( p2pLevel&ICKP2PLEVEL_SOURCESERVICE )
     sourceService = *payload++;
-
-  // fixme: not needed since a device has a unique uuid
-  if( p2pLevel&ICKP2PLEVEL_TARGETUUID ) {
-    logwarn( "_ickP2pExecMessageCallback: found targetuuid \"%s\" in message from \"%s\"", payload, device->uuid );
-    message = strchr((const char*)payload,0) + 1;
-  }
-  if( p2pLevel&ICKP2PLEVEL_SOURCEUUID ) {
-    logwarn( "_ickP2pExecMessageCallback: found sourceuuid \"%s\" in message from \"%s\"", payload, device->uuid );
-    message = strchr((const char*)payload,0) + 1;
-  }
 
   if( payload-(const unsigned char*)message>mSize ) {
     logerr( "_ickP2pExecMessageCallback: truncated message from \"%s\"", device->uuid );

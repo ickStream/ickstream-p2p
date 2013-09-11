@@ -631,7 +631,6 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
 {
   ickP2pContext_t      *ictx = libwebsocket_context_user( context );
   _ickLwsHttpData_t    *psd = (_ickLwsHttpData_t*) user;
-  ickP2pServicetype_t   stype;
   int                   retval = 0;
   int                   fd, socket;
   size_t                remain;
@@ -671,10 +670,8 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
 
       // Handle UPNP description requests
       _ickLibLock( ictx );
-      stype = _ickDescrFindServiceByUrl( ictx, in );
-      if( stype!=ICKP2P_SERVICE_NONE ) {
-        debug( "_lwsHttpCb: found matching service %d", stype );
-        psd->payload = _ickDescrGetDeviceDescr( ictx, wsi, stype );
+      if( !strcmp(in,ICKDEVICE_URI_ROOT) ) {
+        psd->payload = _ickDescrGetDeviceDescr( ictx, wsi );
         _ickLibUnlock( ictx );
         if( !psd->payload )
           return -1;

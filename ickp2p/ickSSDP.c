@@ -573,7 +573,6 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   ickWGetContext_t    *wget;
   const char          *peer;
   ickErrcode_t         irc;
-  ickP2pServicetype_t  stype;
 
 /*------------------------------------------------------------------------*\
     Get name of peer for warnings
@@ -595,8 +594,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 /*------------------------------------------------------------------------*\
     Ignore non ickstream services...
 \*------------------------------------------------------------------------*/
-  stype = _ickDescrFindServiceByUsn( ssdp->usn );
-  if( stype==ICKP2P_SERVICE_NONE ) {
+  if( !strstr(ssdp->usn,ICKDEVICE_TYPESTR_ROOT) ) {
     debug( "_ickDeviceUpdate (%s): No ickstream device or service (%s).", peer, ssdp->usn );
     return 0;
   }
@@ -612,7 +610,8 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 \*------------------------------------------------------------------------*/
   device = _ickLibDeviceFindByUuid( ictx, ssdp->uuid );
   if( !device ) {
-    debug ( "_ickDeviceUpdate (%s): adding new device (%s).", ssdp->usn, ssdp->location );
+    debug ( "_ickDeviceUpdate (%s): adding new ickstream device (%s)",
+            ssdp->usn, ssdp->location );
 
     // Allocate and initialize descriptor
     device = _ickDeviceNew( ssdp->uuid, ICKDEVICE_SSDP );
@@ -622,8 +621,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
       _ickTimerListUnlock( ictx );
       return -1;
     }
-    debug( "_ickDeviceUpdate (%s): New device with service 0x%02x.", device->uuid, stype );
-    device->services       = stype;
+    device->services       = ICKP2P_SERVICE_GENERIC;
     device->lifetime       = ssdp->lifetime;
     device->ickUpnpVersion = _ssdpGetVersion( ssdp->usn );
 
@@ -735,13 +733,6 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   }
 */
 
-  // New service: Execute callbacks registered with discovery handler
-  if( (stype&~device->services) ) {
-    debug( "_ickDeviceUpdate (%s): added service 0x%02x", device->uuid, stype );
-    device->services |= stype;
-    _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_NEW, stype );
-  }
-
   // Release all locks and return code 0 (no device added)
   _ickLibDeviceListUnlock( ictx );
   _ickTimerListUnlock( ictx );
@@ -750,7 +741,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 
 
 /*=========================================================================*\
-  Remove a device or service from a discovery context
+  Remove a device from a discovery context
     ictx - the ickstream context
     ssdp - a parsed SSDP packet
   return values:
@@ -762,7 +753,6 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 {
   ickDevice_t         *device;
   ickWGetContext_t    *wget, *wgetNext;
-  ickP2pServicetype_t  stype;
 
 /*------------------------------------------------------------------------*\
     Need USN header field
@@ -773,10 +763,9 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   }
 
 /*------------------------------------------------------------------------*\
-    Ignore non ickstream services...
+    Ignore non ickstream devices...
 \*------------------------------------------------------------------------*/
-  stype = _ickDescrFindServiceByUsn( ssdp->usn );
-  if( stype==ICKP2P_SERVICE_NONE )
+  if( !strstr(ssdp->usn,ICKDEVICE_TYPESTR_ROOT) )
     return 0;
 
 /*------------------------------------------------------------------------*\
@@ -795,51 +784,38 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     _ickTimerListUnlock( ictx );
     return 0;
   }
+
+/*------------------------------------------------------------------------*\
+    An ickstream device is disappearing?
+\*------------------------------------------------------------------------*/
   _ickDeviceLock( device );
 
-/*------------------------------------------------------------------------*\
-    A service is terminated
-\*------------------------------------------------------------------------*/
-  if( (device->services&stype) || stype!=ICKP2P_SERVICE_GENERIC ) {
-    debug( "_ickDeviceRemove (%s): removing service 0x%02x.", ssdp->usn, stype );
-    device->services &= ~stype;
-    _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_REMOVED, stype );
-  }
+  // Execute callback with all registered services
+  _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_REMOVED, device->services );
 
-/*------------------------------------------------------------------------*\
-    Is the root device disappearing?
-\*------------------------------------------------------------------------*/
-  if( stype==ICKP2P_SERVICE_GENERIC ) {
+  // Unlink from device list
+  _ickLibDeviceRemove( ictx, device );
 
-    // Execute callback with all registered services
-    _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_REMOVED, device->services );
+  // Remove expiration handler for this device
+  _ickTimerDeleteAll( ictx, _ickDeviceExpireTimerCb, device, 0 );
 
-    // Unlink from device list
-    _ickLibDeviceRemove( ictx, device );
+  // Remove heartbeat handler for this device
+  _ickTimerDeleteAll( ictx, _ickDeviceHeartbeatTimerCb, device, 0 );
 
-    // Remove expiration handler for this device
-    _ickTimerDeleteAll( ictx, _ickDeviceExpireTimerCb, device, 0 );
-
-    // Remove heartbeat handler for this device
-    _ickTimerDeleteAll( ictx, _ickDeviceHeartbeatTimerCb, device, 0 );
-
-    // Find and remove HTTP clients for this device
-    _ickLibWGettersLock( ictx );
-    for( wget=ictx->wGetters; wget; wget=wgetNext ) {
-      wgetNext = wget->next;
-      if( _ickWGetUserData(wget)==device ) {
-        // unlink from list of getters and destroy
-        _ickLibWGettersRemove( ictx, wget );
-        _ickWGetDestroy( wget );
-      }
+  // Find and remove HTTP clients for this device
+  _ickLibWGettersLock( ictx );
+  for( wget=ictx->wGetters; wget; wget=wgetNext ) {
+    wgetNext = wget->next;
+    if( _ickWGetUserData(wget)==device ) {
+      // unlink from list of getters and destroy
+      _ickLibWGettersRemove( ictx, wget );
+      _ickWGetDestroy( wget );
     }
-    _ickLibWGettersUnlock( ictx );
-
-    // Free instance
-    _ickDeviceFree( device );
   }
-  else
-    _ickDeviceUnlock( device );
+  _ickLibWGettersUnlock( ictx );
+
+  // Free instance
+  _ickDeviceFree( device );
 
 /*------------------------------------------------------------------------*\
     Release all remaining locks
@@ -1119,29 +1095,11 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   }
 
 /*------------------------------------------------------------------------*\
-    Search for a specific device or service
+    Specific search for a ickstream device
 \*------------------------------------------------------------------------*/
-  else {
-
-    if( !_ssdpVercmp(ssdp->st,ICKDEVICE_TYPESTR_ROOT) )
-      _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
-                             ICKP2P_SERVICE_GENERIC, ICKSSDP_REPEATS );
-
-#ifdef ICKP2P_DYNAMICSERVICES
-    if( (ictx->ickServices&ICKP2P_SERVICE_PLAYER) && !_ssdpVercmp(ssdp->st,ICKSERVICE_TYPESTR_PLAYER) )
-      _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
-                             ICKP2P_SERVICE_PLAYER, ICKSSDP_REPEATS );
-    if( (ictx->ickServices&ICKP2P_SERVICE_CONTROLLER) && !_ssdpVercmp(ssdp->st,ICKSERVICE_TYPESTR_CONTROLLER) )
-      _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
-                             ICKP2P_SERVICE_CONTROLLER, ICKSSDP_REPEATS );
-    if( (ictx->ickServices&ICKP2P_SERVICE_SERVER_GENERIC) && !_ssdpVercmp(ssdp->st,ICKSERVICE_TYPESTR_SERVER) )
-      _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
-                             ICKP2P_SERVICE_SERVER_GENERIC, ICKSSDP_REPEATS );
-    if( (ictx->ickServices&ICKP2P_SERVICE_DEBUG) && !_ssdpVercmp(ssdp->st,ICKSERVICE_TYPESTR_DEBUG) )
-      _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
-                             ICKP2P_SERVICE_DEBUG, ICKSSDP_REPEATS );
-#endif
-  }
+  else if( !_ssdpVercmp(ssdp->st,ICKDEVICE_TYPESTR_ROOT) )
+    _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
+                           ICKP2P_SERVICE_GENERIC, ICKSSDP_REPEATS );
 
 /*------------------------------------------------------------------------*\
     Unlock timer list, that's all
@@ -1363,36 +1321,8 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
       break;
 
     case SSDPMSGLEVEL_SERVICE:
-#ifdef ICKP2P_DYNAMICSERVICES
-      switch( service ) {
-        case ICKP2P_SERVICE_GENERIC:
-          sstr = ICKDEVICE_STRING_ROOT;
-          nst  = ICKDEVICE_TYPESTR_ROOT;
-          break;
-        case ICKP2P_SERVICE_PLAYER:
-          sstr = ICKSERVICE_STRING_PLAYER;
-          nst  = ICKSERVICE_TYPESTR_PLAYER;
-          break;
-        case ICKP2P_SERVICE_CONTROLLER:
-          sstr = ICKSERVICE_STRING_CONTROLLER;
-          nst  = ICKSERVICE_TYPESTR_CONTROLLER;
-          break;
-        case ICKP2P_SERVICE_SERVER_GENERIC:
-          sstr = ICKSERVICE_STRING_SERVER;
-          nst  = ICKSERVICE_TYPESTR_SERVER;
-          break;
-        case ICKP2P_SERVICE_DEBUG:
-          sstr = ICKSERVICE_STRING_DEBUG;
-          nst  = ICKSERVICE_TYPESTR_DEBUG;
-          break;
-        default:
-          logerr( "_ssdpSendDiscoveryMsg: bad service type (%d)", service );
-          return ICKERR_INVALID;
-      }
-#else
       sstr = ICKDEVICE_STRING_ROOT;
       nst  = ICKDEVICE_TYPESTR_ROOT;
-#endif
       asprintf( &usn, "uuid:%s::%s", ictx->deviceUuid, nst );
       nst = strdup( nst );
       break;

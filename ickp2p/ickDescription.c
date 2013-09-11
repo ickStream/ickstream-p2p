@@ -114,123 +114,16 @@ static int  _strmcmp( const char *str, const char *ptr, size_t plen );
 
 
 /*=========================================================================*\
-    Check what ickstream service was announced
-      // fixme: do version comparison
-\*=========================================================================*/
-ickP2pServicetype_t _ickDescrFindServiceByUsn( const char *usn )
-{
-
-/*------------------------------------------------------------------------*\
-    The SSDP root device announcement defines no services
-\*------------------------------------------------------------------------*/
-  if( strstr(usn, ICKDEVICE_TYPESTR_ROOT) )
-    return ICKP2P_SERVICE_GENERIC;
-
-/*------------------------------------------------------------------------*\
-    Check for known services
-\*------------------------------------------------------------------------*/
-#ifdef ICKP2P_DYNAMICSERVICES
-  if( strstr(usn, ICKSERVICE_TYPESTR_PLAYER) )
-    return ICKP2P_SERVICE_PLAYER;
-  if( strstr(usn, ICKSERVICE_TYPESTR_SERVER) )
-    return ICKP2P_SERVICE_SERVER_GENERIC;
-  if( strstr(usn, ICKSERVICE_TYPESTR_CONTROLLER) )
-    return ICKP2P_SERVICE_CONTROLLER;
-  if( strstr(usn, ICKSERVICE_TYPESTR_DEBUG) )
-    return ICKP2P_SERVICE_DEBUG;
-#endif
-
-/*------------------------------------------------------------------------*\
-    No compatible ickstream service found
-\*------------------------------------------------------------------------*/
-  return ICKP2P_SERVICE_NONE;
-}
-
-
-/*=========================================================================*\
-  Find discovery handler and ickstream service type for an
-  UPnP description request received over HTTP
-    caller must lock discovery handler list
-    returns NULL if no match
-\*=========================================================================*/
-ickP2pServicetype_t _ickDescrFindServiceByUrl( const ickP2pContext_t *ictx, const char *uri )
-{
-  char    buffer[32];
-
-  debug( "_ickDescrFindServiceByUrl: \"%s\"", uri );
-
-/*------------------------------------------------------------------------*\
-    Check for root device
-\*------------------------------------------------------------------------*/
-  snprintf( buffer, sizeof(buffer), "/%s.xml", ICKDEVICE_STRING_ROOT );
-  if( !strcmp(uri,buffer) )
-    return ICKP2P_SERVICE_GENERIC;
-
-/*------------------------------------------------------------------------*\
-    For services check if they are actually up
-\*------------------------------------------------------------------------*/
-#ifdef ICKP2P_DYNAMICSERVICES
-  snprintf( buffer, sizeof(buffer), "/%s.xml", ICKSERVICE_STRING_PLAYER );
-  if( (ictx->ickServices&ICKP2P_SERVICE_PLAYER) && !strcmp(uri,buffer) )
-    return ICKP2P_SERVICE_PLAYER;
-  snprintf( buffer, sizeof(buffer), "/%s.xml", ICKSERVICE_STRING_SERVER );
-  if( (ictx->ickServices&ICKP2P_SERVICE_PLAYER) && !strcmp(uri,buffer) )
-    return ICKP2P_SERVICE_SERVER_GENERIC;
-  snprintf( buffer, sizeof(buffer), "/%s.xml", ICKSERVICE_STRING_CONTROLLER );
-  if( (ictx->ickServices&ICKP2P_SERVICE_PLAYER) && !strcmp(uri,buffer) )
-    return ICKP2P_SERVICE_CONTROLLER;
-  snprintf( buffer, sizeof(buffer), "/%s.xml", ICKSERVICE_STRING_DEBUG );
-  if( (ictx->ickServices&ICKP2P_SERVICE_PLAYER) && !strcmp(uri,buffer) )
-    return ICKP2P_SERVICE_DEBUG;
-#endif
-
-/*------------------------------------------------------------------------*\
-    No match
-\*------------------------------------------------------------------------*/
-  return ICKP2P_SERVICE_NONE;
-}
-
-
-/*=========================================================================*\
-  Create an upnp device descriptor for a given ickstream service type
+  Create an upnp device descriptor
     this includes a corresponding HTTP header
     returns an allocated string (caller must free) or NULL on error
 \*=========================================================================*/
-char *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket *wsi, ickP2pServicetype_t stype )
+char *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket *wsi )
 {
   int                        xlen, hlen;
   char                      *xmlcontent = NULL;
-  char                      *type;
   char                      *message;
   char                       header[512];
-
-/*------------------------------------------------------------------------*\
-    Get type string
-\*------------------------------------------------------------------------*/
-#ifdef ICKP2P_DYNAMICSERVICES
-  switch( stype ) {
-    case ICKP2P_SERVICE_GENERIC:
-      type = ICKDEVICE_TYPESTR_ROOT;
-      break;
-    case ICKP2P_SERVICE_PLAYER:
-      type = ICKSERVICE_TYPESTR_PLAYER;
-      break;
-    case ICKP2P_SERVICE_CONTROLLER:
-      type = ICKSERVICE_TYPESTR_CONTROLLER;
-      break;
-    case ICKP2P_SERVICE_SERVER_GENERIC:
-      type = ICKSERVICE_TYPESTR_SERVER;
-      break;
-    case ICKP2P_SERVICE_DEBUG:
-      type = ICKSERVICE_TYPESTR_DEBUG;
-      break;
-    default:
-      logerr( "_ickDescrGetDeviceDescr: invalid service type %d", stype );
-      return NULL;
-  }
-#else
-  type = ICKDEVICE_TYPESTR_ROOT;
-#endif
 
 /*------------------------------------------------------------------------*\
     Construct XML payload
@@ -258,7 +151,7 @@ char *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket 
 
                     ICKDEVICE_UPNP_MAJOR,
                     ICKDEVICE_UPNP_MINOR,
-                    type,
+                    ICKDEVICE_TYPESTR_ROOT,
                     ictx->deviceName,
                     ickUpnpNames.manufacturer,
                     ickUpnpNames.manufacturerUrl,
@@ -380,7 +273,7 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
       _ickDeviceLock( device );
       _ickDeviceSetName( device, _xmlUserData.deviceName );
       device->ickP2pLevel  = _xmlUserData.protocolLevel;
-      if( _xmlUserData.services&~device->services )
+      if( device->services && (_xmlUserData.services&~device->services) )
         logwarn( "_ickWGetXmlCb (%s): found superset of already known services (was:0x%02x new:0x%02x)",
                   uri, device->services, _xmlUserData.services );
       else if( device->services!=_xmlUserData.services && (device->services&_xmlUserData.services) )

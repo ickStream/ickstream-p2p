@@ -90,32 +90,18 @@ Remarks         : -
 #define ICKDEVICE_PRODUCTANDVERSION      "ickStreamDevice/1.0"
 
 //
-// strings defining ickstream devices and services
-//
-#define ICKDEVICE_STRING_ROOT            "Root"
-
-#ifdef ICKP2P_DYNAMICSERVICES
-#define ICKSERVICE_STRING_PLAYER         "Player"
-#define ICKSERVICE_STRING_SERVER         "Server"
-#define ICKSERVICE_STRING_CONTROLLER     "Controller"
-#define ICKSERVICE_STRING_DEBUG          "Debug"
-#endif
-
-//
-// Upnp strings defining ickstream devices and services
-// Note: Versions must match for all USNs
+// Announced UPnP version
 //
 #define ICKDEVICE_UPNP_MAJOR             1
 #define ICKDEVICE_UPNP_MINOR             0
-#define ICKDEVICE_TYPESTR_PREFIX         "urn:schemas-ickstream-com:device:"
-#define ICKDEVICE_TYPESTR_ROOT           "urn:schemas-ickstream-com:device:Root:1"
 
-#ifdef ICKP2P_DYNAMICSERVICES
-#define ICKSERVICE_TYPESTR_PLAYER        "urn:schemas-ickstream-com:device:Player:1"
-#define ICKSERVICE_TYPESTR_SERVER        "urn:schemas-ickstream-com:device:Server:1"
-#define ICKSERVICE_TYPESTR_CONTROLLER    "urn:schemas-ickstream-com:device:Controller:1"
-#define ICKSERVICE_TYPESTR_DEBUG         "urn:schemas-ickstream-com:device:Debug:1"
-#endif
+//
+// Upnp strings defining ickstream devices and services
+//
+#define ICKDEVICE_TYPESTR_PREFIX         "urn:schemas-ickstream-com:device:"
+#define ICKDEVICE_STRING_ROOT            "Root"
+#define ICKDEVICE_TYPESTR_ROOT           "urn:schemas-ickstream-com:device:Root:1"
+#define ICKDEVICE_URI_ROOT               "/Root.xml"
 
 //
 // ickstream preamble elements
@@ -125,10 +111,6 @@ typedef enum {
   ICKP2PLEVEL_GENERIC         = 0,     // first protocol version or unknown
   ICKP2PLEVEL_TARGETSERVICES  = 0x01,  // include target service type with messages
   ICKP2PLEVEL_SOURCESERVICE   = 0x02,  // include source service in message
-  // fixme:  Not needed since each device has a unique UUID. Use source service instead
-  ICKP2PLEVEL_TARGETUUID      = 0x04,  // include target UUID with services (when supporting more than one UUID per websocket)
-  ICKP2PLEVEL_SOURCEUUID      = 0x08,  // include source UUID with services (when supporting more than one UUID per websocket)
-  //
   ICKP2PLEVEL_SUPPORTED       = 0x03,  // that's what we currently support: including the service types
   ICKP2PLEVEL_DEFAULT         = 0,     // that's what we currently use as the default
   ICKP2PLEVEL_INVALID         = 0xf0   // mask to find illegal codes. Used to be backward compatible with previous implementations usually starting messages with "{" or "[". Should be deprecated until launch, then we can use 8 bits for protocol properties
@@ -153,11 +135,8 @@ typedef enum {
 /*=========================================================================*\
   Internal prototypes
 \*=========================================================================*/
-ickP2pServicetype_t  _ickDescrFindServiceByUsn( const char *usn );
-ickP2pServicetype_t  _ickDescrFindServiceByUrl( const ickP2pContext_t *ictx, const char *uri );
-char                *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket *wsi, ickP2pServicetype_t stype );
-
-ickErrcode_t         _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, int arg );
+char         *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket *wsi );
+ickErrcode_t  _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, int arg );
 
 
 #endif /* __ICKDESCRIPTION_H */

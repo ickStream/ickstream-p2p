@@ -56,7 +56,6 @@ Remarks         : -
 /*=========================================================================*\
   Definition of constants
 \*=========================================================================*/
-#define ICKP2P_DYNAMICSERVICES
 #define ICK_P2PENABLEDEBUGAPI
 
 
@@ -196,12 +195,6 @@ int                  ickP2pGetUpnpLoopback( const ickP2pContext_t *ictx );
 long                 ickP2pGetBootId( const ickP2pContext_t *ictx );
 long                 ickP2pGetConfigId( const ickP2pContext_t *ictx );
 ickP2pServicetype_t  ickP2pGetServices( const ickP2pContext_t *ictx );
-
-// Dynamic service management is depricated
-#ifdef ICKP2P_DYNAMICSERVICES
-ickErrcode_t         ickP2pAddService( ickP2pContext_t *ictx, ickP2pServicetype_t type );
-ickErrcode_t         ickP2pRemoveService( ickP2pContext_t *ictx, ickP2pServicetype_t type );
-#endif
 
 // Get device features (allowed only in callbacks!)
 char                *ickP2pGetDeviceName( const ickP2pContext_t *ictx, const char *uuid );
