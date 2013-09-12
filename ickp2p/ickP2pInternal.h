@@ -28,7 +28,7 @@ Remarks         : -
 \*=========================================================================*/
 #include <poll.h>
 #include <pthread.h>
-#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <libwebsockets.h>
 #include "ickP2p.h"
 
@@ -162,7 +162,7 @@ struct _ickP2pContext {
 #ifdef ICK_DEBUG
 #ifdef __linux__
 #include <sys/prctl.h>
-#define PTHREADSETNAME( name )  prctl( PR_SET_NAME, (name) )
+#define PTHREADSETNAME( name )  prctl( PR_SET_NAME, (char*)(name), 0, 0, 0 )
 #endif
 #endif
 #ifndef PTHREADSETNAME
