@@ -146,7 +146,6 @@ struct _ickP2pContext {
   ickWGetContext_t            *wGetters;
   pthread_mutex_t              wGettersMutex;
 
-
   ickP2pEndCb_t                cbEnd;
 };
 
