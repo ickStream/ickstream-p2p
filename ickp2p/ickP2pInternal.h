@@ -161,7 +161,7 @@ struct _ickP2pContext {
 #ifdef ICK_DEBUG
 #ifdef __linux__
 #include <sys/prctl.h>
-#define PTHREADSETNAME( name )  prctl( PR_SET_NAME, (char*)(name), 0, 0, 0 )
+#define PTHREADSETNAME( name )  prctl( PR_SET_NAME, (unsigned long)(name), 0, 0, 0 )
 #endif
 #endif
 #ifndef PTHREADSETNAME
