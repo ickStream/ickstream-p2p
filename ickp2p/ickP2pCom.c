@@ -87,7 +87,7 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
     Determine size if payload is a string
 \*------------------------------------------------------------------------*/
   if( !mSize )
-    mSize = strlen( message );
+    mSize = strlen( message ) + 1;
 
   debug( "ickP2pSendMsg: target=\"%s\" targetServices=0x%02x sourceServices=0x%02x size=%ld",
          uuid?uuid:"<Notification>", targetServices, sourceService, (long)mSize );
@@ -143,9 +143,9 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
       preambleLen++;
 
 /*------------------------------------------------------------------------*\
-    Allocate payload container, include LWS padding and trailing zero
+    Allocate payload container, include LWS padding
 \*------------------------------------------------------------------------*/
-    pSize = preambleLen + mSize + 1;
+    pSize = preambleLen + mSize;
     cSize = LWS_SEND_BUFFER_PRE_PADDING + pSize + LWS_SEND_BUFFER_POST_PADDING;
     container = malloc( cSize );
     if( !container ) {
@@ -167,10 +167,9 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
       *ptr++ = (unsigned char)sourceService;
 
 /*------------------------------------------------------------------------*\
-    Copy payload to container and add trailing zero
+    Copy payload to container
 \*------------------------------------------------------------------------*/
     memcpy( ptr, message, mSize );
-    ptr[ mSize ] = 0;
 
 /*------------------------------------------------------------------------*\
     Try queue message for transmission
@@ -273,7 +272,7 @@ ickErrcode_t _ickP2pSendNullMessage( ickP2pContext_t *ictx, ickDevice_t *device 
   debug( "_ickP2pSendNullMessage: target=\"%s\"", device->uuid );
 
 /*------------------------------------------------------------------------*\
-    Allocate payload container, include LWS padding and trailing zero
+    Allocate payload container, include LWS padding
 \*------------------------------------------------------------------------*/
   cSize = LWS_SEND_BUFFER_PRE_PADDING + 1 + LWS_SEND_BUFFER_POST_PADDING;
   container = malloc( cSize );

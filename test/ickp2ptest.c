@@ -288,7 +288,7 @@ int main( int argc, char *argv[] )
     sprintf( buffer, "Message #%03d from %s - hello ickstream world!", cntr, uuidStr );
 
     // Broadcast message as string
-    printf( "Sending test message #%03d...\n", cntr );
+    printf( "Sending test message #%03d (%ld bytes) ...\n", cntr, (long)strlen(buffer)+1 );
     irc = ickP2pSendMsg( ictx, NULL, ICKP2P_SERVICE_ANY, service, buffer, 0 );
     if( irc ) {
       printf( "ickP2pSendMsg: %s\n", ickStrError(irc) );
