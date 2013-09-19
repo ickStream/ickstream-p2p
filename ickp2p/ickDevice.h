@@ -47,12 +47,12 @@ Remarks         : -
 struct _ickMessage;
 typedef struct _ickMessage ickMessage_t;
 struct _ickMessage {
-  ickMessage_t  *next;
-  ickMessage_t  *prev;
-  double         tCreated;
-  unsigned char *payload;    // strong
-  size_t         size;
-  size_t         issued;
+  ickMessage_t        *next;
+  ickMessage_t        *prev;
+  double               tCreated;
+  unsigned char       *payload;    // strong
+  size_t               size;
+  size_t               issued;
 };
 
 //

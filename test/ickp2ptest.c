@@ -62,7 +62,7 @@ static volatile int stop_signal;
 \*=========================================================================*/
 static void sigHandler( int sig, siginfo_t *siginfo, void *context );
 static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDeviceState_t change, ickP2pServicetype_t type );
-static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices, const char* message, size_t mSize );
+static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices, const char* message, size_t mSize, ickP2pMessageFlag_t mFlags );
 
 
 
@@ -387,16 +387,16 @@ static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDevice
 \*=========================================================================*/
 static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid,
                           ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices,
-                          const char* message, size_t mSize )
+                          const char* message, size_t mSize, ickP2pMessageFlag_t mFlags )
 {
   long i;
 
 /*------------------------------------------------------------------------*\
     Print meta data and message snippet
 \*------------------------------------------------------------------------*/
-  printf( ">>> message from %s,0x%02x -> 0x%02x \"%.30s%s\" (%ld bytes)\n",
+  printf( ">>> message from %s,0x%02x -> 0x%02x \"%.30s%s\" (%ld bytes, flags 0x%02x)\n",
           sourceUuid, sourceService, targetServices, message,
-          mSize>30?"...":"", (long)mSize );
+          mSize>30?"...":"", (long)mSize, mFlags );
 
 /*------------------------------------------------------------------------*\
     Respond to messages
@@ -414,6 +414,14 @@ static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid,
       return;
     }
     free( response );
+  }
+
+/*------------------------------------------------------------------------*\
+    Check integrity of strings
+\*------------------------------------------------------------------------*/
+  if( (mFlags&ICKP2P_MESSAGEFLAG_STRING) && mSize!=strlen(message)+1 ) {
+    printf( "Mismatch in string message size (mSize is %ld, strlen+1 is %ld)",
+        (long)mSize, (long)(strlen(message)+1) );
   }
 
 /*------------------------------------------------------------------------*\

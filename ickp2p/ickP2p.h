@@ -90,8 +90,15 @@ typedef enum {
   ICKP2P_SERVICE_SERVER_GENERIC    = 0x4,
   ICKP2P_SERVICE_DEBUG             = 0x8,
   ICKP2P_SERVICE_MAX               = ICKP2P_SERVICE_DEBUG,
-  ICKP2P_SERVICE_ANY               = 2*ICKP2P_SERVICE_MAX-1,
+  ICKP2P_SERVICE_ANY               = 2*ICKP2P_SERVICE_MAX-1
 } ickP2pServicetype_t;
+
+// Flags for messages (used in message callback)
+typedef enum {
+  ICKP2P_MESSAGEFLAG_NONE         = 0,
+  ICKP2P_MESSAGEFLAG_STRING       = 0x01,
+  ICKP2P_MESSAGEFLAG_NOTIFICATION = 0x02
+} ickP2pMessageFlag_t;
 
 // Names used in upnp descriptions
 typedef struct {
@@ -118,7 +125,7 @@ typedef struct _ickP2pContext ickP2pContext_t;
 \*------------------------------------------------------------------------*/
 typedef void  (*ickP2pEndCb_t)( ickP2pContext_t *ictx );
 typedef void  (*ickP2pDiscoveryCb_t)( ickP2pContext_t *ictx, const char *uuid, ickP2pDeviceState_t change, ickP2pServicetype_t type );
-typedef void  (*ickP2pMessageCb_t)( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices, const char *message, size_t mSize );
+typedef void  (*ickP2pMessageCb_t)( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices, const char *message, size_t mSize, ickP2pMessageFlag_t mFlags );
 typedef int   (*ickP2pConnectMatrixCb_t)( ickP2pContext_t *ictx, ickP2pServicetype_t localServices, ickP2pServicetype_t remoteServices );
 typedef void  (*ickP2pLogFacility_t)( const char *file, int line, int prio, const char * format, ... );
 

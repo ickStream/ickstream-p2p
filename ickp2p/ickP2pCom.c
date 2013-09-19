@@ -79,15 +79,17 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
                             ickP2pServicetype_t targetServices, ickP2pServicetype_t sourceService,
                             const char *message, size_t mSize )
 {
-  ickErrcode_t  irc = ICKERR_SUCCESS;
-  ickDevice_t  *device;
-// const char   *myUuid = ickP2pGetDeviceUuid();
+  ickP2pMessageFlag_t mFlags = ICKP2P_MESSAGEFLAG_NONE;
+  ickErrcode_t        irc    = ICKERR_SUCCESS;
+  ickDevice_t        *device;
 
 /*------------------------------------------------------------------------*\
     Determine size if payload is a string
 \*------------------------------------------------------------------------*/
-  if( !mSize )
-    mSize = strlen( message ) + 1;
+  if( !mSize ) {
+    mFlags |= ICKP2P_MESSAGEFLAG_STRING;
+    mSize   = strlen( message ) + 1;
+  }
 
   debug( "ickP2pSendMsg: target=\"%s\" targetServices=0x%02x sourceServices=0x%02x size=%ld",
          uuid?uuid:"<Notification>", targetServices, sourceService, (long)mSize );
@@ -107,8 +109,10 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
       return ICKERR_NOTCONNECTED;
     }
   }
-  else if( ictx->deviceList )
-    device = ictx->deviceList;
+  else if( ictx->deviceList ) {
+    mFlags |= ICKP2P_MESSAGEFLAG_NOTIFICATION;
+    device  = ictx->deviceList;
+  }
   else {
     _ickLibDeviceListUnlock( ictx );
     return ICKERR_SUCCESS;
@@ -141,6 +145,8 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
       preambleLen++;
     if( p2pLevel&ICKP2PLEVEL_SOURCESERVICE )
       preambleLen++;
+    if( p2pLevel&ICKP2PLEVEL_MESSAGEFLAGS )
+      preambleLen++;
 
 /*------------------------------------------------------------------------*\
     Allocate payload container, include LWS padding
@@ -165,6 +171,9 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
 
     if( p2pLevel&ICKP2PLEVEL_SOURCESERVICE )
       *ptr++ = (unsigned char)sourceService;
+
+    if( p2pLevel&ICKP2PLEVEL_MESSAGEFLAGS )
+      *ptr++ = (unsigned char)mFlags;
 
 /*------------------------------------------------------------------------*\
     Copy payload to container
@@ -867,6 +876,7 @@ static void _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t
   ickP2pLevel_t        p2pLevel;
   ickP2pServicetype_t  targetServices = ICKP2P_SERVICE_GENERIC;
   ickP2pServicetype_t  sourceService  = ICKP2P_SERVICE_GENERIC;
+  ickP2pMessageFlag_t  mFlags         = ICKP2P_MESSAGEFLAG_NONE;
   const unsigned char *payload = message;
   struct _cblist      *walk;
 
@@ -890,6 +900,9 @@ static void _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t
   if( p2pLevel&ICKP2PLEVEL_SOURCESERVICE )
     sourceService = *payload++;
 
+  if( p2pLevel&ICKP2PLEVEL_MESSAGEFLAGS )
+    mFlags = *payload++;
+
   if( payload-(const unsigned char*)message>mSize ) {
     logerr( "_ickP2pExecMessageCallback: truncated message from \"%s\"", device->uuid );
     return;
@@ -904,7 +917,7 @@ static void _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t
 \*------------------------------------------------------------------------*/
   pthread_mutex_lock( &ictx->messageCbsMutex );
   for( walk=ictx->messageCbs; walk; walk=walk->next )
-    ((ickP2pMessageCb_t)walk->callback)( ictx, device->uuid, sourceService, targetServices, (const char*)payload, mSize );
+    ((ickP2pMessageCb_t)walk->callback)( ictx, device->uuid, sourceService, targetServices, (const char*)payload, mSize, mFlags );
   pthread_mutex_unlock( &ictx->messageCbsMutex );
 }
 

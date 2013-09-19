@@ -88,9 +88,10 @@ typedef enum {
   ICKP2PLEVEL_GENERIC         = 0,     // first protocol version or unknown
   ICKP2PLEVEL_TARGETSERVICES  = 0x01,  // include target service type with messages
   ICKP2PLEVEL_SOURCESERVICE   = 0x02,  // include source service in message
-  ICKP2PLEVEL_SUPPORTED       = 0x03,  // that's what we currently support: including the service types
+  ICKP2PLEVEL_MESSAGEFLAGS    = 0x04,  // include message flags in message
+  ICKP2PLEVEL_SUPPORTED       = 0x07,  // that's what we currently support: including the service types
   ICKP2PLEVEL_DEFAULT         = 0,     // that's what we currently use as the default
-  ICKP2PLEVEL_INVALID         = 0xf0   // mask to find illegal codes. Used to be backward compatible with previous implementations usually starting messages with "{" or "[". Should be deprecated until launch, then we can use 8 bits for protocol properties
+  ICKP2PLEVEL_INVALID         = 0xf8   // mask to find illegal codes. Used to be backward compatible with previous implementations usually starting messages with "{" or "[". Should be deprecated until launch, then we can use 8 bits for protocol properties
 } ickP2pLevel_t;
 
 
