@@ -77,6 +77,7 @@ int main( int argc, char *argv[] )
   char                *uuidStr     = NULL;
   const char          *name        = DEVICENAME;
   const char          *ifname      = IFNAME;
+  const char          *port_arg    = "1900";
   const char          *verb_arg    = "4";
   const char          *service_arg = NULL;
 
@@ -84,6 +85,7 @@ int main( int argc, char *argv[] )
   ickP2pContext_t     *ictx;
   uuid_t               uuid;
   ickP2pServicetype_t  service;
+  int                  port        = 1900;
   int                  cntr;
   char                *vlp;
   long                 i;
@@ -97,6 +99,7 @@ int main( int argc, char *argv[] )
   addarg( "config",    "-c",  &cfg_fname,   "filename",  "Set name of configuration file" );
   addarg( "*uuid",     "-u",  &uuidStr,     "uuid",      "Use UUID for this device (default: random)" );
   addarg( "*name",     "-n",  &name,        "name",      "Use Name for this device" );
+  addarg( "*port",     "-p",  &port_arg,    "port",      "SSDP listener port" );
   addarg( "*idev",     "-i",  &ifname,      "interface", "Main network interface" );
   addarg( "*services", "-s",  &service_arg, "bitvector", "Announce services (default: random)" );
   addarg( "*verbose",  "-v",  &verb_arg,    "level",     "Set ickp2p logging level (0-7)" );
@@ -177,6 +180,20 @@ int main( int argc, char *argv[] )
     service = 1<<random()%4;
 
 /*------------------------------------------------------------------------*\
+    Get SSDP listener port
+\*------------------------------------------------------------------------*/
+  if( port_arg ) {
+    char *eptr;
+    port = (int)strtol( port_arg, &eptr, 0 );
+    while( isspace(*eptr) )
+      eptr++;
+    if( *eptr || port<0 || port>65535 ) {
+      fprintf( stderr, "Bad port: '%s'\n", port_arg );
+      return 1;
+    }
+  }
+
+/*------------------------------------------------------------------------*\
     Create a very large payload message
 \*------------------------------------------------------------------------*/
   vlp = malloc( VLP_SIZE );
@@ -200,7 +217,7 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Create context
 \*------------------------------------------------------------------------*/
-  ictx = ickP2pCreate( DEVICENAME, uuidStr, "./httpFolder", 100, 1900, service, &irc  );
+  ictx = ickP2pCreate( DEVICENAME, uuidStr, "./httpFolder", 100, port, service, &irc  );
   if( !ictx ) {
     fprintf( stderr, "ickP2pCreate: %s\n", ickStrError(irc) );
     return -1;

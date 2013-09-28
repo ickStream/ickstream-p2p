@@ -383,11 +383,6 @@ ickSsdp_t *_ickSsdpParse( const char *buffer, size_t length, const struct sockad
       if( strcasecmp(value,"239.255.255.250") &&
           strcasecmp(value,"239.255.255.250:1900") ) {
         logwarn("_ickSsdpParse (%s): Invalid HOST header value \"%s\"", peer, value );
-        // fixme: ignore bug of old ickp2plib
-        if( strcasecmp(value,"239.255.255.250:PORT") ) {
-          _ickSsdpFree( ssdp );
-          return NULL;
-        }
       }
     }
 
@@ -1258,7 +1253,7 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
     memset( &sockname, 0, sizeof(struct sockaddr_in) );
     sockname.sin_family      = AF_INET;
     sockname.sin_addr.s_addr = inet_addr( ICKSSDP_MCASTADDR );
-    sockname.sin_port        = htons( ICKSSDP_MCASTPORT );
+    sockname.sin_port        = htons( ictx->upnpListenerPort );
     addr = (const struct sockaddr*)&sockname;
   }
   snprintf( addrstr, sizeof(addrstr), "%s:%d",
