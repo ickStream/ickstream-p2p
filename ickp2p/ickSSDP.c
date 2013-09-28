@@ -50,6 +50,7 @@ Remarks         : refactored from ickDiscoverRegistry
 #include "ickMainThread.h"
 #include "ickWGet.h"
 #include "ickSSDP.h"
+#include "ickP2pCom.h"
 
 
 /*=========================================================================*\
@@ -554,9 +555,9 @@ int _ickSsdpExecute( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 \*=========================================================================*/
 static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 {
+  int                  retval = 0;
   ickDevice_t         *device;
   ickTimer_t          *timer;
-  ickWGetContext_t    *wget;
   const char          *peer;
   ickErrcode_t         irc;
 
@@ -578,7 +579,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   }
 
 /*------------------------------------------------------------------------*\
-    Ignore non ickstream services...
+    Ignore all non ickstream services...
 \*------------------------------------------------------------------------*/
   if( !strstr(ssdp->usn,ICKDEVICE_TYPESTR_ROOT) ) {
     debug( "_ickDeviceUpdate (%s): No ickstream device or service (%s).", peer, ssdp->usn );
@@ -592,10 +593,13 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   _ickTimerListLock( ictx );
 
 /*------------------------------------------------------------------------*\
-   New device?
+    New device?
 \*------------------------------------------------------------------------*/
   device = _ickLibDeviceFindByUuid( ictx, ssdp->uuid );
-  if( !device ) {
+  if( device ) {
+    debug ( "_ickDeviceUpdate (%s): found an instance (updating).", ssdp->usn );
+  }
+  else {
     debug ( "_ickDeviceUpdate (%s): adding new ickstream device (%s)",
             ssdp->usn, ssdp->location );
 
@@ -603,55 +607,18 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     device = _ickDeviceNew( ssdp->uuid, ICKDEVICE_SSDP );
     if( !device ) {
       logerr( "_ickDeviceUpdate: out of memory" );
-      _ickLibDeviceListUnlock( ictx );
-      _ickTimerListUnlock( ictx );
-      return -1;
+      retval = -1;
+      goto bail;
     }
     device->services       = ICKP2P_SERVICE_GENERIC;
-    device->lifetime       = ssdp->lifetime;
     device->ickUpnpVersion = _ssdpGetVersion( ssdp->usn );
+    device->location       = strdup( ssdp->location );
 
-    //fixme: Ver.1 devices only answer to root requests
-    if( device->ickUpnpVersion==1 ) {
-      char *ptr=strrchr(ssdp->location,'/');
-      if( ptr )
-        asprintf( &device->location, "%.*s/Root.xml", (int)(ptr-ssdp->location), ssdp->location );
-    }
-    if( !device->location )
-      device->location   = strdup( ssdp->location );
     if( !device->location ) {
       logerr( "_ickDeviceUpdate: out of memory" );
       _ickDeviceFree( device );
-      _ickLibDeviceListUnlock( ictx );
-      _ickTimerListUnlock( ictx );
-      return -1;
-    }
-
-    // Start retrieval of unpn descriptor
-    wget = _ickWGetInit( ictx, device->location, _ickWGetXmlCb, device, &irc );
-    if( !wget ) {
-      logerr( "_ickDeviceUpdate (%s): could not start xml retriever for SSDP update on \"%s\" (%s).",
-          device->uuid, device->location, ickStrError(irc) );
-      _ickDeviceFree( device );
-      _ickLibDeviceListUnlock( ictx );
-      _ickTimerListUnlock( ictx );
-      return -1;
-    }
-
-    // Link to list of getters
-    _ickLibWGettersLock( ictx );
-    _ickLibWGettersAdd( ictx, wget );
-    _ickLibWGettersUnlock( ictx );
-
-    // Create expiration timer
-    irc = _ickTimerAdd( ictx, device->lifetime*1000, 1, _ickDeviceExpireTimerCb, device, 0 );
-    if( irc ) {
-      logerr( "_ickDeviceUpdate (%s): could not create expiration timer (%s)",
-          device->uuid, ickStrError(irc) );
-      _ickDeviceFree( device );
-      _ickLibDeviceListUnlock( ictx );
-      _ickTimerListUnlock( ictx );
-      return -1;
+      retval = -1;
+      goto bail;
     }
 
     //Link device to discovery handler
@@ -661,49 +628,67 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     // this is done by the xml handler after the device is full initialzed
     // _ickDiscoveryExecDiscoveryCallback( dh, device, ICKP2P_NEW, stype );
 
-    // Release all locks and return code 1 (a device was added)
-    _ickLibDeviceListUnlock( ictx );
-    _ickTimerListUnlock( ictx );
-    return 1;
+    // Return code is 1 (a device was added)
+    retval = 1;
   }
 
 /*------------------------------------------------------------------------*\
-   Update a known device
+    Crate or update expiration timer
 \*------------------------------------------------------------------------*/
-  debug ( "_ickDeviceUpdate (%s): found an instance (updating).", ssdp->usn );
-
-  // Update timestamp for expiration time
   device->lifetime = ssdp->lifetime;
-
-  // Find and modify expiration handler for this device
   timer = _ickTimerFind( ictx, _ickDeviceExpireTimerCb, device, 0 );
   if( timer )
     _ickTimerUpdate( ictx, timer, device->lifetime*1000, 1 );
   else {
-    if( device->type==ICKDEVICE_SSDP )
-      logerr( "_ickDeviceUpdate: could not find expiration timer." );
     irc = _ickTimerAdd( ictx, device->lifetime*1000, 1, _ickDeviceExpireTimerCb, device, 0 );
     if( irc ) {
       logerr( "_ickDeviceUpdate (%s): could not create expiration timer (%s)",
           device->uuid, ickStrError(irc) );
-      _ickDeviceFree( device );
-      _ickLibDeviceListUnlock( ictx );
-      _ickTimerListUnlock( ictx );
-      return -1;
+      retval = -1;
+      goto bail;
     }
   }
 
-  // Check protocol version, should be same on one UUID
-  if( device->ickUpnpVersion!=_ssdpGetVersion(ssdp->usn) ) {
-    if( device->type==ICKDEVICE_SSDP )
-      logwarn( "_ickDeviceUpdate (%s): version mismatch for USN \"%s\" (expected %d).",
-               device->uuid, ssdp->usn, device->ickUpnpVersion );
-    else
-      device->ickUpnpVersion =_ssdpGetVersion( ssdp->usn );
+/*------------------------------------------------------------------------*\
+    New device? -> Start xml getter which will do the connection
+\*------------------------------------------------------------------------*/
+  if( device->tXmlComplete==0.0 ) {
+    debug( "_ickDeviceUpdate (%s): need to get XML device descriptor", device->uuid );
+
+    // Don't start wget twice
+    if( device->wget ) {
+      loginfo( "_ickDeviceUpdate (%s): xml retriever already exists \"%s\".",
+          device->uuid, device->location );
+      goto bail;
+    }
+
+    // Start retrieval of unpn descriptor
+    device->wget = _ickWGetInit( ictx, device->location, _ickWGetXmlCb, device, &irc );
+    if( !device->wget ) {
+      logerr( "_ickDeviceUpdate (%s): could not start xml retriever \"%s\" (%s).",
+          device->uuid, device->location, ickStrError(irc) );
+      retval = -1;
+      goto bail;
+    }
+
+    // Link to list of getters
+    _ickLibWGettersLock( ictx );
+    _ickLibWGettersAdd( ictx, device->wget );
+    _ickLibWGettersUnlock( ictx );
   }
 
+/*------------------------------------------------------------------------*\
+    If the device is complete, but not connected, reinitiate web socket connection
+\*------------------------------------------------------------------------*/
+  else if( !device->wsi && device->doConnect ) {
+    debug( "_ickDeviceUpdate (%s): trying to reconnect", device->uuid );
+    _ickWebSocketOpen( ictx->lwsContext, device );
+  }
+
+/*------------------------------------------------------------------------*\
+    Location changed?
+\*------------------------------------------------------------------------*/
 /*
-  // New location?
   if( strcmp(device->location,ssdp->location) ) {
     debug ( "_ickDeviceUpdate (%s): updating location (\"%s\"->\"%s\".",
         ssdp->usn, device->location, ssdp->location );
@@ -719,10 +704,13 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   }
 */
 
-  // Release all locks and return code 0 (no device added)
+/*------------------------------------------------------------------------*\
+    Release all locks and return result
+\*------------------------------------------------------------------------*/
+bail:
   _ickLibDeviceListUnlock( ictx );
   _ickTimerListUnlock( ictx );
-  return 0;
+  return retval;
 }
 
 

@@ -30,6 +30,7 @@ Remarks         : -
 #include <libwebsockets.h>
 #include "ickP2p.h"
 #include "ickDescription.h"
+#include "ickWGet.h"
 
 
 /*=========================================================================*\
@@ -82,6 +83,7 @@ struct _ickDevice {
   ickP2pLevel_t        ickP2pLevel;
   ickMessage_t        *outQueue;
   double               tCreation;
+  ickWGetContext_t    *wget;
   double               tXmlComplete;
   int                  doConnect;
   double               tConnect;

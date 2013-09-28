@@ -26,6 +26,7 @@ Remarks         : Library needs to be compiled with ICK_P2PENABLEDEBUGAPI
 
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <libwebsockets.h>
 #include <arpa/inet.h>
@@ -200,6 +201,72 @@ char *_ickP2pGetDebugFile( ickP2pContext_t *ictx, const char *uri )
   strcpy( message, header );
   strcpy( message+hlen, debugContent );
   Sfree( debugContent );
+
+/*------------------------------------------------------------------------*\
+  That's all
+\*------------------------------------------------------------------------*/
+  return message;
+}
+
+
+/*=========================================================================*\
+  Get HTTP log info
+    this includes a corresponding HTTP header
+    returns an allocated string (caller must free) or NULL on error
+\*=========================================================================*/
+char *_ickP2pGetLogFile( ickP2pContext_t *ictx, const char *uri )
+{
+  int          level;
+  char        *logContent;
+  int          dlen, hlen;
+  char        *message;
+  char         header[512];
+
+  debug( "_ickP2pGetLogFile (%p): \"%s\"", ictx, uri );
+
+/*------------------------------------------------------------------------*\
+    Get minimum log level from path
+\*------------------------------------------------------------------------*/
+  if( strlen(uri)>strlen(ICK_P2PLOGURI) ) {
+    const char *ptr = uri + strlen(ICK_P2PLOGURI);
+    char       *eptr;
+    if( *ptr!='/' )
+      return strdup( HTTP_404 );
+    ptr++;
+    level = (int) strtol( ptr, &eptr, 10 );
+    while( isspace(*eptr) )
+      eptr++;
+    if( *eptr ) {
+      logwarn("_ickP2pGetLogFile (%p): Requested minimum level is not a number (%s)", ictx, ptr );
+      return strdup( HTTP_404 );
+    }
+  }
+
+/*------------------------------------------------------------------------*\
+    Get debug info
+\*------------------------------------------------------------------------*/
+  logContent = ickP2pGetLogContent( level );
+  if( !logContent )
+    return strdup( HTTP_404 );
+
+/*------------------------------------------------------------------------*\
+  Construct header
+\*------------------------------------------------------------------------*/
+  dlen = strlen( logContent);
+  hlen = sprintf( header, HTTP_200, "text/plain", (long)dlen );
+
+/*------------------------------------------------------------------------*\
+  Merge header and payload
+\*------------------------------------------------------------------------*/
+  message = malloc( hlen+dlen+1 );
+  if( !message ) {
+    Sfree( logContent );
+    logerr( "_ickP2pGetLogFile: out of memory" );
+    return NULL;
+  }
+  strcpy( message, header );
+  strcpy( message+hlen, logContent );
+  Sfree( logContent );
 
 /*------------------------------------------------------------------------*\
   That's all
@@ -488,6 +555,7 @@ static char *_ickDeviceStateJson( ickDevice_t *device, int indent )
                   "%*s\"p2pLevel\": %d,\n"
                   "%*s\"lifetime\": %d,\n"
                   "%*s\"services\": %d,\n"
+                  "%*s\"getXml\": \"%s\",\n"
                   "%*s\"tXmlComplete\": %f,\n"
                   "%*s\"doConnect\": %s,\n"
                   "%*s\"tConnect\": %f,\n"
@@ -511,6 +579,7 @@ static char *_ickDeviceStateJson( ickDevice_t *device, int indent )
                   indent, "", JSON_INTEGER( device->ickP2pLevel ),
                   indent, "", JSON_INTEGER( device->lifetime ),
                   indent, "", JSON_INTEGER( device->services ),
+                  indent, "", JSON_STRING( device->wget?_ickWGetUri(device->wget) : NULL ),
                   indent, "", JSON_REAL( device->tXmlComplete ),
                   indent, "", JSON_BOOL( device->doConnect ),
                   indent, "", JSON_REAL( device->tConnect ),

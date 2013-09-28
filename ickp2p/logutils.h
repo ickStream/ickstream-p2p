@@ -38,11 +38,29 @@ Remarks         : -
 	Includes needed by definitions from this file
 \*=========================================================================*/
 #include <syslog.h>
+#include <pthread.h>
 #include "ickP2p.h"
+
 
 /*=========================================================================*\
        Macro and type definitions 
 \*=========================================================================*/
+
+//
+// An entry in the in-memory ring buffer
+//
+struct _ickP2pLogEntry;
+typedef struct _ickP2pLogEntry ickP2pLogEntry_t;
+struct _ickP2pLogEntry {
+  ickP2pLogEntry_t    *next;
+  const char          *file;        // weak
+  int                  line;
+  double               timeStamp;
+  int                  prio;
+  pthread_t            thread;      // weak
+  char                *text;        // strong
+};
+
 
 // Define the debug macro. This could also used in libwebsockets...
 #ifdef ICK_DEBUG

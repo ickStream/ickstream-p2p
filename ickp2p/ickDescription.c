@@ -305,6 +305,9 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
       if( /* device->doConnect && */ device->localIsServer )
         _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
 
+      // No more wgetter active for this device
+      device->wget = NULL;
+
       break;
 
   }

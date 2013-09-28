@@ -141,7 +141,7 @@ int main( int argc, char *argv[] )
       fprintf( stderr, "Bad verbosity level: '%s'\n", verb_arg );
       return 1;
     }
-    ickP2pSetLogLevel( level );
+    ickP2pSetLogging( level, stderr, 500 );
 #ifndef ICK_DEBUG
     if( level>=LOG_DEBUG ) {
        fprintf( stderr, "%s: binary not compiled for debugging, loglevel %d might be too high!\n",

@@ -104,7 +104,7 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
       _ickLibDeviceListUnlock( ictx );
       return ICKERR_NODEVICE;
     }
-    if( !device->doConnect ) {
+    if( !device->wsi ) {
       _ickLibDeviceListUnlock( ictx );
       return ICKERR_NOTCONNECTED;
     }
@@ -133,7 +133,7 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
 /*------------------------------------------------------------------------*\
     Ignore unconnected devices in broadcast mode
 \*------------------------------------------------------------------------*/
-    if( !device->doConnect )
+    if( !device->wsi )
       goto nextDevice;
 
 /*------------------------------------------------------------------------*\
@@ -437,55 +437,6 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
 
 
 /*=========================================================================*\
-  Terminate a web socket connection to a device
-    caller should lock the device,
-    this must be called from the main thread
-\*=========================================================================*/
-ickErrcode_t _ickWebSocketClose( struct libwebsocket_context *context, ickDevice_t *device )
-{
-  debug( "_ickWebSocketClose: \"%s\"", device->uuid );
-
-/*------------------------------------------------------------------------*\
-    Check status
-\*------------------------------------------------------------------------*/
-  if( !device->wsi ) {
-    logerr( "_ickWebSocketClose (%s): not connected", device->uuid );
-    return ICKERR_NOTCONNECTED;
-  }
-
-/*------------------------------------------------------------------------*\
-    Close connection
-\*------------------------------------------------------------------------*/
-  //libwebsocket_close_and_free_session(context, device->wsi, LWS_CLOSE_STATUS_NORMAL);
-  device->wsi = NULL;
-
-/*------------------------------------------------------------------------*\
-    Delete unsent messages
-\*------------------------------------------------------------------------*/
-  if( device->outQueue ) {
-    ickMessage_t *msg, *next;
-    int           num;
-
-    //Loop over output queue, free and count entries
-    for( num=0,msg=device->outQueue; msg; msg=next ) {
-      next = msg->next;
-      Sfree( msg->payload );
-      Sfree( msg )
-      num++;
-    }
-    device->outQueue = NULL;
-    loginfo( "_ickDeviceFree: Deleted %d unsent messages.", num );
-  }
-
-/*------------------------------------------------------------------------*\
-    That's all
-\*------------------------------------------------------------------------*/
-  return ICKERR_SUCCESS;
-}
-
-
-
-/*=========================================================================*\
   Handle LWS callbacks related to the ickp2p protocol
 \*=========================================================================*/
 int _lwsP2pCb( struct libwebsocket_context *context,
@@ -608,17 +559,44 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       _ickLibDeviceListLock( ictx );
       device = _ickLibDeviceFindByUuid( ictx , psd->uuid );
 
-      // Device already handled as connected or connecting client by openwebsocket?
-      if( device /*&& device->wsi*/ ) {
-        debug( "_lwsP2pCb (%s): Connection rejected, using present wsi for \"%s\" (%p|%p)",
-                  device->uuid, device->location, device->wsi, wsi);
-        psd->device = device;
-        _ickLibDeviceListUnlock( ictx );
-        return -1;
+
+      // Device already known?
+      if( device ) {
+
+        // Already connected: this is somehow strange
+        if( device->wsi ) {
+          logwarn( "_lwsP2pCb (%s): Connection rejected, using present wsi for \"%s\" (%p|%p)",
+                    device->uuid, device->location, device->wsi, wsi);
+          psd->device = device;
+          _ickLibDeviceListUnlock( ictx );
+          return -1;
+        }
+
+        // Device is handled by a wget task (hopefully initiated by SSDP discovery)
+        else if( device->wget ) {
+          logwarn( "_lwsP2pCb (%s): Connection rejected, XML retriever running \"%s\"",
+                    device->uuid, device->location );
+          psd->device = device;
+          _ickLibDeviceListUnlock( ictx );
+          return -1;
+        }
+
+        // This is probably a reconnect
+        else if( device->doConnect ) {
+          debug( "_lwsP2pCb (%s): (Re)connecting already known device", device->uuid );
+        }
+
+        // Incoming connect from a device we don't want to connect to (should not happen)
+        else {
+          debug( "_lwsP2pCb (%s): Connection rejected due to local connection matrix", device->uuid );
+          _ickLibDeviceListUnlock( ictx );
+          return -1;
+        }
       }
 
+
       // Device unknown (i.e. was not (yet) discovered by SSDP)
-      if( !device ) {
+      else {
         ickWGetContext_t *wget;
         ickErrcode_t      irc;
 
@@ -638,8 +616,6 @@ int _lwsP2pCb( struct libwebsocket_context *context,
           _ickLibDeviceListUnlock( ictx );
           return -1;
         }
-        psd->device = device;
-        device->wsi = wsi;
 
         // Get URL of ickstream root device
         if( asprintf(&dscrPath,"http://%s/%s.xml",psd->host,ICKDEVICE_STRING_ROOT)<0 ) {
@@ -669,11 +645,14 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         //Link New device to discovery handler
         _ickLibDeviceAdd( ictx, device );
       }
+
       _ickLibDeviceListUnlock( ictx );
 
       // We are server, set connection timestamp
       device->localIsServer = 1;
       device->tConnect      = _ickTimeNow();
+      device->wsi           = wsi;
+      psd->device           = device;
 
       break;
 
@@ -764,9 +743,10 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       rlen   = libwebsockets_remaining_packet_payload( wsi );
   int final = libwebsocket_is_final_fragment( wsi );
 
-      debug( "_lwsP2pCb %d: %s ready to receive (%ld bytes, %ld remain, %s)", socket,
+      debug( "_lwsP2pCb %d: %s ready to receive (%ld bytes, %ld remain, %s) from \"%s\"", socket,
              reason==LWS_CALLBACK_CLIENT_RECEIVE?"client":"server",
-             (long)len, (long)rlen, final?"final":"to be continued" );
+             (long)len, (long)rlen, final?"final":"to be continued",
+             device?device->uuid:"<unknown UUID>" );
 
       // reset timer
       timer = _ickTimerFind( ictx, _ickDeviceExpireTimerCb, device, 0 );
@@ -814,10 +794,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
     case LWS_CALLBACK_CLOSED:
       socket = libwebsocket_get_socket_fd( wsi );
       device = psd->device;
-      debug( "_lwsP2pCb %d: connection closed", socket );
+      debug( "_lwsP2pCb %d: connection closed (%s)", socket, device?device->uuid:"<unknown UUID>" );
 
-
-      // Mark devices descriptor
+      // Mark and reset devices descriptor
       if( device ) {
 
         // Remove heartbeat and delayed write handler for this device
@@ -830,7 +809,25 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         // Execute discovery callback
         _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_DISCONNECTED, device->services );
 
-        device->wsi = NULL;
+        // Delete unsent messages
+        if( device->outQueue ) {
+          ickMessage_t *msg, *next;
+          int           num;
+
+          //Loop over output queue, free and count entries
+          for( num=0,msg=device->outQueue; msg; msg=next ) {
+            next = msg->next;
+            Sfree( msg->payload );
+            Sfree( msg )
+            num++;
+          }
+          device->outQueue = NULL;
+          loginfo( "_ickDeviceFree: Deleted %d unsent messages.", num );
+        }
+
+        // Reset device state
+        device->localIsServer = 0;
+        device->wsi           = NULL;
       }
 
       // Free per session data

@@ -27,6 +27,7 @@ Remarks         : -
 /*=========================================================================*\
   Includes required by definitions from this file
 \*=========================================================================*/
+#include <stdio.h>
 #include <stddef.h>
 
 /*=========================================================================*\
@@ -145,7 +146,8 @@ extern ickUpnpNames_t ickUpnpNames;
 const char          *ickP2pGetVersion( int *major, int *minor );
 const char          *ickP2pGitVersion( void );
 void                 ickP2pSetLogFacility( ickP2pLogFacility_t facility );
-void                 ickP2pSetLogLevel( int level );
+void                 ickP2pSetLogging( int level, FILE *fp, int bufLen );
+char                *ickP2pGetLogContent( int level );
 const char          *ickStrError( ickErrcode_t code );
 
 // Context lifecycle

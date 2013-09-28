@@ -33,6 +33,7 @@ Remarks         : -
   Definition of constants
 \*=========================================================================*/
 #define ICK_P2PDEBUGURI "/debug"
+#define ICK_P2PLOGURI   "/log"
 
 
 /*=========================================================================*\
@@ -59,5 +60,6 @@ Remarks         : -
   Internal prototypes
 \*=========================================================================*/
 char *_ickP2pGetDebugFile( ickP2pContext_t *ictx, const char *uri );
+char *_ickP2pGetLogFile( ickP2pContext_t *ictx, const char *uri );
 
 #endif /* __ICKP2PDEBUG_H */

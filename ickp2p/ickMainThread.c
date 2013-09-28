@@ -678,6 +678,22 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
         libwebsocket_callback_on_writable( context, wsi );
         break;
       }
+
+      if( ictx->debugApiEnabled && !strncmp(in,ICK_P2PLOGURI,strlen(ICK_P2PLOGURI)) ) {
+
+        // Get log info
+        psd->payload = _ickP2pGetLogFile( ictx, in );
+        if( !psd->payload )
+          return -1;
+        psd->psize   = strlen( psd->payload );
+        psd->nextptr = psd->payload;
+        debug( "_lwsHttpCb %d: sending log info \"%s\"", sd, psd->payload );
+
+        // Enqueue a LWS_CALLBACK_HTTP_WRITEABLE callback for the real work
+        libwebsocket_callback_on_writable( context, wsi );
+        break;
+      }
+
 #endif
 
       // We don't serve root or files if no folder is set

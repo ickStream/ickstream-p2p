@@ -72,7 +72,6 @@ typedef struct {
 ickErrcode_t _ickP2pSendNullMessage( ickP2pContext_t *ictx, ickDevice_t *device );
 
 ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_t *device );
-ickErrcode_t _ickWebSocketClose( struct libwebsocket_context *context, ickDevice_t *device );
 
 int    _lwsP2pCb( struct libwebsocket_context *context,
                   struct libwebsocket *wsi,
