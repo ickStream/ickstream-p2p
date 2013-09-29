@@ -755,19 +755,30 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 \*------------------------------------------------------------------------*/
   device = _ickLibDeviceFindByUuid( ictx, ssdp->uuid );
   if( !device ) {
-    loginfo( "_ickDeviceRemove (%s): no instance found.", ssdp->usn );
+    logwarn( "_ickDeviceRemove (%s): no instance found.", ssdp->usn );
     _ickLibDeviceListUnlock( ictx );
     _ickTimerListUnlock( ictx );
     return 0;
   }
 
 /*------------------------------------------------------------------------*\
-    An ickstream device is disappearing?
+   Execute callback with all registered services
 \*------------------------------------------------------------------------*/
-  _ickDeviceLock( device );
-
-  // Execute callback with all registered services
   _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_REMOVED, device->services );
+
+/*------------------------------------------------------------------------*\
+    Device still connected?
+\*------------------------------------------------------------------------*/
+  if( device->wsi ) {
+    debug( "_ickDeviceRemove (%s): still connected.", ssdp->usn );
+    _ickLibDeviceListUnlock( ictx );
+    _ickTimerListUnlock( ictx );
+    return 0;
+  }
+
+/*------------------------------------------------------------------------*\
+   Get rid of device
+\*------------------------------------------------------------------------*/
 
   // Unlink from device list
   _ickLibDeviceRemove( ictx, device );
