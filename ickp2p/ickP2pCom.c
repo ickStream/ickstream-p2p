@@ -410,7 +410,6 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
 /*------------------------------------------------------------------------*\
     Initiate connection
 \*------------------------------------------------------------------------*/
-  device->localIsServer = 0;
   device->wsi = libwebsocket_client_connect_extended(
                     context,
                     address,
@@ -423,10 +422,12 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
                     -1,                       // ietf_version_or_minus_one
                     psd );
   if( !device->wsi ) {
-    logerr( "_ickWebSocketOpen (%s): Could not create lws client socket.",
+    debug( "_ickWebSocketOpen (%s): Could not create lws client socket.",
             device->uuid );
     irc = ICKERR_LWSERR;
   }
+  else
+    device->localIsServer = 0;
 
 /*------------------------------------------------------------------------*\
     Clean up, that's all

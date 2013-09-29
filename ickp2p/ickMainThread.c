@@ -1233,7 +1233,7 @@ void _ickTimerListLock( ickP2pContext_t *ictx )
 \*=========================================================================*/
 void _ickTimerListUnlock( ickP2pContext_t *ictx )
 {
-  debug ( "_ickTimerListLock (%p): unlocked", ictx );
+  debug ( "_ickTimerListUnlock (%p): unlocked", ictx );
   pthread_mutex_unlock( &ictx->timersMutex );
 }
 

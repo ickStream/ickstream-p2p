@@ -205,7 +205,7 @@ static void _ickWGetLock( ickWGetContext_t *context )
 \*=========================================================================*/
 static void _ickWGetUnlock( ickWGetContext_t *context )
 {
-  debug ( "_ickWGetLock (%s): unlocked", context->uri );
+  debug ( "_ickWGetUnlock (%s): unlocked", context->uri );
   pthread_mutex_unlock( &context->mutex );
 }
 

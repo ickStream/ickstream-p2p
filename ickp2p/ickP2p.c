@@ -905,7 +905,7 @@ void _ickLibInterfaceListUnlock( ickP2pContext_t *ictx )
 \*=========================================================================*/
 static void _ickLibInterfaceDestruct( ickInterface_t *interface )
 {
-  debug( "_ickLibInterfaceDestruct (%p): %s", interface->name );
+  debug( "_ickLibInterfaceDestruct: %s", interface->name );
 
 /*------------------------------------------------------------------------*\
     Close SSDP socket (if any)

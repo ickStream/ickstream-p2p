@@ -682,6 +682,8 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
       retval = -1;
       goto bail;
     }
+
+    // This might be rejected if a connection was initiated by peer
     _ickWebSocketOpen( ictx->lwsContext, device );
   }
 
