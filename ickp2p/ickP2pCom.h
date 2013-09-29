@@ -43,6 +43,7 @@ Remarks         : -
 //
 typedef struct {
   ickP2pContext_t *ictx;         // weak
+  int              kill;         // close connection without modifying device
   char            *uuid;         // strong
   char            *host;         // strong
   ickDevice_t     *device;       // weak

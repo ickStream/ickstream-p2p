@@ -545,14 +545,18 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       psd->host = _ickLwsDupToken( wsi, WSI_TOKEN_HOST );
       if( !psd->host ) {
         logwarn( "_lwsP2pCb: Incoming connection rejected (no HOST).");
-        return -1;
+        psd->kill = 1;
+        libwebsocket_callback_on_writable( context, wsi );
+        return -1; // No effect for LWS_CALLBACK_ESTABLISHED
       }
 
       // Get origin
       psd->uuid = _ickLwsDupToken( wsi, WSI_TOKEN_ORIGIN );
       if( !psd->uuid ) {
         logwarn( "_lwsP2pCb: Incoming connection rejected (no UUID).");
-        return -1;
+        psd->kill = 1;
+        libwebsocket_callback_on_writable( context, wsi );
+        return -1; // No effect for LWS_CALLBACK_ESTABLISHED
       }
 
       // Lock device list and try to find device
@@ -569,7 +573,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
                     device->uuid, device->location, device->wsi, wsi);
           psd->device = device;
           _ickLibDeviceListUnlock( ictx );
-          return -1;
+          psd->kill = 1;
+          libwebsocket_callback_on_writable( context, wsi );
+          return -1; // No effect for LWS_CALLBACK_ESTABLISHED
         }
 
         // Device is handled by a wget task (hopefully initiated by SSDP discovery)
@@ -578,7 +584,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
                     device->uuid, device->location );
           psd->device = device;
           _ickLibDeviceListUnlock( ictx );
-          return -1;
+          psd->kill = 1;
+          libwebsocket_callback_on_writable( context, wsi );
+          return -1; // No effect for LWS_CALLBACK_ESTABLISHED
         }
 
         // This is probably a reconnect
@@ -590,7 +598,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         else {
           debug( "_lwsP2pCb (%s): Connection rejected due to local connection matrix", device->uuid );
           _ickLibDeviceListUnlock( ictx );
-          return -1;
+          psd->kill = 1;
+          libwebsocket_callback_on_writable( context, wsi );
+          return -1; // No effect for LWS_CALLBACK_ESTABLISHED
         }
       }
 
@@ -604,7 +614,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         if( !psd->host ) {
           logwarn( "_lwsP2pCb: Incoming connection rejected (no HOST).");
           _ickLibDeviceListUnlock( ictx );
-          return -1;
+          psd->kill = 1;
+          libwebsocket_callback_on_writable( context, wsi );
+          return -1; // No effect for LWS_CALLBACK_ESTABLISHED
         }
         debug( "_lwsP2pCb (%s): Discovered new device via incoming ws connection from \"%s\".",
                psd->uuid, psd->host );
@@ -614,14 +626,18 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         if( !device ) {
           logerr( "_lwsP2pCb: out of memory" );
           _ickLibDeviceListUnlock( ictx );
-          return -1;
+          psd->kill = 1;
+          libwebsocket_callback_on_writable( context, wsi );
+          return -1; // No effect for LWS_CALLBACK_ESTABLISHED
         }
 
         // Get URL of ickstream root device
         if( asprintf(&dscrPath,"http://%s/%s.xml",psd->host,ICKDEVICE_STRING_ROOT)<0 ) {
           logerr( "_lwsP2pCb: out of memory" );
           _ickLibDeviceListUnlock( ictx );
-          return -1;
+          psd->kill = 1;
+          libwebsocket_callback_on_writable( context, wsi );
+          return -1; // No effect for LWS_CALLBACK_ESTABLISHED
         }
         _ickDeviceSetLocation( device, dscrPath );
 
@@ -633,7 +649,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
               psd->uuid, psd->host, ickStrError(irc) );
           _ickDeviceFree( device );
           _ickLibDeviceListUnlock( ictx );
-          return -1;
+          psd->kill = 1;
+          libwebsocket_callback_on_writable( context, wsi );
+          return -1; // No effect for LWS_CALLBACK_ESTABLISHED
         }
         _ickLibWGettersLock( ictx );
         _ickLibWGettersAdd( ictx, wget );
@@ -665,6 +683,12 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       device = psd->device;
       debug( "_lwsP2pCb %d: %s connection is writable", socket,
              reason==LWS_CALLBACK_CLIENT_WRITEABLE?"client":"server" );
+
+      // Kill this connection?
+      if( psd->kill ) {
+        debug( "_lwsP2pCb %d: closing connection on kill request", socket );
+        return -1;
+      }
 
       // Check wsi
       if( wsi!=device->wsi ) {
@@ -799,8 +823,13 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       device = psd->device;
       debug( "_lwsP2pCb %d: connection closed (%s)", socket, device?device->uuid:"<unknown UUID>" );
 
+      // Kill this connection?
+      if( psd->kill ) {
+        debug( "_lwsP2pCb %d: connection killed (no cleanup)", socket );
+      }
+
       // Mark and reset devices descriptor
-      if( device ) {
+      if( device && !psd->kill ) {
 
         // Remove heartbeat and delayed write handler for this device
         _ickTimerDeleteAll( ictx, _ickDeviceHeartbeatTimerCb, device, 0 );

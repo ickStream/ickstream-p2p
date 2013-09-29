@@ -673,10 +673,15 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   }
 
 /*------------------------------------------------------------------------*\
-    If the device is complete, but not connected, reinitiate web socket connection
+    If the device is complete, but not connected,
+    reinitiate web socket connection with new location
 \*------------------------------------------------------------------------*/
   else if( !device->wsi && device->doConnect ) {
     debug( "_ickDeviceUpdate (%s): trying to reconnect", device->uuid );
+    if( _ickDeviceSetLocation(device,ssdp->location) ) {
+      retval = -1;
+      goto bail;
+    }
     _ickWebSocketOpen( ictx->lwsContext, device );
   }
 
