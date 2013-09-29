@@ -100,11 +100,15 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
   _ickLibDeviceListLock( ictx );
   if( uuid ) {
     device = _ickLibDeviceFindByUuid( ictx, uuid );
+
+    // Unknown device?
     if( !device ) {
       _ickLibDeviceListUnlock( ictx );
       return ICKERR_NODEVICE;
     }
-    if( !device->wsi ) {
+
+    // Not connected?
+    if( !device->wsi || device->ickP2pLevel==ICKP2PLEVEL_GENERIC ) {
       _ickLibDeviceListUnlock( ictx );
       return ICKERR_NOTCONNECTED;
     }
@@ -133,7 +137,7 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
 /*------------------------------------------------------------------------*\
     Ignore unconnected devices in broadcast mode
 \*------------------------------------------------------------------------*/
-    if( !device->wsi )
+    if( !device->wsi || device->ickP2pLevel==ICKP2PLEVEL_GENERIC )
       goto nextDevice;
 
 /*------------------------------------------------------------------------*\
@@ -194,11 +198,7 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
 /*------------------------------------------------------------------------*\
     Book a writable callback for the devices wsi
 \*------------------------------------------------------------------------*/
-    if( device->wsi )
-      libwebsocket_callback_on_writable( ictx->lwsContext, device->wsi );
-    else
-      debug( "ickP2pSendMsg (%s): sending deferred, wsi not yet present (%ld bytes).",
-             device->uuid, (long)mSize );
+    libwebsocket_callback_on_writable( ictx->lwsContext, device->wsi );
 
 /*------------------------------------------------------------------------*\
     Handle next device in notification mode
@@ -685,6 +685,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       // Check if protocol level is already known. This might not the case for incoming LWS connections
       // when the XML file was not yet received or interpreted. Then delay the sending of messages as
       // we cannot construct a preamble. Recheck in 100 ms
+#if 0
+      // fixme: not needed as we check this before sending messages
       if( device->ickP2pLevel==ICKP2PLEVEL_GENERIC ) {
         _ickTimerListLock( ictx );
         if( !_ickTimerFind(ictx,_ickWriteTimerCb,device,0) ) {
@@ -698,6 +700,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         _ickDeviceUnlock( device );
         break;
       }
+#endif
 
       // Try to transmit the current message
       remainder = _ickP2pComTransmit( wsi, message );
@@ -721,7 +724,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       if( remainder )
         libwebsocket_callback_on_writable( context, wsi );
 
-      // If complete, delete message and chack for a next one
+      // If complete, delete message and check for a next one
       else {
         _ickDeviceRemoveAndFreeMessage( device, message );
         device->nTx++;

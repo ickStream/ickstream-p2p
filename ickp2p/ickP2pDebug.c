@@ -28,6 +28,8 @@ Remarks         : Library needs to be compiled with ICK_P2PENABLEDEBUGAPI
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <libwebsockets.h>
 #include <arpa/inet.h>
 
@@ -290,7 +292,7 @@ static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
   int             i;
   int             rc;
   char           *result;
-  debug( "_ickContextStateJson (%p): %s", ictx->deviceUuid );
+  debug( "_ickContextStateJson (%p): %s", ictx, ictx->deviceUuid );
   indent += JSON_INDENT;
 
 /*------------------------------------------------------------------------*\
@@ -380,6 +382,7 @@ static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
 \*------------------------------------------------------------------------*/
   rc = asprintf( &result,
                   "{\n"
+                  "%*s\"pid\": %d,\n"
                   "%*s\"uuid\": \"%s\",\n"
                   "%*s\"name\": \"%s\",\n"
                   "%*s\"services\": %d,\n"
@@ -401,6 +404,7 @@ static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
                   "%*s\"interfaces\": %s\n"
                   "%*s\"devices\": %s\n"
                         "%*s}\n",
+                  indent, "", JSON_INTEGER( getpid() ),
                   indent, "", JSON_STRING( ictx->deviceUuid ),
                   indent, "", JSON_STRING( ictx->deviceName ),
                   indent, "", JSON_INTEGER( ictx->ickServices ),

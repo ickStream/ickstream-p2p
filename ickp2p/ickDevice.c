@@ -255,7 +255,7 @@ ickErrcode_t _ickDeviceRemoveAndFreeMessage( ickDevice_t *device, ickMessage_t *
     if( walk==message )
       break;
   if( !walk ) {
-    logerr( "_ickDeviceRemoveMessage (%s): message not member of output queue",
+    logerr( "_ickDeviceRemoveAndFreeMessage (%s): message not member of output queue",
             device->uuid );
     return ICKERR_NOMEMBER;
   }

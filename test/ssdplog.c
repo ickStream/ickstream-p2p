@@ -308,7 +308,7 @@ int main( int argc, char *argv[] )
     fprintf( stderr, "Could not set O_NONBLOCK on socket (%s)", strerror(errno) );
 
 /*------------------------------------------------------------------------*\
-    Reuse address (multiple processes will receive MCASTS)
+    Reuse address (multiple processes will receive MCASTs)
 \*------------------------------------------------------------------------*/
   opt = 1;
   rc = setsockopt( sd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt) );

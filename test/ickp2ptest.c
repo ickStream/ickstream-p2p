@@ -33,6 +33,8 @@ Remarks         : -
 #include <time.h>
 #include <syslog.h>
 #include <uuid/uuid.h>
+#include <sys/select.h>
+#include <sys/time.h>
 
 #include "config.h"
 #include "ickP2p.h"
@@ -73,12 +75,14 @@ int main( int argc, char *argv[] )
 {
   int                  help_flag   = 0;
   int                  vers_flag   = 0;
+  int                  loop_flag   = 0;
   const char          *cfg_fname   = NULL;
   char                *uuidStr     = NULL;
   const char          *name        = DEVICENAME;
   const char          *ifname      = IFNAME;
   const char          *port_arg    = "1900";
   const char          *verb_arg    = "4";
+  const char          *wait_arg    = "10000";
   const char          *service_arg = NULL;
 
   ickErrcode_t         irc;
@@ -86,6 +90,7 @@ int main( int argc, char *argv[] )
   uuid_t               uuid;
   ickP2pServicetype_t  service;
   int                  port        = 1900;
+  int                  waitspan    = 10000;
   int                  cntr;
   char                *vlp;
   long                 i;
@@ -101,7 +106,9 @@ int main( int argc, char *argv[] )
   addarg( "*name",     "-n",  &name,        "name",      "Use Name for this device" );
   addarg( "*port",     "-p",  &port_arg,    "port",      "SSDP listener port" );
   addarg( "*idev",     "-i",  &ifname,      "interface", "Main network interface" );
+  addarg( "*loopback", "-l",  &loop_flag,   NULL,        "Enable UPnP self discovery" );
   addarg( "*services", "-s",  &service_arg, "bitvector", "Announce services (default: random)" );
+  addarg( "*wait",     "-w",  &wait_arg,    "millisecs", "Maximum wait time between two messages" );
   addarg( "*verbose",  "-v",  &verb_arg,    "level",     "Set ickp2p logging level (0-7)" );
 
 /*-------------------------------------------------------------------------*\
@@ -194,6 +201,20 @@ int main( int argc, char *argv[] )
   }
 
 /*------------------------------------------------------------------------*\
+    Get wait time windows
+\*------------------------------------------------------------------------*/
+  if( wait_arg ) {
+    char *eptr;
+    waitspan = (int)strtol( wait_arg, &eptr, 0 );
+    while( isspace(*eptr) )
+      eptr++;
+    if( *eptr || waitspan<0 ) {
+      fprintf( stderr, "Bad wait time: '%s'\n", port_arg );
+      return 1;
+    }
+  }
+
+/*------------------------------------------------------------------------*\
     Create a very large payload message
 \*------------------------------------------------------------------------*/
   vlp = malloc( VLP_SIZE );
@@ -217,7 +238,7 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Create context
 \*------------------------------------------------------------------------*/
-  ictx = ickP2pCreate( DEVICENAME, uuidStr, "./httpFolder", 100, port, service, &irc  );
+  ictx = ickP2pCreate( name, uuidStr, "./httpFolder", 100, port, service, &irc  );
   if( !ictx ) {
     fprintf( stderr, "ickP2pCreate: %s\n", ickStrError(irc) );
     return -1;
@@ -265,10 +286,12 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Set loopback mode
 \*------------------------------------------------------------------------*/
-  irc = ickP2pUpnpLoopback( ictx, 1 );
-  if( irc ) {
-    printf( "ickP2pUpnpLoopback: %s\n", ickStrError(irc) );
-    goto end;
+  if( loop_flag ) {
+    irc = ickP2pUpnpLoopback( ictx, 1 );
+    if( irc ) {
+      printf( "ickP2pUpnpLoopback: %s\n", ickStrError(irc) );
+      goto end;
+    }
   }
 
 /*------------------------------------------------------------------------*\
@@ -312,6 +335,7 @@ int main( int argc, char *argv[] )
       goto end;
     }
 
+    // Send large payload message
     if( !(cntr%10) ) {
       printf( "Sending very large payload (%ld bytes) message #%03d...\n", (long)VLP_SIZE, ++cntr );
       irc = ickP2pSendMsg( ictx, NULL, ICKP2P_SERVICE_ANY, service, vlp, VLP_SIZE );
@@ -321,8 +345,14 @@ int main( int argc, char *argv[] )
       }
     }
 
-    // wait a random time [0-9s]
-    sleep( random()%10 );
+    // wait a random time
+    if( waitspan ) {
+      struct timeval timeout;
+      long           waitms = random()%(waitspan+1);
+      timeout.tv_sec  = waitms/1000;
+      timeout.tv_usec = (waitms%1000)*1000;
+      select( 0, NULL, NULL, NULL, &timeout);
+    }
 
   }
 
