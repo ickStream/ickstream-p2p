@@ -427,7 +427,7 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
     irc = ICKERR_LWSERR;
   }
   else
-    device->localIsServer = 0;
+    device->connectionState = ICKDEVICE_CLIENTCONNECTING;
 
 /*------------------------------------------------------------------------*\
     Clean up, that's all
@@ -516,8 +516,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       if( _ickDeviceOutQueue(device) )
         libwebsocket_callback_on_writable( context, wsi );
 
-      // Timestamp for connection
+      // Timestamp and mode of connection
       device->tConnect = _ickTimeNow();
+      device->connectionState = ICKDEVICE_ISCLIENT;
 
       // Execute discovery callback
       _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
@@ -525,7 +526,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       break;
 
 /*------------------------------------------------------------------------*\
-   Filter incoming request, PSD not available at this point...
+   Filter connections (both inbound and outbound),
+   PSD not available at this point...
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
       socket = libwebsocket_get_socket_fd( wsi );
@@ -555,8 +557,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       _ickLibDeviceListLock( ictx );
       device = _ickLibDeviceFindByUuid( ictx , uuid );
 
-      // Device already known?
-      if( device ) {
+      // Device already known and no client under initialization (i.e. server?) ?
+      if( device && device->connectionState!=ICKDEVICE_CLIENTCONNECTING ) {
 
         // Already connected?
         if( device->wsi ) {
@@ -643,7 +645,10 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
       // Device already known?
       if( device ) {
-        debug( "_lwsP2pCb (%s): Reconnecting already initialized device", device->uuid );
+        debug( "_lwsP2pCb (%s): (Re)connected already initialized device", device->uuid );
+
+        // Execute discovery callback
+        _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
       }
 
       // Device unknown (i.e. was not (yet) discovered by SSDP)
@@ -698,10 +703,10 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       _ickLibDeviceListUnlock( ictx );
 
       // We are server, set connection timestamp
-      device->localIsServer = 1;
-      device->tConnect      = _ickTimeNow();
-      device->wsi           = wsi;
-      psd->device           = device;
+      device->connectionState = ICKDEVICE_ISSERVER;
+      device->tConnect        = _ickTimeNow();
+      device->wsi             = wsi;
+      psd->device             = device;
 
       break;
 
@@ -889,7 +894,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         }
 
         // Reset device state
-        device->localIsServer = 0;
+        device->connectionState = ICKDEVICE_NOTCONNECTED;
         device->wsi           = NULL;
       }
 

@@ -564,7 +564,7 @@ static char *_ickDeviceStateJson( ickDevice_t *device, int indent )
                   "%*s\"doConnect\": %s,\n"
                   "%*s\"tConnect\": %f,\n"
                   "%*s\"tDisconnect\": %f,\n"
-                  "%*s\"localIsServer\": %s,\n"
+                  "%*s\"connectionState\": %d,\n"
                   "%*s\"rx\": %d,\n"
                   "%*s\"rxSegmented\": %d,\n"
                   "%*s\"tx\": %d,\n"
@@ -588,7 +588,7 @@ static char *_ickDeviceStateJson( ickDevice_t *device, int indent )
                   indent, "", JSON_BOOL( device->doConnect ),
                   indent, "", JSON_REAL( device->tConnect ),
                   indent, "", JSON_REAL( device->tDisconnect ),
-                  indent, "", JSON_BOOL( device->localIsServer ),
+                  indent, "", JSON_INTEGER( device->connectionState ),
                   indent, "", JSON_INTEGER( device->nRx ),
                   indent, "", JSON_INTEGER( device->nRxSegmented ),
                   indent, "", JSON_INTEGER( device->nTx ),

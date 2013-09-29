@@ -302,7 +302,7 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
 
       // Signal device readiness to user code
       _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_NEW, device->services );
-      if( /* device->doConnect && */ device->localIsServer )
+      if( device->connectionState==ICKDEVICE_ISSERVER )
         _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
 
       // No more wgetter active for this device

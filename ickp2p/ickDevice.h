@@ -66,36 +66,46 @@ typedef enum {
 } ickDeviceType_t;
 
 //
+// Type of device connection
+//
+typedef enum {
+  ICKDEVICE_NOTCONNECTED,
+  ICKDEVICE_CLIENTCONNECTING,
+  ICKDEVICE_ISCLIENT,
+  ICKDEVICE_ISSERVER
+} ickDeviceConnection_t;
+
+//
 // An ickstream device
 //
 struct _ickDevice {
-  ickDevice_t         *prev;
-  ickDevice_t         *next;
-  ickP2pContext_t     *ictx;            // weak
-  pthread_mutex_t      mutex;
-  ickDeviceType_t      type;
-  int                  lifetime;
-  char                *uuid;          // strong
-  char                *location;      // strong
-  int                  ickUpnpVersion;
-  ickP2pServicetype_t  services;
-  char                *friendlyName;  // strong
-  ickP2pLevel_t        ickP2pLevel;
-  ickMessage_t        *outQueue;
-  double               tCreation;
-  ickWGetContext_t    *wget;
-  double               tXmlComplete;
-  int                  doConnect;
-  double               tConnect;
-  double               tDisconnect;
-  int                  localIsServer;
-  int                  nRx;
-  int                  nRxSegmented;
-  int                  nTx;
-  double               tLastRx;
-  double               tLastTx;
+  ickDevice_t          *prev;
+  ickDevice_t          *next;
+  ickP2pContext_t      *ictx;            // weak
+  pthread_mutex_t       mutex;
+  ickDeviceType_t       type;
+  int                   lifetime;
+  char                 *uuid;          // strong
+  char                 *location;      // strong
+  int                   ickUpnpVersion;
+  ickP2pServicetype_t   services;
+  char                 *friendlyName;  // strong
+  ickP2pLevel_t         ickP2pLevel;
+  ickMessage_t         *outQueue;
+  double                tCreation;
+  ickWGetContext_t     *wget;
+  double                tXmlComplete;
+  int                   doConnect;
+  double                tConnect;
+  double                tDisconnect;
+  ickDeviceConnection_t connectionState;
+  int                   nRx;
+  int                   nRxSegmented;
+  int                   nTx;
+  double                tLastRx;
+  double                tLastTx;
 
-  struct libwebsocket *wsi;
+  struct libwebsocket  *wsi;
 
 };
 
