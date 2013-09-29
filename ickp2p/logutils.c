@@ -181,10 +181,9 @@ static void __icklog( const char *file, int line, int prio, const char *fmt, ...
     return;
 
 /*------------------------------------------------------------------------*\
-    Get timestamp, init arguments, lock mutex
+    Get timestamp and lock mutex
 \*------------------------------------------------------------------------*/
   gettimeofday( &tv, NULL );
-  va_start( a_list, fmt );
   pthread_mutex_lock( &loggerMutex );
   
 /*------------------------------------------------------------------------*\
@@ -201,7 +200,9 @@ static void __icklog( const char *file, int line, int prio, const char *fmt, ...
       fprintf( ickp2pLogStream, ": " );
 
     // the message itself
+    va_start( a_list, fmt );
     vfprintf( ickp2pLogStream, fmt, a_list );
+    va_end ( a_list );
 
     // New line and flush stream buffer
     fprintf( ickp2pLogStream, "\n" );
@@ -220,10 +221,13 @@ static void __icklog( const char *file, int line, int prio, const char *fmt, ...
       goto bail;
 
     // Construct the log message
+    va_start( a_list, fmt );
     if( vasprintf(&entry->text,fmt,a_list)<0 ) {
+      va_end ( a_list );
       free( entry );
       goto bail;
     }
+    va_end ( a_list );
 
     // Store meta data
     entry->file      = file;
@@ -241,10 +245,9 @@ static void __icklog( const char *file, int line, int prio, const char *fmt, ...
   }
 
 /*------------------------------------------------------------------------*\
-    Clean variable argument list, unlock mutex
+    Unlock mutex
 \*------------------------------------------------------------------------*/
 bail:
-  va_end ( a_list );
   pthread_mutex_unlock( &loggerMutex );
 }
 
