@@ -410,6 +410,7 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
 /*------------------------------------------------------------------------*\
     Initiate connection
 \*------------------------------------------------------------------------*/
+  device->localIsServer = 0;
   device->wsi = libwebsocket_client_connect_extended(
                     context,
                     address,
@@ -489,19 +490,14 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       break;
 
 /*------------------------------------------------------------------------*\
-   Filter incomming request
-\*------------------------------------------------------------------------*/
-    case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
-      socket = libwebsocket_get_socket_fd( wsi );
-      debug( "_lwsP2pCb %d: filter protocol connection", socket );
-      break;
-
-/*------------------------------------------------------------------------*\
-    Filter connection requests
+    Filter outgoing connection requests
 \*------------------------------------------------------------------------*/
     case LWS_CALLBACK_CLIENT_FILTER_PRE_ESTABLISH:
       socket = libwebsocket_get_socket_fd( wsi );
       debug( "_lwsP2pCb %d: client filter pre-establish", socket );
+#ifdef ICK_DEBUG
+      _ickLwsDumpHeaders( wsi );
+#endif
       break;
 
 /*------------------------------------------------------------------------*\
@@ -525,6 +521,87 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       // Execute discovery callback
       _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
 
+      break;
+
+/*------------------------------------------------------------------------*\
+   Filter incoming request, PSD not available at this point...
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
+      socket = libwebsocket_get_socket_fd( wsi );
+      debug( "_lwsP2pCb %d: filter protocol connection", socket );
+
+#ifdef ICK_DEBUG
+      _ickLwsDumpHeaders( wsi );
+#endif
+      char *host, *uuid;
+
+      // Get remote host (we use the HOST field for transmission)
+      host = _ickLwsDupToken( wsi, WSI_TOKEN_HOST );
+      if( !host ) {
+        logwarn( "_lwsP2pCb: Incoming connection rejected (no HOST).");
+        return -1;
+      }
+
+      // Get origin
+      uuid = _ickLwsDupToken( wsi, WSI_TOKEN_ORIGIN );
+      if( !uuid ) {
+        Sfree( host );
+        logwarn( "_lwsP2pCb: Incoming connection rejected (no UUID).");
+        return -1;
+      }
+
+      // Lock device list and try to find device
+      _ickLibDeviceListLock( ictx );
+      device = _ickLibDeviceFindByUuid( ictx , uuid );
+
+      // Device already known?
+      if( device ) {
+
+        // Already connected?
+        if( device->wsi ) {
+          debug( "_lwsP2pCb (%s): Connection rejected, wsi present for \"%s\" (%p|%p)",
+                  device->uuid, device->location, device->wsi, wsi);
+          _ickLibDeviceListUnlock( ictx );
+          Sfree( host );
+          Sfree( uuid );
+          return -1;
+        }
+
+        // Device initializing: a wget task exists
+        else if( device->wget ) {
+          debug( "_lwsP2pCb (%s): Connection rejected, XML retriever running \"%s\"",
+                 device->uuid, device->location );
+          _ickLibDeviceListUnlock( ictx );
+          Sfree( host );
+          Sfree( uuid );
+          return -1;
+        }
+
+        // Incoming connect from a device we don't want to connect to (should not happen)
+        else if( !device->doConnect ) {
+          debug( "_lwsP2pCb (%s): Connection rejected due to local connection matrix", device->uuid );
+          _ickLibDeviceListUnlock( ictx );
+          Sfree( host );
+          Sfree( uuid );
+          return -1;
+        }
+
+        // This is a reconnect: Set (new!) URL of ickstream root device
+        debug( "_lwsP2pCb (%s): Reconnecting already initialized device", device->uuid );
+        if( asprintf(&dscrPath,"http://%s/%s.xml",host,ICKDEVICE_STRING_ROOT)<0 ) {
+          logerr( "_lwsP2pCb: out of memory" );
+          _ickLibDeviceListUnlock( ictx );
+          Sfree( host );
+          Sfree( uuid );
+          return -1;
+        }
+        Sfree( device->location );
+        device->location = dscrPath;
+      }
+
+      _ickLibDeviceListUnlock( ictx );
+      Sfree( host );
+      Sfree( uuid );
       break;
 
 /*------------------------------------------------------------------------*\
@@ -563,61 +640,15 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       _ickLibDeviceListLock( ictx );
       device = _ickLibDeviceFindByUuid( ictx , psd->uuid );
 
-
       // Device already known?
       if( device ) {
-
-        // Already connected: this is somehow strange
-        if( device->wsi ) {
-          logwarn( "_lwsP2pCb (%s): Connection rejected, using present wsi for \"%s\" (%p|%p)",
-                    device->uuid, device->location, device->wsi, wsi);
-          psd->device = device;
-          _ickLibDeviceListUnlock( ictx );
-          psd->kill = 1;
-          libwebsocket_callback_on_writable( context, wsi );
-          return -1; // No effect for LWS_CALLBACK_ESTABLISHED
-        }
-
-        // Device is handled by a wget task (hopefully initiated by SSDP discovery)
-        else if( device->wget ) {
-          logwarn( "_lwsP2pCb (%s): Connection rejected, XML retriever running \"%s\"",
-                    device->uuid, device->location );
-          psd->device = device;
-          _ickLibDeviceListUnlock( ictx );
-          psd->kill = 1;
-          libwebsocket_callback_on_writable( context, wsi );
-          return -1; // No effect for LWS_CALLBACK_ESTABLISHED
-        }
-
-        // This is probably a reconnect
-        else if( device->doConnect ) {
-          debug( "_lwsP2pCb (%s): (Re)connecting already known device", device->uuid );
-        }
-
-        // Incoming connect from a device we don't want to connect to (should not happen)
-        else {
-          debug( "_lwsP2pCb (%s): Connection rejected due to local connection matrix", device->uuid );
-          _ickLibDeviceListUnlock( ictx );
-          psd->kill = 1;
-          libwebsocket_callback_on_writable( context, wsi );
-          return -1; // No effect for LWS_CALLBACK_ESTABLISHED
-        }
+        debug( "_lwsP2pCb (%s): Reconnecting already initialized device", device->uuid );
       }
-
 
       // Device unknown (i.e. was not (yet) discovered by SSDP)
       else {
-        ickWGetContext_t *wget;
         ickErrcode_t      irc;
 
-        // Need client hostname for device location
-        if( !psd->host ) {
-          logwarn( "_lwsP2pCb: Incoming connection rejected (no HOST).");
-          _ickLibDeviceListUnlock( ictx );
-          psd->kill = 1;
-          libwebsocket_callback_on_writable( context, wsi );
-          return -1; // No effect for LWS_CALLBACK_ESTABLISHED
-        }
         debug( "_lwsP2pCb (%s): Discovered new device via incoming ws connection from \"%s\".",
                psd->uuid, psd->host );
 
@@ -639,12 +670,11 @@ int _lwsP2pCb( struct libwebsocket_context *context,
           libwebsocket_callback_on_writable( context, wsi );
           return -1; // No effect for LWS_CALLBACK_ESTABLISHED
         }
-        _ickDeviceSetLocation( device, dscrPath );
+        device->location = dscrPath;
 
-        // Start retrieval of unpn descriptor
-        wget = _ickWGetInit( ictx, dscrPath, _ickWGetXmlCb, device, &irc );
-        Sfree( dscrPath );
-        if( !wget ) {
+        // Start retrieval of UPnP descriptor
+        device->wget = _ickWGetInit( ictx, dscrPath, _ickWGetXmlCb, device, &irc );
+        if( !device->wget ) {
           logerr( "_lwsP2pCb (%s): could not start xml retriever \"%s\" (%s).",
               psd->uuid, psd->host, ickStrError(irc) );
           _ickDeviceFree( device );
@@ -654,13 +684,13 @@ int _lwsP2pCb( struct libwebsocket_context *context,
           return -1; // No effect for LWS_CALLBACK_ESTABLISHED
         }
         _ickLibWGettersLock( ictx );
-        _ickLibWGettersAdd( ictx, wget );
+        _ickLibWGettersAdd( ictx, device->wget );
         _ickLibWGettersUnlock( ictx );
 
         // Expiration and heartbeat timer for WS discovered devices will be created in _ickWGetXmlCb()
         // fixme: there might be lws messages received before the xml file is interpreted, ...
 
-        //Link New device to discovery handler
+        // Link new device to discovery handler
         _ickLibDeviceAdd( ictx, device );
       }
 

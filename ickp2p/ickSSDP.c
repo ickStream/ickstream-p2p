@@ -592,7 +592,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 \*------------------------------------------------------------------------*/
   device = _ickLibDeviceFindByUuid( ictx, ssdp->uuid );
   if( device ) {
-    debug ( "_ickDeviceUpdate (%s): found an instance (updating).", ssdp->usn );
+    debug ( "_ickDeviceUpdate (%s): found an instance (updating or reconnecting).", ssdp->usn );
   }
   else {
     debug ( "_ickDeviceUpdate (%s): adding new ickstream device (%s)",
