@@ -218,7 +218,7 @@ char *_ickP2pGetDebugFile( ickP2pContext_t *ictx, const char *uri )
 \*=========================================================================*/
 char *_ickP2pGetLogFile( ickP2pContext_t *ictx, const char *uri )
 {
-  int          level;
+  int          level = 7;
   char        *logContent;
   int          dlen, hlen;
   char        *message;
