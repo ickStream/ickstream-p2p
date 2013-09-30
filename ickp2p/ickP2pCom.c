@@ -35,6 +35,7 @@ Remarks         : refactored from ickP2PComm.c
 #include "ickMainThread.h"
 #include "ickDescription.h"
 #include "ickDevice.h"
+#include "ickSSDP.h"
 #include "ickP2pCom.h"
 
 
@@ -53,7 +54,6 @@ Remarks         : refactored from ickP2PComm.c
 /*=========================================================================*\
   Private prototypes
 \*=========================================================================*/
-static void  _ickWriteTimerCb( const ickTimer_t *timer, void *data, int tag );
 static void  _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t *device,
                                          const void *message, size_t mSize );
 static int   _ickP2pComTransmit( struct libwebsocket *wsi, ickMessage_t *message );
@@ -744,26 +744,6 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         break;
       }
 
-      // Check if protocol level is already known. This might not the case for incoming LWS connections
-      // when the XML file was not yet received or interpreted. Then delay the sending of messages as
-      // we cannot construct a preamble. Recheck in 100 ms
-#if 0
-      // fixme: not needed as we check this before sending messages
-      if( device->ickP2pLevel==ICKP2PLEVEL_GENERIC ) {
-        _ickTimerListLock( ictx );
-        if( !_ickTimerFind(ictx,_ickWriteTimerCb,device,0) ) {
-          ickErrcode_t irc;
-          irc = _ickTimerAdd( ictx, 100, 1, _ickWriteTimerCb, device, 0 );
-          if( irc )
-            logerr( "_lwsP2pCb (%s): could not create write timer (%s)",
-                    psd->uuid, ickStrError(irc) );
-        }
-        _ickTimerListUnlock( ictx );
-        _ickDeviceUnlock( device );
-        break;
-      }
-#endif
-
       // Try to transmit the current message
       remainder = _ickP2pComTransmit( wsi, message );
 
@@ -865,15 +845,14 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
       // Kill this connection?
       if( psd->kill ) {
-        debug( "_lwsP2pCb %d: connection killed (no cleanup)", socket );
+        debug( "_lwsP2pCb %d: connection killed (no device cleanup)", socket );
       }
 
       // Mark and reset devices descriptor
       if( device && !psd->kill ) {
 
-        // Remove heartbeat and delayed write handler for this device
+        // Remove heartbeat for this device
         _ickTimerDeleteAll( ictx, _ickHeartbeatTimerCb, device, 0 );
-        _ickTimerDeleteAll( ictx, _ickWriteTimerCb, device, 0 );
 
         // Set timestamp
         device->tDisconnect = _ickTimeNow();
@@ -903,6 +882,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
         // Get rid of device descriptor if SSDP is not alive
         if( device->ssdpState!=ICKDEVICE_SSDPALIVE ) {
+          _ickTimerDeleteAll( ictx, _ickDeviceExpireTimerCb, device, 0 );
           _ickLibDeviceRemove( ictx, device );
           _ickDeviceFree( device );
         }
@@ -927,18 +907,6 @@ int _lwsP2pCb( struct libwebsocket_context *context,
     That's all
 \*------------------------------------------------------------------------*/
   return 0;
-}
-
-
-/*=========================================================================*\
-  Execute a timed write request for an wsi
-\*=========================================================================*/
-static void _ickWriteTimerCb( const ickTimer_t *timer, void *data, int tag )
-{
-  const ickDevice_t *device = data;
-  debug( "_ickWriteTimerCb: \"%s\"", device->uuid );
-
-  libwebsocket_callback_on_writable( device->ictx->lwsContext, device->wsi );
 }
 
 
