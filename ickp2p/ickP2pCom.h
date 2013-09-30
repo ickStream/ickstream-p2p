@@ -79,5 +79,7 @@ int    _lwsP2pCb( struct libwebsocket_context *context,
                   enum libwebsocket_callback_reasons reason, void *user,
                   void *in, size_t len );
 
+void        _ickHeartbeatTimerCb( const ickTimer_t *timer, void *data, int tag );
+
 
 #endif /* __ICKP2PCOM_H */

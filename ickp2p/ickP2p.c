@@ -1056,6 +1056,21 @@ ickP2pLibState_t ickP2pGetState( const ickP2pContext_t *ictx )
 }
 
 /*=========================================================================*\
+  Convert state to a string
+\*=========================================================================*/
+const char *ickLibState2Str( ickP2pLibState_t state )
+{
+  switch( state ) {
+    case ICKLIB_CREATED:     return "created";
+    case ICKLIB_RUNNING:     return "running";
+    case ICKLIB_SUSPENDED:   return "suspended";
+    case ICKLIB_TERMINATING: return "terminating";
+  }
+
+  return "Invalid state";
+}
+
+/*=========================================================================*\
   Get os name
 \*=========================================================================*/
 const char *ickP2pGetOsName( const ickP2pContext_t *ictx )

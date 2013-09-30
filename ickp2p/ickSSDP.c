@@ -599,7 +599,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
             ssdp->usn, ssdp->location );
 
     // Allocate and initialize descriptor
-    device = _ickDeviceNew( ssdp->uuid, ICKDEVICE_SSDP );
+    device = _ickDeviceNew( ssdp->uuid );
     if( !device ) {
       logerr( "_ickDeviceUpdate: out of memory" );
       retval = -1;
@@ -626,6 +626,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     // Return code is 1 (a device was added)
     retval = 1;
   }
+  device->ssdpState = ICKDEVICE_SSDPALIVE;
 
 /*------------------------------------------------------------------------*\
     Crate or update expiration timer
@@ -760,6 +761,7 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     _ickTimerListUnlock( ictx );
     return 0;
   }
+  device->ssdpState = ICKDEVICE_SSDPBYEBYE;
 
 /*------------------------------------------------------------------------*\
    Execute callback with all registered services
@@ -771,8 +773,6 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 \*------------------------------------------------------------------------*/
   if( device->wsi ) {
     debug( "_ickDeviceRemove (%s): still connected.", ssdp->usn );
-    // fixme: we should probably eliminate the device from the psd, but we don't have access...
-    // So we keep the device, which will time out...
     _ickLibDeviceListUnlock( ictx );
     _ickTimerListUnlock( ictx );
     return 0;
@@ -789,7 +789,7 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   _ickTimerDeleteAll( ictx, _ickDeviceExpireTimerCb, device, 0 );
 
   // Remove heartbeat handler for this device
-  _ickTimerDeleteAll( ictx, _ickDeviceHeartbeatTimerCb, device, 0 );
+  _ickTimerDeleteAll( ictx, _ickHeartbeatTimerCb, device, 0 );
 
   // Find and remove HTTP clients for this device
   _ickLibWGettersLock( ictx );
@@ -1505,6 +1505,9 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
 }
 
 
+#pragma mark -- Timer callbacks
+
+
 /*=========================================================================*\
   Send a notification: remove from a discovery context
     timer list is already locked
@@ -1545,6 +1548,48 @@ static void _ickSsdpNotifyCb( const ickTimer_t *timer, void *data, int tag )
     Sfree( note->message );
     Sfree( note );
   }
+}
+
+
+/*=========================================================================*\
+  A device has expired: remove from a discovery context
+    timer list is already locked as this is a timer callback
+\*=========================================================================*/
+void _ickDeviceExpireTimerCb( const ickTimer_t *timer, void *data, int tag )
+{
+  ickDevice_t     *device = data;
+  ickP2pContext_t *ictx   = device->ictx;
+
+  debug( "_ickDeviceExpireCb: %s", device->uuid );
+
+/*------------------------------------------------------------------------*\
+    Lock device list
+\*------------------------------------------------------------------------*/
+  _ickLibDeviceListLock( ictx );
+  device->ssdpState = ICKDEVICE_SSDPEXPIRED;
+
+/*------------------------------------------------------------------------*\
+    Execute callback with all registered services
+\*------------------------------------------------------------------------*/
+  _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_EXPIRED, device->services );
+
+/*------------------------------------------------------------------------*\
+    Get rid of device descriptor if not connected
+\*------------------------------------------------------------------------*/
+  if( device->connectionState==ICKDEVICE_NOTCONNECTED ) {
+
+    // Remove heartbeat handler for this device
+    _ickTimerDeleteAll( ictx, _ickHeartbeatTimerCb, device, 0 );
+
+    // Unlink from device list and free instance
+    _ickLibDeviceRemove( ictx, device );
+    _ickDeviceFree( device );
+  }
+
+/*------------------------------------------------------------------------*\
+    Release device list locks
+\*------------------------------------------------------------------------*/
+  _ickLibDeviceListUnlock( ictx );
 }
 
 

@@ -212,7 +212,7 @@ void _ickLibWGettersUnlock( ickP2pContext_t *ictx  );
 void _ickLibWGettersAdd( ickP2pContext_t *ictx , ickWGetContext_t *wget );
 void _ickLibWGettersRemove( ickP2pContext_t *ictx , ickWGetContext_t *wget );
 
-double _ickTimeNow( void );
+double      _ickTimeNow( void );
 
 
 

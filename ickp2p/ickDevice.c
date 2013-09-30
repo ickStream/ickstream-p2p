@@ -63,10 +63,10 @@ Remarks         : refactored from ickDiscoverRegistry
 /*=========================================================================*\
     Create an new device
 \*=========================================================================*/
-ickDevice_t *_ickDeviceNew( const char *uuid, ickDeviceType_t type )
+ickDevice_t *_ickDeviceNew( const char *uuid )
 {
   ickDevice_t *device;
-  debug( "_ickDeviceNew: uuid=\"%s\" type %d", uuid, type );
+  debug( "_ickDeviceNew: \"%s\"", uuid );
 
 /*------------------------------------------------------------------------*\
     Allocate and initialize descriptor
@@ -335,7 +335,36 @@ size_t _ickDevicePendingBytes( ickDevice_t *device )
   return size;
 }
 
+/*=========================================================================*\
+  Convert SSDP state to string
+\*=========================================================================*/
+const char *_ickDeviceSsdpState2Str( ickDeviceSsdpState_t state )
+{
+  switch( state ) {
+    case ICKDEVICE_SSDPUNSEEN:  return "not yet seen";
+    case ICKDEVICE_SSDPALIVE:   return "alive";
+    case ICKDEVICE_SSDPBYEBYE:  return "byebye";
+    case ICKDEVICE_SSDPEXPIRED: return "expired";
+  }
 
+  return "Invalid SSDP state";
+}
+
+
+/*=========================================================================*\
+  Convert connection state to string
+\*=========================================================================*/
+const char *_ickDeviceConnState2Str( ickDeviceConnState_t state )
+{
+  switch( state ) {
+    case ICKDEVICE_NOTCONNECTED:      return "not connected";
+    case ICKDEVICE_CLIENTCONNECTING:  return "client connecting";
+    case ICKDEVICE_ISCLIENT:          return "client (connected)";
+    case ICKDEVICE_ISSERVER:          return "server (connected)";
+  }
+
+  return "Invalid connection state";
+}
 
 
 /*=========================================================================*\

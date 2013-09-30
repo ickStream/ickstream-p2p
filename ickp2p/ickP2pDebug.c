@@ -390,7 +390,7 @@ static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
                   "%*s\"wsPort\": %d,\n"
                   "%*s\"folder\": \"%s\",\n"
                   "%*s\"lifetime\": %d,\n"
-                  "%*s\"state\": %d,\n"
+                  "%*s\"state\": \"%s\",\n"
                   "%*s\"loopback\": %s,\n"
                   "%*s\"customConnectMatrix\": %s,\n"
                   "%*s\"tCreation\": %f,\n"
@@ -412,7 +412,7 @@ static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
                   indent, "", JSON_INTEGER( ictx->lwsPort ),
                   indent, "", JSON_STRING( ictx->upnpFolder),
                   indent, "", JSON_INTEGER( ictx->lifetime ),
-                  indent, "", JSON_INTEGER( ictx->state ),
+                  indent, "", JSON_STRING( ickLibState2Str(ictx->state) ),
                   indent, "", JSON_BOOL( ictx->upnpLoopback ),
                   indent, "", JSON_BOOL( ictx->lwsConnectMatrixCb==ickP2pDefaultConnectMatrixCb ),
                   indent, "", JSON_REAL( ictx->tCreation ),
@@ -551,7 +551,6 @@ static char *_ickDeviceStateJson( ickDevice_t *device, int indent )
   rc = asprintf( &result,
                   "{\n"
                   "%*s\"name\": \"%s\",\n"
-                  "%*s\"type\": %d,\n"
                   "%*s\"tCreation\": %f,\n"
                   "%*s\"UUID\": \"%s\",\n"
                   "%*s\"location\": \"%s\",\n"
@@ -560,11 +559,12 @@ static char *_ickDeviceStateJson( ickDevice_t *device, int indent )
                   "%*s\"lifetime\": %d,\n"
                   "%*s\"services\": %d,\n"
                   "%*s\"getXml\": \"%s\",\n"
-                  "%*s\"tXmlComplete\": %f,\n"
                   "%*s\"doConnect\": %s,\n"
+                  "%*s\"ssdpState\": \"%s\",\n"
+                  "%*s\"connectionState\": \"%s\",\n"
+                  "%*s\"tXmlComplete\": %f,\n"
                   "%*s\"tConnect\": %f,\n"
                   "%*s\"tDisconnect\": %f,\n"
-                  "%*s\"connectionState\": %d,\n"
                   "%*s\"rx\": %d,\n"
                   "%*s\"rxSegmented\": %d,\n"
                   "%*s\"tx\": %d,\n"
@@ -575,7 +575,6 @@ static char *_ickDeviceStateJson( ickDevice_t *device, int indent )
                   "%*s\"message\": %s\n"
                   "%*s}",
                   indent, "", JSON_STRING( device->friendlyName ),
-                  indent, "", JSON_INTEGER( device->type ),
                   indent, "", JSON_REAL( device->tCreation ),
                   indent, "", JSON_STRING( device->uuid ),
                   indent, "", JSON_STRING( device->location ),
@@ -584,11 +583,12 @@ static char *_ickDeviceStateJson( ickDevice_t *device, int indent )
                   indent, "", JSON_INTEGER( device->lifetime ),
                   indent, "", JSON_INTEGER( device->services ),
                   indent, "", JSON_STRING( device->wget?_ickWGetUri(device->wget) : NULL ),
-                  indent, "", JSON_REAL( device->tXmlComplete ),
                   indent, "", JSON_BOOL( device->doConnect ),
+                  indent, "", JSON_STRING( _ickDeviceSsdpState2Str(device->ssdpState) ),
+                  indent, "", JSON_STRING( _ickDeviceConnState2Str(device->connectionState) ),
+                  indent, "", JSON_REAL( device->tXmlComplete ),
                   indent, "", JSON_REAL( device->tConnect ),
                   indent, "", JSON_REAL( device->tDisconnect ),
-                  indent, "", JSON_INTEGER( device->connectionState ),
                   indent, "", JSON_INTEGER( device->nRx ),
                   indent, "", JSON_INTEGER( device->nRxSegmented ),
                   indent, "", JSON_INTEGER( device->nTx ),

@@ -57,23 +57,25 @@ struct _ickMessage {
 };
 
 //
-// Type of device creation
+// Device SSDP state
 //
 typedef enum {
-  ICKDEVICE_LOOPBACK,
-  ICKDEVICE_SSDP,
-  ICKDEVICE_WS
-} ickDeviceType_t;
+  ICKDEVICE_SSDPUNSEEN,
+  ICKDEVICE_SSDPALIVE,
+  ICKDEVICE_SSDPBYEBYE,
+  ICKDEVICE_SSDPEXPIRED
+} ickDeviceSsdpState_t;
 
 //
-// Type of device connection
+// Device connection state
 //
 typedef enum {
   ICKDEVICE_NOTCONNECTED,
   ICKDEVICE_CLIENTCONNECTING,
   ICKDEVICE_ISCLIENT,
   ICKDEVICE_ISSERVER
-} ickDeviceConnection_t;
+} ickDeviceConnState_t;
+
 
 //
 // An ickstream device
@@ -83,7 +85,6 @@ struct _ickDevice {
   ickDevice_t          *next;
   ickP2pContext_t      *ictx;            // weak
   pthread_mutex_t       mutex;
-  ickDeviceType_t       type;
   int                   lifetime;
   char                 *uuid;          // strong
   char                 *location;      // strong
@@ -98,7 +99,8 @@ struct _ickDevice {
   int                   doConnect;
   double                tConnect;
   double                tDisconnect;
-  ickDeviceConnection_t connectionState;
+  ickDeviceConnState_t  connectionState;
+  ickDeviceSsdpState_t  ssdpState;
   int                   nRx;
   int                   nRxSegmented;
   int                   nTx;
@@ -128,7 +130,7 @@ struct _ickDevice {
 /*=========================================================================*\
   Internal prototypes
 \*=========================================================================*/
-ickDevice_t  *_ickDeviceNew( const char *uuid, ickDeviceType_t type );
+ickDevice_t  *_ickDeviceNew( const char *uuid );
 void          _ickDeviceFree( ickDevice_t *device );
 void          _ickDeviceLock( ickDevice_t *device );
 void          _ickDeviceUnlock( ickDevice_t *device );
@@ -140,6 +142,9 @@ ickErrcode_t  _ickDeviceRemoveAndFreeMessage( ickDevice_t *device, ickMessage_t 
 ickMessage_t *_ickDeviceOutQueue( ickDevice_t *device );
 int           _ickDevicePendingMessages( ickDevice_t *device );
 size_t        _ickDevicePendingBytes( ickDevice_t *device );
+
+const char   *_ickDeviceConnState2Str( ickDeviceConnState_t state );
+const char   *_ickDeviceSsdpState2Str( ickDeviceSsdpState_t state );
 
 
 #endif /* __ICKSSDP_H */

@@ -37,6 +37,7 @@ Remarks         : -
 #include "logutils.h"
 #include "ickDevice.h"
 #include "ickSSDP.h"
+#include "ickP2pCom.h"
 #include "ickWGet.h"
 #include "ickMainThread.h"
 #include "ickDescription.h"
@@ -280,6 +281,7 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
 
       // Create expiration timer if necessary (could have been created by an SSDP announcement in the meanwhile)
       _ickTimerListLock( ictx );
+#if 0
       if( !_ickTimerFind(ictx,_ickDeviceExpireTimerCb,device,0) ) {
         ickErrcode_t irc;
         debug( "_ickWGetXmlCb (%s): create expiration timer", device->uuid );
@@ -288,12 +290,13 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
           logerr( "_ickWGetXmlCb (%s): could not create expiration timer (%s)",
                   uri, ickStrError(irc) );
       }
+#endif
 
       // Create heartbeat timer if necessary
-      if( device->doConnect && !_ickTimerFind(ictx,_ickDeviceHeartbeatTimerCb,device,0) ) {
+      if( device->doConnect && !_ickTimerFind(ictx,_ickHeartbeatTimerCb,device,0) ) {
         ickErrcode_t irc;
         debug( "_ickWGetXmlCb (%s): create heartbeat timer", device->uuid );
-        irc = _ickTimerAdd( ictx, device->lifetime*1000, 0, _ickDeviceHeartbeatTimerCb, device, 0 );
+        irc = _ickTimerAdd( ictx, device->lifetime*1000, 0, _ickHeartbeatTimerCb, device, 0 );
         if( irc )
           logerr( "_ickWGetXmlCb (%s): could not create heartbeat timer (%s)",
                   device->uuid, ickStrError(irc) );

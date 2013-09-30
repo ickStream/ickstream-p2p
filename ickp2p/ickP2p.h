@@ -169,6 +169,7 @@ ickErrcode_t         ickP2pRemoveMessageCallback( ickP2pContext_t *ictx,ickP2pMe
 
 // Get context features
 ickP2pLibState_t     ickP2pGetState( const ickP2pContext_t *ictx );
+const char          *ickLibState2Str( ickP2pLibState_t state );
 const char          *ickP2pGetOsName( const ickP2pContext_t *ictx );
 const char          *ickP2pGetName( const ickP2pContext_t *ictx );
 const char          *ickP2pGetDeviceUuid( const ickP2pContext_t *ictx );

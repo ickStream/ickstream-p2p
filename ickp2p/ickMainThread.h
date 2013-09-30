@@ -64,9 +64,6 @@ typedef void (*ickTimerCb_t)( const ickTimer_t *timer, void *data, int tag );
 void         *_ickMainThread( void *arg );
 ickErrcode_t  _ickMainThreadBreak( ickP2pContext_t *ictx, char flag );
 
-void          _ickDeviceExpireTimerCb( const ickTimer_t *timer, void *data, int tag );
-void          _ickDeviceHeartbeatTimerCb( const ickTimer_t *timer, void *data, int tag );
-
 
 ickErrcode_t  _ickMainThreadAddWGet( ickWGetContext_t *ickWGet );
 

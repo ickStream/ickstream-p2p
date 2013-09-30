@@ -125,7 +125,7 @@ ickErrcode_t  _ickSsdpNewDiscovery( ickP2pContext_t *ictx );
 void          _ickSsdpEndDiscovery( ickP2pContext_t *ictx );
 ickErrcode_t  _ickSsdpAnnounceServices( ickP2pContext_t *ictx, ickP2pServicetype_t service, ickSsdpMsgType_t mtype );
 
-
+void          _ickDeviceExpireTimerCb( const ickTimer_t *timer, void *data, int tag );
 
 
 #endif /* __ICKSSDP_H */

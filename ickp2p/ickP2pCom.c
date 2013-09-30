@@ -456,7 +456,6 @@ int _lwsP2pCb( struct libwebsocket_context *context,
   size_t             rlen;
   unsigned char     *ptr;
   char              *dscrPath;
-  ickTimer_t        *timer;
 
 /*------------------------------------------------------------------------*\
     What to do?
@@ -662,7 +661,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
                psd->uuid, psd->host );
 
         // Create and init device
-        device = _ickDeviceNew( psd->uuid, ICKDEVICE_WS );
+        device = _ickDeviceNew( psd->uuid );
         if( !device ) {
           logerr( "_lwsP2pCb: out of memory" );
           _ickLibDeviceListUnlock( ictx );
@@ -814,12 +813,14 @@ int _lwsP2pCb( struct libwebsocket_context *context,
              (long)len, (long)rlen, final?"final":"to be continued",
              device?device->uuid:"<unknown UUID>" );
 
-      // reset timer
-      timer = _ickTimerFind( ictx, _ickDeviceExpireTimerCb, device, 0 );
+#if 0
+      // reset SSDP expiration timer
+      ickTimer_t *timer = _ickTimerFind( ictx, _ickDeviceExpireTimerCb, device, 0 );
       if( timer )
         _ickTimerUpdate( ictx, timer, device->lifetime*1000, 1 );
       else
         logerr( "_lwsP2pCb (%s): could not find expiration timer.", psd->uuid );
+#endif
 
       // Set timestamp of last (partial) receive
       device->tLastRx = _ickTimeNow();
@@ -871,7 +872,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       if( device && !psd->kill ) {
 
         // Remove heartbeat and delayed write handler for this device
-        _ickTimerDeleteAll( ictx, _ickDeviceHeartbeatTimerCb, device, 0 );
+        _ickTimerDeleteAll( ictx, _ickHeartbeatTimerCb, device, 0 );
         _ickTimerDeleteAll( ictx, _ickWriteTimerCb, device, 0 );
 
         // Set timestamp
@@ -898,7 +899,14 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
         // Reset device state
         device->connectionState = ICKDEVICE_NOTCONNECTED;
-        device->wsi           = NULL;
+        device->wsi             = NULL;
+
+        // Get rid of device descriptor if SSDP is not alive
+        if( device->ssdpState!=ICKDEVICE_SSDPALIVE ) {
+          _ickLibDeviceRemove( ictx, device );
+          _ickDeviceFree( device );
+        }
+
       }
 
       // Free per session data
@@ -1043,6 +1051,32 @@ static int _ickP2pComTransmit( struct libwebsocket *wsi, ickMessage_t *message )
 \*------------------------------------------------------------------------*/
   return (int)(message->size - message->issued);
 }
+
+
+#pragma mark -- Timer callbacks
+
+
+/*=========================================================================*\
+  Send heart bet on a LWS connection. This is done to reset the expiration
+    timer in case a ws connection exists but SSDP is not routed.
+    timer list is already locked as this is a timer callback
+\*=========================================================================*/
+void _ickHeartbeatTimerCb( const ickTimer_t *timer, void *data, int tag )
+{
+  ickDevice_t     *device = data;
+  ickP2pContext_t *ictx   = device->ictx;
+
+  debug( "_ickDeviceHeartbeatTimerCb: %s", device->uuid );
+
+/*------------------------------------------------------------------------*\
+    Queue heartbeat message
+\*------------------------------------------------------------------------*/
+  _ickP2pSendNullMessage( ictx, device );
+
+}
+
+
+#pragma mark -- Tools
 
 
 /*=========================================================================*\
