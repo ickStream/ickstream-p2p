@@ -512,6 +512,14 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       debug( "_lwsP2pCb %d: client connection established, %d messages pending",
              socket, _ickDevicePendingMessages(device) );
 
+      // If already connected drop this connection
+      if( device->connectionState==ICKDEVICE_ISSERVER ) {
+        debug( "_lwsP2pCb %d: dropping client connection (am already server)", socket );
+        psd->kill = 1;
+        libwebsocket_callback_on_writable( context, wsi );
+        return -1;  // No effect for LWS_CALLBACK_CLIENT_ESTABLISHED
+      }
+
       // Heartbeat was already created in _ickWGetXmlCb() if necessary
 
       // Book a write event if a message is already pending
