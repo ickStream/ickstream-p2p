@@ -108,7 +108,7 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
     }
 
     // Not connected?
-    if( !device->wsi || device->ickP2pLevel==ICKP2PLEVEL_GENERIC ) {
+    if( !device->wsi || device->connectionState==ICKDEVICE_NOTCONNECTED ) {
       _ickLibDeviceListUnlock( ictx );
       return ICKERR_NOTCONNECTED;
     }
@@ -137,7 +137,7 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
 /*------------------------------------------------------------------------*\
     Ignore unconnected devices in broadcast mode
 \*------------------------------------------------------------------------*/
-    if( !device->wsi || device->ickP2pLevel==ICKP2PLEVEL_GENERIC )
+    if( !device->wsi || device->connectionState==ICKDEVICE_NOTCONNECTED )
       goto nextDevice;
 
 /*------------------------------------------------------------------------*\
@@ -198,7 +198,8 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
 /*------------------------------------------------------------------------*\
     Book a writable callback for the devices wsi
 \*------------------------------------------------------------------------*/
-    libwebsocket_callback_on_writable( ictx->lwsContext, device->wsi );
+    if( device->connectionState>ICKDEVICE_CLIENTCONNECTING )
+      libwebsocket_callback_on_writable( ictx->lwsContext, device->wsi );
 
 /*------------------------------------------------------------------------*\
     Handle next device in notification mode
@@ -485,8 +486,10 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       logwarn( "_lwsP2pCb %d: connection error", socket );
 
       // Execute discovery callback
-      if( device )
+      if( device ) {
+        device->connectionState = ICKDEVICE_NOTCONNECTED;
         _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_ERROR, device->services );
+      }
 
       break;
 

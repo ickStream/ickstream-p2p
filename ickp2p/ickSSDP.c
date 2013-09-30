@@ -771,6 +771,8 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 \*------------------------------------------------------------------------*/
   if( device->wsi ) {
     debug( "_ickDeviceRemove (%s): still connected.", ssdp->usn );
+    // fixme: we should probably eliminate the device from the psd, but we don't have access...
+    // So we keep the device, which will time out...
     _ickLibDeviceListUnlock( ictx );
     _ickTimerListUnlock( ictx );
     return 0;
