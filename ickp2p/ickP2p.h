@@ -72,15 +72,19 @@ typedef enum {
 
 // Modes of device discovery callback
 typedef enum {
-  ICKP2P_CONNECTED    = 1,
+  ICKP2P_INITIALIZED  =1,
+  ICKP2P_CONNECTED,
   ICKP2P_DISCONNECTED,
-  ICKP2P_ERROR,
-  ICKP2P_LEGACY,
-  ICKP2P_NEW,
-  ICKP2P_REMOVED,
+  ICKP2P_DISCOVERED,
+  ICKP2P_BYEBYE,
   ICKP2P_EXPIRED,
-  ICKP2P_TERMINATE
+  ICKP2P_TERMINATE,
+  ICKP2P_LEGACY,
+  ICKP2P_ERROR
 } ickP2pDeviceState_t;
+
+//#define ICKP2P_NEW ICKP2P_DISCOVERED
+//#define ICKP2P_REMOVED ICKP2P_BYEBYE
 
 // Service types
 typedef enum {
@@ -149,6 +153,7 @@ void                 ickP2pSetLogFacility( ickP2pLogFacility_t facility );
 void                 ickP2pSetLogging( int level, FILE *fp, int bufLen );
 char                *ickP2pGetLogContent( int level );
 const char          *ickStrError( ickErrcode_t code );
+const char          *ickLibDeviceState2Str( ickP2pDeviceState_t change );
 
 // Context lifecycle
 ickP2pContext_t     *ickP2pCreate( const char *deviceName, const char *deviceUuid,
@@ -166,6 +171,7 @@ ickErrcode_t         ickP2pRegisterDiscoveryCallback( ickP2pContext_t *ictx, ick
 ickErrcode_t         ickP2pRemoveDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDiscoveryCb_t callback );
 ickErrcode_t         ickP2pRegisterMessageCallback( ickP2pContext_t *ictx, ickP2pMessageCb_t callback );
 ickErrcode_t         ickP2pRemoveMessageCallback( ickP2pContext_t *ictx,ickP2pMessageCb_t callback );
+
 
 // Get context features
 ickP2pLibState_t     ickP2pGetState( const ickP2pContext_t *ictx );

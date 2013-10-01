@@ -616,17 +616,20 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
       goto bail;
     }
 
-    //Link device to discovery handler
+    // Link device to discovery handler
     _ickLibDeviceAdd( ictx, device );
-
-    // Execute callbacks registered with discovery handler
-    // this is done by the xml handler after the device is full initialzed
-    // _ickDiscoveryExecDiscoveryCallback( dh, device, ICKP2P_NEW, stype );
 
     // Return code is 1 (a device was added)
     retval = 1;
   }
-  device->ssdpState = ICKDEVICE_SSDPALIVE;
+
+/*------------------------------------------------------------------------*\
+    Execute callbacks on first discovery
+\*------------------------------------------------------------------------*/
+  if( device->ssdpState!=ICKDEVICE_SSDPALIVE ) {
+    _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_DISCOVERED, device->services );
+    device->ssdpState = ICKDEVICE_SSDPALIVE;
+  }
 
 /*------------------------------------------------------------------------*\
     Crate or update expiration timer
@@ -766,7 +769,7 @@ static int _ickDeviceRemove( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 /*------------------------------------------------------------------------*\
    Execute callback with all registered services
 \*------------------------------------------------------------------------*/
-  _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_REMOVED, device->services );
+  _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_BYEBYE, device->services );
 
 /*------------------------------------------------------------------------*\
     Device still connected?

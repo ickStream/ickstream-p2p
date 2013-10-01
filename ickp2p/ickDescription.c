@@ -276,43 +276,16 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
       // Set timestamp
       device->tXmlComplete = _ickTimeNow();
 
-      // Clean up
+      // Clean up, No more wgetter active for this device
       Sfree( _xmlUserData.deviceName );
-
-      // Create expiration timer if necessary (could have been created by an SSDP announcement in the meanwhile)
-      _ickTimerListLock( ictx );
-#if 0
-      if( !_ickTimerFind(ictx,_ickDeviceExpireTimerCb,device,0) ) {
-        ickErrcode_t irc;
-        debug( "_ickWGetXmlCb (%s): create expiration timer", device->uuid );
-        irc = _ickTimerAdd( ictx, device->lifetime*1000, 1, _ickDeviceExpireTimerCb, device, 0 );
-        if( irc )
-          logerr( "_ickWGetXmlCb (%s): could not create expiration timer (%s)",
-                  uri, ickStrError(irc) );
-      }
-#endif
-
-      // Create heartbeat timer if necessary
-      if( device->doConnect && !_ickTimerFind(ictx,_ickHeartbeatTimerCb,device,0) ) {
-        ickErrcode_t irc;
-        debug( "_ickWGetXmlCb (%s): create heartbeat timer", device->uuid );
-        irc = _ickTimerAdd( ictx, device->lifetime*1000, 0, _ickHeartbeatTimerCb, device, 0 );
-        if( irc )
-          logerr( "_ickWGetXmlCb (%s): could not create heartbeat timer (%s)",
-                  device->uuid, ickStrError(irc) );
-      }
-      _ickTimerListUnlock( ictx );
+      device->wget = NULL;
 
       // Signal device readiness to user code
-      _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_NEW, device->services );
+      _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_INITIALIZED, device->services );
       if( device->connectionState==ICKDEVICE_ISSERVER )
         _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
 
-      // No more wgetter active for this device
-      device->wget = NULL;
-
       break;
-
   }
 
 /*------------------------------------------------------------------------*\

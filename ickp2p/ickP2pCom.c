@@ -337,6 +337,7 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
   char                *host;
   char                *ptr;
   _ickLwsP2pData_t    *psd;
+  struct libwebsocket *wsi;
 
   debug( "_ickWebSocketOpen (%s): \"%s\"", device->uuid, device->location );
 
@@ -412,7 +413,7 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
     Initiate connection
 \*------------------------------------------------------------------------*/
   device->connectionState = ICKDEVICE_CLIENTCONNECTING;
-  device->wsi = libwebsocket_client_connect_extended(
+  wsi = libwebsocket_client_connect_extended(
                     context,
                     address,
                     port,
@@ -423,7 +424,7 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
                     ICKP2P_WS_PROTOCOLNAME,   // protocol
                     -1,                       // ietf_version_or_minus_one
                     psd );
-  if( !device->wsi ) {
+  if( !wsi ) {
     debug( "_ickWebSocketOpen (%s): Could not create lws client socket.",
             device->uuid );
     irc = ICKERR_LWSERR;
@@ -512,23 +513,36 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       debug( "_lwsP2pCb %d: client connection established, %d messages pending",
              socket, _ickDevicePendingMessages(device) );
 
-      // If already connected drop this connection
-      if( device->connectionState==ICKDEVICE_ISSERVER ) {
-        debug( "_lwsP2pCb %d: dropping client connection (am already server)", socket );
+#if 0 // done in LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION
+      // Drop this connection if already connected
+      if( device->wsi ) {
+        debug( "_lwsP2pCb %d: dropping client connection (already connected)", socket );
         psd->kill = 1;
         libwebsocket_callback_on_writable( context, wsi );
         return -1;  // No effect for LWS_CALLBACK_CLIENT_ESTABLISHED
       }
+#endif
 
-      // Heartbeat was already created in _ickWGetXmlCb() if necessary
+      // Create heartbeat timer
+      _ickTimerListLock( ictx );
+      if( device->doConnect ) {
+        ickErrcode_t irc;
+        debug( "_lwsP2pCb (%s): create heartbeat timer", device->uuid );
+        irc = _ickTimerAdd( ictx, device->lifetime*1000, 0, _ickHeartbeatTimerCb, device, 0 );
+        if( irc )
+          logerr( "_lwsP2pCb (%s): could not create heartbeat timer (%s)",
+                  device->uuid, ickStrError(irc) );
+      }
+      _ickTimerListUnlock( ictx );
 
       // Book a write event if a message is already pending
       if( _ickDeviceOutQueue(device) )
         libwebsocket_callback_on_writable( context, wsi );
 
       // Timestamp and mode of connection
-      device->tConnect = _ickTimeNow();
+      device->tConnect        = _ickTimeNow();
       device->connectionState = ICKDEVICE_ISCLIENT;
+      device->wsi             = wsi;
 
       // Execute discovery callback
       _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
@@ -567,13 +581,12 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       _ickLibDeviceListLock( ictx );
       device = _ickLibDeviceFindByUuid( ictx , uuid );
 
-      // Device already known and no client under initialization (i.e. server?) ?
-      if( device && device->connectionState!=ICKDEVICE_CLIENTCONNECTING ) {
+      // Device already existing?
+      if( device ) {
 
         // Already connected?
         if( device->wsi ) {
-          debug( "_lwsP2pCb (%s): Connection rejected, wsi present for \"%s\" (%p|%p)",
-                  device->uuid, device->location, device->wsi, wsi);
+          debug( "_lwsP2pCb (%s): Connection rejected, already connected", device->uuid );
           _ickLibDeviceListUnlock( ictx );
           Sfree( host );
           Sfree( uuid );
@@ -610,6 +623,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         }
         Sfree( device->location );
         device->location = dscrPath;
+
+        // We will be server
+        device->connectionState = ICKDEVICE_ISSERVER;
       }
 
       _ickLibDeviceListUnlock( ictx );
@@ -663,8 +679,6 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
       // Device unknown (i.e. was not (yet) discovered by SSDP)
       else {
-        ickErrcode_t      irc;
-
         debug( "_lwsP2pCb (%s): Discovered new device via incoming ws connection from \"%s\".",
                psd->uuid, psd->host );
 
@@ -688,21 +702,6 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         }
         device->location = dscrPath;
 
-        // Start retrieval of UPnP descriptor
-        device->wget = _ickWGetInit( ictx, dscrPath, _ickWGetXmlCb, device, &irc );
-        if( !device->wget ) {
-          logerr( "_lwsP2pCb (%s): could not start xml retriever \"%s\" (%s).",
-              psd->uuid, psd->host, ickStrError(irc) );
-          _ickDeviceFree( device );
-          _ickLibDeviceListUnlock( ictx );
-          psd->kill = 1;
-          libwebsocket_callback_on_writable( context, wsi );
-          return -1; // No effect for LWS_CALLBACK_ESTABLISHED
-        }
-        _ickLibWGettersLock( ictx );
-        _ickLibWGettersAdd( ictx, device->wget );
-        _ickLibWGettersUnlock( ictx );
-
         // Expiration and heartbeat timer for WS discovered devices will be created in _ickWGetXmlCb()
         // fixme: there might be lws messages received before the xml file is interpreted, ...
 
@@ -711,6 +710,46 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       }
 
       _ickLibDeviceListUnlock( ictx );
+
+      // Start retrieval of UPnP descriptor if necessary
+      if( device->tXmlComplete==0.0 ) {
+        debug( "_lwsP2pCb (%s): need to get XML device descriptor", device->uuid );
+
+        // Don't start wget twice
+        if( device->wget ) {
+          loginfo( "_lwsP2pCb (%s): xml retriever already exists \"%s\".",
+              device->uuid, device->location );
+        }
+
+        else {
+          ickErrcode_t irc;
+          device->wget = _ickWGetInit( ictx, dscrPath, _ickWGetXmlCb, device, &irc );
+          if( !device->wget ) {
+            logerr( "_lwsP2pCb (%s): could not start xml retriever \"%s\" (%s).",
+                psd->uuid, psd->host, ickStrError(irc) );
+            _ickDeviceFree( device );
+            _ickLibDeviceListUnlock( ictx );
+            psd->kill = 1;
+            libwebsocket_callback_on_writable( context, wsi );
+            return -1; // No effect for LWS_CALLBACK_ESTABLISHED
+          }
+          _ickLibWGettersLock( ictx );
+          _ickLibWGettersAdd( ictx, device->wget );
+          _ickLibWGettersUnlock( ictx );
+        }
+      }
+
+      // Create heartbeat timer
+      _ickTimerListLock( ictx );
+      if( device->doConnect ) {
+        ickErrcode_t irc;
+        debug( "_lwsP2pCb (%s): create heartbeat timer", device->uuid );
+        irc = _ickTimerAdd( ictx, device->lifetime*1000, 0, _ickHeartbeatTimerCb, device, 0 );
+        if( irc )
+          logerr( "_lwsP2pCb (%s): could not create heartbeat timer (%s)",
+                  device->uuid, ickStrError(irc) );
+      }
+      _ickTimerListUnlock( ictx );
 
       // We are server, set connection timestamp
       device->connectionState = ICKDEVICE_ISSERVER;

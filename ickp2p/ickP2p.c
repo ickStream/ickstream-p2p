@@ -742,14 +742,8 @@ ickErrcode_t ickP2pRemoveMessageCallback( ickP2pContext_t *ictx, ickP2pMessageCb
 void _ickLibExecDiscoveryCallback( ickP2pContext_t *ictx, const ickDevice_t *dev, ickP2pDeviceState_t change, ickP2pServicetype_t type )
 {
   struct _cblist *walk;
-  debug( "_ickLibExecDiscoveryCallback (%p): \"%s\" change=%d services=%d",
-         ictx, dev->uuid, change, type );
-
-/*------------------------------------------------------------------------*\
-   Use friendly name as indicator for LWS initialization
-\*------------------------------------------------------------------------*/
-  if( !dev->friendlyName )
-    return;
+  debug( "_ickLibExecDiscoveryCallback (%p): \"%s\" change=%d (%s) services=%d",
+         ictx, dev->uuid, change, ickLibDeviceState2Str(change), type );
 
 /*------------------------------------------------------------------------*\
    Lock list mutex and execute all registered callbacks
@@ -758,6 +752,27 @@ void _ickLibExecDiscoveryCallback( ickP2pContext_t *ictx, const ickDevice_t *dev
   for( walk=ictx->discoveryCbs; walk; walk=walk->next )
     ((ickP2pDiscoveryCb_t)walk->callback)( ictx, dev->uuid, change, type );
   pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+}
+
+
+/*=========================================================================*\
+  Convert device state to a string
+\*=========================================================================*/
+const char *ickLibDeviceState2Str( ickP2pDeviceState_t change )
+{
+  switch( change ) {
+    case ICKP2P_INITIALIZED:  return "initialized";
+    case ICKP2P_CONNECTED:    return "connected";
+    case ICKP2P_DISCONNECTED: return "disconnected";
+    case ICKP2P_DISCOVERED:   return "discovered";
+    case ICKP2P_BYEBYE:       return "byebye";
+    case ICKP2P_EXPIRED:      return "expired";
+    case ICKP2P_TERMINATE:    return "terminating";
+    case ICKP2P_LEGACY:       return "legacy";
+    case ICKP2P_ERROR:        return "error";
+  }
+
+  return "Invalid device state";
 }
 
 
@@ -1153,7 +1168,7 @@ int ickP2pGetUpnpLoopback( const ickP2pContext_t *ictx )
 /*=========================================================================*\
   Get services of a context
 \*=========================================================================*/
-ickP2pServicetype_t  ickP2pGetServices( const ickP2pContext_t *ictx )
+ickP2pServicetype_t ickP2pGetServices( const ickP2pContext_t *ictx )
 {
   return ictx->ickServices;
 }

@@ -379,35 +379,7 @@ end:
 \*=========================================================================*/
 static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDeviceState_t change, ickP2pServicetype_t type )
 {
-  char *cstr = "???";
   char  tstr[128];
-
-  switch( change ) {
-    case   ICKP2P_CONNECTED:
-      cstr = "connected";
-      break;
-    case   ICKP2P_DISCONNECTED:
-      cstr = "disconnected";
-      break;
-    case   ICKP2P_LEGACY:
-      cstr = "adding (legacy)";
-      break;
-    case   ICKP2P_NEW:
-      cstr = "adding (new)";
-      break;
-    case ICKP2P_REMOVED:
-      cstr = "removing";
-      break;
-    case ICKP2P_EXPIRED:
-      cstr = "expiring";
-      break;
-    case ICKP2P_TERMINATE:
-      cstr = "terminating";
-      break;
-    case ICKP2P_ERROR:
-      cstr = "error";
-      break;
-  }
 
   *tstr = 0;
   if( type==ICKP2P_SERVICE_GENERIC )
@@ -424,7 +396,7 @@ static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDevice
       strcat( tstr, " debugging" );
   }
 
-  printf( "+++ %s -- %s %s\n", uuid, cstr, tstr );
+  printf( "+++ %s -- %s -- %s\n", uuid, ickLibDeviceState2Str(change), tstr );
   printf( "+++ %s -- Location: %s\n", uuid, ickP2pGetDeviceLocation(ictx,uuid) );
 }
 

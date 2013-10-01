@@ -86,11 +86,11 @@ struct _ickDevice {
   ickP2pContext_t      *ictx;            // weak
   pthread_mutex_t       mutex;
   int                   lifetime;
-  char                 *uuid;          // strong
-  char                 *location;      // strong
+  char                 *uuid;            // strong
+  char                 *location;        // strong
   int                   ickUpnpVersion;
   ickP2pServicetype_t   services;
-  char                 *friendlyName;  // strong
+  char                 *friendlyName;    // strong
   ickP2pLevel_t         ickP2pLevel;
   ickMessage_t         *outQueue;
   double                tCreation;
@@ -106,9 +106,7 @@ struct _ickDevice {
   int                   nTx;
   double                tLastRx;
   double                tLastTx;
-
-  struct libwebsocket  *wsi;
-
+  struct libwebsocket  *wsi;            // weak
 };
 
 /*------------------------------------------------------------------------*\
