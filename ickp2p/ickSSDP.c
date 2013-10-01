@@ -97,15 +97,20 @@ static void         _ickSsdpAnnounceCb( const ickTimer_t *timer, void *data, int
 static void         _ickSsdpSearchCb( const ickTimer_t *timer, void *data, int tag );
 
 static int          _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
-static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx, const struct sockaddr *addr, ickSsdpMsgType_t type );
-static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx, const struct sockaddr *addr, ickSsdpMsgType_t type, ssdpMsgLevel_t level, ickP2pServicetype_t service, int repeat );
+static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
+                                                  const struct sockaddr *addr,
+                                                  ickSsdpMsgType_t type, long delay );
+static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
+                                           const struct sockaddr *addr,
+                                           ickSsdpMsgType_t type,
+                                           ssdpMsgLevel_t level,
+                                           int repeat, long delay );
 static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
                                             ickInterface_t *interface,
                                             const struct sockaddr *addr,
                                             ickSsdpMsgType_t type,
                                             ssdpMsgLevel_t level,
-                                            ickP2pServicetype_t service,
-                                            int repeat );
+                                            int repeat, long delay );
 static void         _ickSsdpNotifyCb( const ickTimer_t *timer, void *data, int tag );
 
 static int          _ssdpGetVersion( const char *dscr );
@@ -838,19 +843,20 @@ ickErrcode_t _ickSsdpNewDiscovery( ickP2pContext_t *ictx )
   _ickTimerListLock( ictx );
 
 /*------------------------------------------------------------------------*\
-    Schedule initial advertisements
+    Schedule initial advertisements with some inital delay to avoid
+    race conditions with two-way connects
 \*------------------------------------------------------------------------*/
-  irc = _ssdpSendInitialDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_ALIVE );
+  irc = _ssdpSendInitialDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_ALIVE, ICKSSDP_INITIALDELAY );
   if( irc ) {
     _ickTimerListUnlock( ictx );
     return irc;
   }
 
 /*------------------------------------------------------------------------*\
-    Request advertisements from all reachable upnp devices
+    Request immediate advertisements from all reachable upnp devices
 \*------------------------------------------------------------------------*/
   irc = _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_MSEARCH, SSDPMSGLEVEL_GLOBAL,
-                               ICKP2P_SERVICE_NONE, ICKSSDP_REPEATS );
+                               ICKSSDP_REPEATS, 0 );
   if( irc ) {
     _ickTimerListUnlock( ictx );
     return irc;
@@ -897,23 +903,11 @@ void _ickSsdpEndDiscovery( ickP2pContext_t *ictx )
     Immediately announce all devices and services as terminated
 \*------------------------------------------------------------------------*/
   _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_ROOT,
-                         ICKP2P_SERVICE_NONE, 0 );
+                         0, 0 );
   _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_UUID,
-                         ICKP2P_SERVICE_NONE, 0 );
+                         0, 0 );
   _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
-                         ICKP2P_SERVICE_GENERIC, 0 );
-  if( ictx->ickServices&ICKP2P_SERVICE_PLAYER )
-    _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
-                           ICKP2P_SERVICE_PLAYER, 0 );
-  if( ictx->ickServices&ICKP2P_SERVICE_CONTROLLER )
-    _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
-                           ICKP2P_SERVICE_CONTROLLER, 0 );
-  if( ictx->ickServices&ICKP2P_SERVICE_SERVER_GENERIC )
-    _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
-                           ICKP2P_SERVICE_SERVER_GENERIC, 0 );
-  if( ictx->ickServices&ICKP2P_SERVICE_DEBUG )
-    _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
-                           ICKP2P_SERVICE_DEBUG, 0 );
+                         0, 0 );
 
 /*------------------------------------------------------------------------*\
     Terminate all known device
@@ -933,50 +927,6 @@ void _ickSsdpEndDiscovery( ickP2pContext_t *ictx )
   _ickTimerListUnlock( ictx );
 }
 
-
-/*=========================================================================*\
-  Services were registerd or terminated
-\*=========================================================================*/
-ickErrcode_t _ickSsdpAnnounceServices( ickP2pContext_t *ictx, ickP2pServicetype_t services, ickSsdpMsgType_t mtype )
-{
-
-/*------------------------------------------------------------------------*\
-    Be defensive
-\*------------------------------------------------------------------------*/
-  if( mtype!=SSDPMSGTYPE_ALIVE && SSDPMSGTYPE_BYEBYE ) {
-    logerr( "_ickSsdpAnnounceServices: invalid message type (%d)", mtype );
-    return ICKERR_INVALID;
-  }
-
-/*------------------------------------------------------------------------*\
-    Lock timer list for queuing messages
-\*------------------------------------------------------------------------*/
-  _ickTimerListLock( ictx );
-
-/*------------------------------------------------------------------------*\
-    Announce all new or terminated services
-\*------------------------------------------------------------------------*/
-  if( services&ICKP2P_SERVICE_PLAYER )
-    _ssdpSendDiscoveryMsg( ictx, NULL, mtype, SSDPMSGLEVEL_SERVICE,
-                           ICKP2P_SERVICE_PLAYER, ICKSSDP_REPEATS );
-  if( services&ICKP2P_SERVICE_CONTROLLER )
-    _ssdpSendDiscoveryMsg( ictx, NULL, mtype, SSDPMSGLEVEL_SERVICE,
-                           ICKP2P_SERVICE_CONTROLLER, ICKSSDP_REPEATS );
-  if( services&ICKP2P_SERVICE_SERVER_GENERIC )
-    _ssdpSendDiscoveryMsg( ictx, NULL, mtype, SSDPMSGLEVEL_SERVICE,
-                           ICKP2P_SERVICE_SERVER_GENERIC, ICKSSDP_REPEATS );
-  if( services&ICKP2P_SERVICE_DEBUG )
-    _ssdpSendDiscoveryMsg( ictx, NULL, mtype, SSDPMSGLEVEL_SERVICE,
-                           ICKP2P_SERVICE_DEBUG, ICKSSDP_REPEATS );
-
-/*------------------------------------------------------------------------*\
-    Unlock timer list, that's all
-\*------------------------------------------------------------------------*/
-  _ickTimerListUnlock( ictx );
-  return ICKERR_SUCCESS;
-}
-
-
 /*=========================================================================*\
   Execute frequent announcements of offered services
     timer list is already locked for callbacks
@@ -989,9 +939,9 @@ static void _ickSsdpAnnounceCb( const ickTimer_t *timer, void *data, int tag )
   debug( "_ickSsdpAnnounceCb (%p): sending periodic announcements...", ictx );
 
 /*------------------------------------------------------------------------*\
-    Schedule initial advertisements
+    Schedule advertisements
 \*------------------------------------------------------------------------*/
-  irc = _ssdpSendInitialDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_ALIVE );
+  irc = _ssdpSendInitialDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_ALIVE, 0 );
   if( irc ) {
     logerr( "_ickSsdpAnnounceCb: could not send alive announcements (%s).",
         ickStrError(irc) );
@@ -1018,7 +968,7 @@ static void _ickSsdpSearchCb( const ickTimer_t *timer, void *data, int tag )
     Schedule an M-Search for ickstream root devices
 \*------------------------------------------------------------------------*/
   irc = _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_MSEARCH, SSDPMSGLEVEL_SERVICE,
-                               ICKP2P_SERVICE_GENERIC, 1 /*ICKSSDP_REPEATS*/ );
+                               1 /*ICKSSDP_REPEATS*/, 0 );
   if( irc ) {
     logerr( "_ickSsdpSearchCb: could not send alive announcements (%s).",
         ickStrError(irc) );
@@ -1065,7 +1015,7 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     Search for all devices and services
 \*------------------------------------------------------------------------*/
   if( !strcmp(ssdp->st,"ssdp:all") ) {
-    _ssdpSendInitialDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE );
+    _ssdpSendInitialDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, 0 );
   }
 
 /*------------------------------------------------------------------------*\
@@ -1073,7 +1023,7 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 \*------------------------------------------------------------------------*/
   else if( !strcmp(ssdp->st,"upnp:rootdevice") ) {
     _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_ROOT,
-                          ICKP2P_SERVICE_NONE, ICKSSDP_REPEATS );
+                           ICKSSDP_REPEATS, 0 );
   }
 
 /*------------------------------------------------------------------------*\
@@ -1082,7 +1032,7 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   else if( !strncmp(ssdp->st,"uuid:",5) ) {
     if( !strcasecmp(ssdp->st+5,ictx->deviceUuid) ) {
       _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_UUID,
-                             ICKP2P_SERVICE_NONE, ICKSSDP_REPEATS );
+                             ICKSSDP_REPEATS, 0 );
     }
   }
 
@@ -1091,7 +1041,7 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 \*------------------------------------------------------------------------*/
   else if( !_ssdpVercmp(ssdp->st,ICKDEVICE_TYPESTR_ROOT) )
     _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
-                           ICKP2P_SERVICE_GENERIC, ICKSSDP_REPEATS );
+                           ICKSSDP_REPEATS, 0 );
 
 /*------------------------------------------------------------------------*\
     Unlock timer list, that's all
@@ -1113,7 +1063,7 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 \*=========================================================================*/
 static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
                                                   const struct sockaddr *addr,
-                                                  ickSsdpMsgType_t type )
+                                                  ickSsdpMsgType_t type, long delay )
 {
   ickErrcode_t irc;
   debug( "_ssdpSendInitialDiscoveryMsg (%p): %d", ictx, type );
@@ -1122,7 +1072,7 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
     Advertise UPNP root
 \*------------------------------------------------------------------------*/
   irc = _ssdpSendDiscoveryMsg( ictx, addr, type, SSDPMSGLEVEL_ROOT,
-                               ICKP2P_SERVICE_NONE, ICKSSDP_REPEATS );
+                               ICKSSDP_REPEATS, delay );
   if( irc )
     return irc;
 
@@ -1130,7 +1080,7 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
     Advertise UUID
 \*------------------------------------------------------------------------*/
   irc = _ssdpSendDiscoveryMsg( ictx, addr, type, SSDPMSGLEVEL_UUID,
-                               ICKP2P_SERVICE_NONE, ICKSSDP_REPEATS );
+                               ICKSSDP_REPEATS, delay );
   if( irc )
     return irc;
 
@@ -1138,40 +1088,9 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
     Advertise ickstream root device
 \*------------------------------------------------------------------------*/
   irc = _ssdpSendDiscoveryMsg( ictx, addr, type, SSDPMSGLEVEL_SERVICE,
-                               ICKP2P_SERVICE_GENERIC, ICKSSDP_REPEATS );
+                               ICKSSDP_REPEATS, delay );
   if( irc )
     return irc;
-
-/*------------------------------------------------------------------------*\
-    Advertise ickstream services
-\*------------------------------------------------------------------------*/
-  if( ictx->ickServices&ICKP2P_SERVICE_PLAYER ) {
-    irc = _ssdpSendDiscoveryMsg( ictx, addr, type, SSDPMSGLEVEL_SERVICE,
-                                ICKP2P_SERVICE_PLAYER, ICKSSDP_REPEATS );
-    if( irc )
-      return irc;
-  }
-
-  if( ictx->ickServices&ICKP2P_SERVICE_CONTROLLER ) {
-    irc = _ssdpSendDiscoveryMsg( ictx, addr, type, SSDPMSGLEVEL_SERVICE,
-                                 ICKP2P_SERVICE_CONTROLLER, ICKSSDP_REPEATS );
-    if( irc )
-      return irc;
-  }
-
-  if( ictx->ickServices&ICKP2P_SERVICE_SERVER_GENERIC ) {
-    irc = _ssdpSendDiscoveryMsg( ictx, addr, type, SSDPMSGLEVEL_SERVICE,
-                           ICKP2P_SERVICE_SERVER_GENERIC, ICKSSDP_REPEATS );
-    if( irc )
-      return irc;
-  }
-
-  if( ictx->ickServices&ICKP2P_SERVICE_DEBUG ) {
-    irc = _ssdpSendDiscoveryMsg( ictx, addr, type, SSDPMSGLEVEL_SERVICE,
-                                 ICKP2P_SERVICE_DEBUG, ICKSSDP_REPEATS );
-    if( irc )
-      return irc;
-  }
 
 /*------------------------------------------------------------------------*\
     That's it
@@ -1187,10 +1106,9 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
               else unicast target in network byte order (for M-Search responses)
     type    - the message type (alive,byebye,M-Search,Response)
     level   - the message type (global,root,uuid,service)
-    service - the ickstream service to announce (for type=SSDPMSG_SERVICE)
-              with ICKP2P_SERVICE_GENERIC the ickstream root device is announced
     repeat  - number of repetitions (randomly distributed in time)
               if <=0 one message is sent immediately
+    delay   - initial delay of first message (in ms), if repeat>0
     returns -1 on error, 0 on success
     Caller should lock timer list (which is already the case in timer callbacks)
 \*=========================================================================*/
@@ -1198,8 +1116,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
                                            const struct sockaddr *addr,
                                            ickSsdpMsgType_t type,
                                            ssdpMsgLevel_t level,
-                                           ickP2pServicetype_t service,
-                                           int repeat )
+                                           int repeat, long delay )
 {
   ickInterface_t *interface;
   ickErrcode_t    irc = ICKERR_SUCCESS;
@@ -1211,7 +1128,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
 
     _ickLibInterfaceListLock( ictx );
     for( interface=ictx->interfaces; interface; interface=interface->next ) {
-      irc = __ssdpSendDiscoveryMsg( ictx, interface, NULL, type, level, service, repeat );
+      irc = __ssdpSendDiscoveryMsg( ictx, interface, NULL, type, level, repeat, delay );
       if( irc )
         break;
     }
@@ -1235,7 +1152,7 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
     Do the unicasts
 \*------------------------------------------------------------------------*/
   else
-    irc = __ssdpSendDiscoveryMsg( ictx, interface, addr, type, level, service, repeat );
+    irc = __ssdpSendDiscoveryMsg( ictx, interface, addr, type, level, repeat, delay );
   _ickLibInterfaceListUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
@@ -1249,8 +1166,7 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
                                             const struct sockaddr *addr,
                                             ickSsdpMsgType_t type,
                                             ssdpMsgLevel_t level,
-                                            ickP2pServicetype_t service,
-                                            int repeat )
+                                            int repeat, long delay )
 {
 
   upnp_notification_t *note;
@@ -1259,15 +1175,14 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
   char                 addrstr[64];
   time_t               now;
   ickErrcode_t         irc = ICKERR_SUCCESS;
-  long                 delay;
   char                 timestr[80];
   char                *nst = NULL;
   char                *usn = NULL;
   char                *sstr = NULL;
   char                *message = NULL;
 
-  debug( "_ssdpSendDiscoveryMsg (%p): level=%d, type=%d, service=0x%02x, repeat=%d",
-         ictx, level, type, service, repeat );
+  debug( "_ssdpSendDiscoveryMsg (%p): level=%d, type=%d, repeat=%d",
+         ictx, level, type, repeat );
 
 /*------------------------------------------------------------------------*\
     Use multicast?
@@ -1483,9 +1398,8 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
   memcpy( &note->sockname, addr, addr_len );
 
 /*------------------------------------------------------------------------*\
-    Queue instances, randomly delay transmissions
+    Queue instances, randomly delay transmissions after initial delay
 \*------------------------------------------------------------------------*/
-  delay = 0;
   while( repeat-- ) {
     delay += random() % ICKSSDP_RNDDELAY;
     irc = _ickTimerAdd( ictx, delay, 1, _ickSsdpNotifyCb, note, 0 );

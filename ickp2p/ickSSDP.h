@@ -43,7 +43,7 @@ Remarks         : -
 #define ICKSSDP_MSEARCH_MX      1
 #define ICKSSDP_MCASTADDR       "239.255.255.250"
 #define ICKSSDP_MCASTPORT       1900
-
+#define ICKSSDP_INITIALDELAY    500
 
 /*=========================================================================*\
   Macro and type definitions
@@ -123,7 +123,6 @@ void          _ickSsdpFree( ickSsdp_t *ssdp );
 int           _ickSsdpExecute( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
 ickErrcode_t  _ickSsdpNewDiscovery( ickP2pContext_t *ictx );
 void          _ickSsdpEndDiscovery( ickP2pContext_t *ictx );
-ickErrcode_t  _ickSsdpAnnounceServices( ickP2pContext_t *ictx, ickP2pServicetype_t service, ickSsdpMsgType_t mtype );
 
 void          _ickDeviceExpireTimerCb( const ickTimer_t *timer, void *data, int tag );
 
