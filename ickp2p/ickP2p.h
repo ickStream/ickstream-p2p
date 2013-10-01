@@ -72,7 +72,7 @@ typedef enum {
 
 // Modes of device discovery callback
 typedef enum {
-  ICKP2P_INITIALIZED  =1,
+  ICKP2P_INITIALIZED = 1,
   ICKP2P_CONNECTED,
   ICKP2P_DISCONNECTED,
   ICKP2P_DISCOVERED,
@@ -83,8 +83,8 @@ typedef enum {
   ICKP2P_ERROR
 } ickP2pDeviceState_t;
 
-//#define ICKP2P_NEW ICKP2P_DISCOVERED
-//#define ICKP2P_REMOVED ICKP2P_BYEBYE
+#define ICKP2P_NEW ICKP2P_DISCOVERED
+#define ICKP2P_REMOVED ICKP2P_BYEBYE
 
 // Service types
 typedef enum {

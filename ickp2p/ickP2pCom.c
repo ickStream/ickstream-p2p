@@ -513,7 +513,6 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       debug( "_lwsP2pCb %d: client connection established, %d messages pending",
              socket, _ickDevicePendingMessages(device) );
 
-#if 0 // done in LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION
       // Drop this connection if already connected
       if( device->wsi ) {
         debug( "_lwsP2pCb %d: dropping client connection (already connected)", socket );
@@ -521,7 +520,6 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         libwebsocket_callback_on_writable( context, wsi );
         return -1;  // No effect for LWS_CALLBACK_CLIENT_ESTABLISHED
       }
-#endif
 
       // Create heartbeat timer
       _ickTimerListLock( ictx );
