@@ -71,6 +71,7 @@ typedef enum {
 //
 typedef enum {
   ICKDEVICE_NOTCONNECTED,
+  ICKDEVICE_LOOPBACK,
   ICKDEVICE_CLIENTCONNECTING,
   ICKDEVICE_ISCLIENT,
   ICKDEVICE_ISSERVER
@@ -136,7 +137,8 @@ void          _ickDeviceUnlock( ickDevice_t *device );
 ickErrcode_t  _ickDeviceSetLocation( ickDevice_t *device, const char *location );
 ickErrcode_t  _ickDeviceSetName( ickDevice_t *device, const char *name );
 ickErrcode_t  _ickDeviceAddMessage( ickDevice_t *device, void *container, size_t size );
-ickErrcode_t  _ickDeviceRemoveAndFreeMessage( ickDevice_t *device, ickMessage_t *message );
+ickErrcode_t  _ickDeviceUnlinkMessage( ickDevice_t *device, ickMessage_t *message );
+void          _ickDeviceFreeMessage( ickMessage_t *message );
 ickMessage_t *_ickDeviceOutQueue( ickDevice_t *device );
 int           _ickDevicePendingMessages( ickDevice_t *device );
 size_t        _ickDevicePendingBytes( ickDevice_t *device );

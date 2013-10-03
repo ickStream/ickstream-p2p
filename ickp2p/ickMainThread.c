@@ -334,6 +334,13 @@ void *_ickMainThread( void *arg )
              i, plist.fds[i].fd, plist.fds[i].revents );
 
 /*------------------------------------------------------------------------*\
+    First execute loop back deliveries
+\*------------------------------------------------------------------------*/
+    while( ictx->deviceLoopback && ictx->deviceLoopback->outQueue ) {
+      _ickDeliverLoopbackMessage( ictx );
+    }
+
+/*------------------------------------------------------------------------*\
     Was there a break request?
 \*------------------------------------------------------------------------*/
     if( plist.fds[0].revents&POLLIN ) {
@@ -496,7 +503,7 @@ static void _ickServiceSsdpSocket( ickP2pContext_t *ictx, char *buffer, int sd )
     return;
 
 /*------------------------------------------------------------------------*\
-    Ignore loop back messages from ourself
+    Ignore loop back messages from ourself?
 \*------------------------------------------------------------------------*/
   if( !ictx->upnpLoopback && ssdp->uuid && !strcasecmp(ssdp->uuid,ictx->deviceUuid) ) {
     debug( "_ickServiceSsdpSocket (%d): ignoring message from myself", sd );

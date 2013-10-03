@@ -240,12 +240,12 @@ ickErrcode_t _ickDeviceAddMessage( ickDevice_t *device, void *container, size_t 
 /*=========================================================================*\
   Remove a message container from the output queue
     caller should lock the device
-    This will also free the message
+    caller needs also to free the message
 \*=========================================================================*/
-ickErrcode_t _ickDeviceRemoveAndFreeMessage( ickDevice_t *device, ickMessage_t *message )
+ickErrcode_t _ickDeviceUnlinkMessage( ickDevice_t *device, ickMessage_t *message )
 {
   ickMessage_t *walk;
-  debug( "_ickDeviceRemoveAndFreeMessage (%s): message %p (%ld bytes)",
+  debug( "_ickDeviceUnlinkMessage (%s): message %p (%ld bytes)",
          device->uuid, message, message->size );
 
 /*------------------------------------------------------------------------*\
@@ -255,7 +255,7 @@ ickErrcode_t _ickDeviceRemoveAndFreeMessage( ickDevice_t *device, ickMessage_t *
     if( walk==message )
       break;
   if( !walk ) {
-    logerr( "_ickDeviceRemoveAndFreeMessage (%s): message not member of output queue",
+    logerr( "_ickDeviceUnlinkMessage (%s): message not member of output queue",
             device->uuid );
     return ICKERR_NOMEMBER;
   }
@@ -271,6 +271,21 @@ ickErrcode_t _ickDeviceRemoveAndFreeMessage( ickDevice_t *device, ickMessage_t *
     device->outQueue = message->next;
 
 /*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
+  return ICKERR_SUCCESS;
+}
+
+
+/*=========================================================================*\
+  Free a message container
+\*=========================================================================*/
+void _ickDeviceFreeMessage( ickMessage_t *message )
+{
+  debug( "_ickDeviceFreeMessage: message %p (%ld bytes)",
+         message, message->size );
+
+/*------------------------------------------------------------------------*\
     Free payload and descriptor
 \*------------------------------------------------------------------------*/
   Sfree( message->payload );
@@ -279,7 +294,6 @@ ickErrcode_t _ickDeviceRemoveAndFreeMessage( ickDevice_t *device, ickMessage_t *
 /*------------------------------------------------------------------------*\
     That's all
 \*------------------------------------------------------------------------*/
-  return ICKERR_SUCCESS;
 }
 
 
@@ -358,6 +372,7 @@ const char *_ickDeviceConnState2Str( ickDeviceConnState_t state )
 {
   switch( state ) {
     case ICKDEVICE_NOTCONNECTED:      return "not connected";
+    case ICKDEVICE_LOOPBACK:          return "loopback (connected)";
     case ICKDEVICE_CLIENTCONNECTING:  return "client connecting";
     case ICKDEVICE_ISCLIENT:          return "client (connected)";
     case ICKDEVICE_ISSERVER:          return "server (connected)";

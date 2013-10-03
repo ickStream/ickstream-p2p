@@ -613,7 +613,6 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     device->services       = ICKP2P_SERVICE_GENERIC;
     device->ickUpnpVersion = _ssdpGetVersion( ssdp->usn );
     device->location       = strdup( ssdp->location );
-
     if( !device->location ) {
       logerr( "_ickDeviceUpdate: out of memory" );
       _ickDeviceFree( device );
@@ -623,6 +622,40 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
 
     // Link device to discovery handler
     _ickLibDeviceAdd( ictx, device );
+
+    // Loop back?
+    if( !strcasecmp(ssdp->uuid,ictx->deviceUuid) ) {
+
+      // Complete device description
+      device->friendlyName = strdup( ictx->deviceName );
+      device->ickP2pLevel  = ICKP2PLEVEL_SUPPORTED;
+      device->services     = ictx->ickServices;
+      device->lifetime     = ictx->lifetime;
+      if( !device->friendlyName ) {
+        logerr( "_ickDeviceUpdate: out of memory" );
+        _ickDeviceFree( device );
+        retval = -1;
+        goto bail;
+      }
+
+      //Evaluate connection matrix
+      device->doConnect = 1;
+      if( ictx->lwsConnectMatrixCb )
+        device->doConnect = ictx->lwsConnectMatrixCb( ictx, ictx->ickServices, device->services );
+      debug( "_ickDeviceUpdate (%s): %s need to connect", device->uuid, device->doConnect?"Do":"No" );
+      if( device->doConnect )
+        device->connectionState = ICKDEVICE_LOOPBACK;
+
+      // Set timestamp and set pointer to loopback device
+      device->tXmlComplete = _ickTimeNow();
+      ictx->deviceLoopback = device;
+
+      // Signal device readiness to user code
+      _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_INITIALIZED, device->services );
+      if( device->doConnect )
+        _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
+
+    }
 
     // Return code is 1 (a device was added)
     retval = 1;
@@ -685,7 +718,7 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     If the device is complete, but not connected,
     reinitiate web socket connection with new location
 \*------------------------------------------------------------------------*/
-  else if( !device->wsi && device->doConnect ) {
+  else if( !device->wsi && device->doConnect && device->connectionState!=ICKDEVICE_LOOPBACK ) {
     debug( "_ickDeviceUpdate (%s): trying to reconnect", device->uuid );
     if( _ickDeviceSetLocation(device,ssdp->location) ) {
       retval = -1;

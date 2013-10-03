@@ -71,7 +71,7 @@ typedef struct {
   Internal prototypes
 \*=========================================================================*/
 ickErrcode_t _ickP2pSendNullMessage( ickP2pContext_t *ictx, ickDevice_t *device );
-
+ickErrcode_t _ickDeliverLoopbackMessage( ickP2pContext_t *ictx );
 ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_t *device );
 
 int    _lwsP2pCb( struct libwebsocket_context *context,

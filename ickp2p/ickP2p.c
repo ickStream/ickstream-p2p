@@ -1414,6 +1414,12 @@ void _ickLibDeviceRemove( ickP2pContext_t *ictx, ickDevice_t *device )
     ictx->deviceList = device->next;
 
 /*------------------------------------------------------------------------*\
+    Reset loop back device?
+\*------------------------------------------------------------------------*/
+  if( device==ictx->deviceLoopback )
+    ictx->deviceLoopback = NULL;
+
+/*------------------------------------------------------------------------*\
     Device is not associated
 \*------------------------------------------------------------------------*/
   device->ictx = NULL;

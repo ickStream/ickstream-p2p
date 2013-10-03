@@ -132,6 +132,7 @@ struct _ickP2pContext {
 
   // List of remote devices seen by this interface
   ickDevice_t                 *deviceList;
+  ickDevice_t                 *deviceLoopback;
   pthread_mutex_t              deviceListMutex;
 
   // List of local services offered to the world

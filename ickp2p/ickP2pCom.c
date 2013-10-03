@@ -108,7 +108,8 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
     }
 
     // Not connected?
-    if( !device->wsi || device->connectionState==ICKDEVICE_NOTCONNECTED ) {
+    if( (!device->wsi||device->connectionState==ICKDEVICE_NOTCONNECTED) &&
+        device->connectionState!=ICKDEVICE_LOOPBACK ) {
       _ickLibDeviceListUnlock( ictx );
       return ICKERR_NOTCONNECTED;
     }
@@ -137,7 +138,8 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
 /*------------------------------------------------------------------------*\
     Ignore unconnected devices in broadcast mode
 \*------------------------------------------------------------------------*/
-    if( !device->wsi || device->connectionState==ICKDEVICE_NOTCONNECTED )
+    if( (!device->wsi||device->connectionState==ICKDEVICE_NOTCONNECTED) &&
+        device->connectionState!=ICKDEVICE_LOOPBACK )
       goto nextDevice;
 
 /*------------------------------------------------------------------------*\
@@ -198,8 +200,16 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
 /*------------------------------------------------------------------------*\
     Book a writable callback for the devices wsi
 \*------------------------------------------------------------------------*/
-    if( device->connectionState>ICKDEVICE_CLIENTCONNECTING )
+    if( device->wsi )
       libwebsocket_callback_on_writable( ictx->lwsContext, device->wsi );
+
+    // Loopback
+    else if( device->connectionState==ICKDEVICE_LOOPBACK ) {
+      // Set submission timestamp and count message as sent
+      device->tLastTx = _ickTimeNow();
+      device->nTx++;
+    }
+
 
 /*------------------------------------------------------------------------*\
     Handle next device in notification mode
@@ -268,6 +278,7 @@ int ickP2pDefaultConnectMatrixCb( ickP2pContext_t *ictx, ickP2pServicetype_t loc
 
 #pragma mark -- internal functions
 
+
 /*=========================================================================*\
   Send a Null message (used for heart beat and syncing)
     ictx           - ickstream context
@@ -280,6 +291,10 @@ ickErrcode_t _ickP2pSendNullMessage( ickP2pContext_t *ictx, ickDevice_t *device 
   char         *container;
 
   debug( "_ickP2pSendNullMessage: target=\"%s\"", device->uuid );
+  if( device->connectionState==ICKDEVICE_LOOPBACK ) {
+    logerr( "_ickP2pSendNullMessage (%s): called for loopback device", device->uuid );
+    return ICKERR_INVALID;
+  }
 
 /*------------------------------------------------------------------------*\
     Allocate payload container, include LWS padding
@@ -322,6 +337,46 @@ ickErrcode_t _ickP2pSendNullMessage( ickP2pContext_t *ictx, ickDevice_t *device 
 
 
 /*=========================================================================*\
+  Deliver a message via loopback
+    timer list is already locked
+\*=========================================================================*/
+ickErrcode_t _ickDeliverLoopbackMessage( ickP2pContext_t *ictx )
+{
+  ickDevice_t     *device = ictx->deviceLoopback;
+  ickMessage_t    *message;
+
+  debug( "_ickDeliverLoopbackMessage: \"%s\"", device->uuid );
+
+/*------------------------------------------------------------------------*\
+   There should be a message pending....
+\*------------------------------------------------------------------------*/
+  _ickDeviceLock( device );
+  message = _ickDeviceOutQueue( device );
+  if( !message ) {
+    _ickDeviceUnlock( device );
+    logerr( "_ickDeliverLoopbackMessage: empty out queue for \"%s\"!", device->uuid  );
+    return ICKERR_INVALID;
+  }
+  _ickDeviceUnlinkMessage( device, message );
+  _ickDeviceUnlock( device );
+
+/*------------------------------------------------------------------------*\
+    Deliver message locally, don't use LWS padding
+\*------------------------------------------------------------------------*/
+  device->tLastRx = _ickTimeNow();
+  _ickP2pExecMessageCallback( ictx, device, message->payload+LWS_SEND_BUFFER_PRE_PADDING, message->size );
+  device->nRx++;
+
+/*------------------------------------------------------------------------*\
+    Release message, that's all
+\*------------------------------------------------------------------------*/
+  _ickDeviceFreeMessage( message );
+  return ICKERR_SUCCESS;
+}
+
+
+
+/*=========================================================================*\
   Initiate web socket connection to a device
     caller should lock the device,
     this must be called from the main thread
@@ -340,6 +395,10 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
   struct libwebsocket *wsi;
 
   debug( "_ickWebSocketOpen (%s): \"%s\"", device->uuid, device->location );
+  if( device->connectionState==ICKDEVICE_LOOPBACK ) {
+    logerr( "_ickWebSocketOpen (%s): called for loopback device", device->uuid );
+    return ICKERR_INVALID;
+  }
 
 /*------------------------------------------------------------------------*\
     Check status
@@ -764,7 +823,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         logerr( "_lwsP2pCb %d: error writing to \"%s\"", socket, device->uuid );
         // Execute discovery callback
         _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_ERROR, device->services );
-        _ickDeviceRemoveAndFreeMessage( device, message );
+        _ickDeviceUnlinkMessage( device, message );
+        _ickDeviceFreeMessage( message );
         if( _ickDeviceOutQueue(device) )
           libwebsocket_callback_on_writable( context, wsi );
         _ickDeviceUnlock( device );
@@ -780,7 +840,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
       // If complete, delete message and check for a next one
       else {
-        _ickDeviceRemoveAndFreeMessage( device, message );
+        _ickDeviceUnlinkMessage( device, message );
+        _ickDeviceFreeMessage( message );
         device->nTx++;
         if( _ickDeviceOutQueue(device) )
           libwebsocket_callback_on_writable( context, wsi );
