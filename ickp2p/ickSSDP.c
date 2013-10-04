@@ -948,6 +948,8 @@ void _ickSsdpEndDiscovery( ickP2pContext_t *ictx )
   _ickLibDeviceListLock( ictx );
   while( ictx->deviceList ) {
     ickDevice_t *device = ictx->deviceList;
+    if( device->connectionState==ICKDEVICE_LOOPBACK )
+      _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_DISCONNECTED, device->services );
     _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_TERMINATE, device->services );
     _ickLibDeviceRemove( ictx, device );
     _ickDeviceFree( device );
