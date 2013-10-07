@@ -85,6 +85,7 @@ typedef struct _ickDevice ickDevice_t;
 struct _cblist {
   struct _cblist  *next;
   struct _cblist  *prev;
+  int              isNew;
   void            *callback;
 };
 

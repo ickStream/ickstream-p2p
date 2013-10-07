@@ -334,6 +334,26 @@ void *_ickMainThread( void *arg )
              i, plist.fds[i].fd, plist.fds[i].revents );
 
 /*------------------------------------------------------------------------*\
+    Detect any newly registered callbacks and send current device states
+\*------------------------------------------------------------------------*/
+    struct _cblist *cb;
+    pthread_mutex_lock( &ictx->discoveryCbsMutex );
+    for( cb=ictx->discoveryCbs; cb; cb=cb->next ) {
+      ickDevice_t *device;
+      if( !cb->isNew )
+        continue;
+      cb->isNew = 0;
+      _ickLibDeviceListLock( ictx );
+      for( device=ictx->deviceList; device; device=device->next ) {
+        ((ickP2pDiscoveryCb_t)cb->callback)( ictx, device->uuid, ICKP2P_LEGACY, device->services );
+        if( device->wsi || device->connectionState==ICKDEVICE_LOOPBACK )
+          ((ickP2pDiscoveryCb_t)cb->callback)( ictx, device->uuid, ICKP2P_CONNECTED, device->services );
+      }
+      _ickLibDeviceListUnlock( ictx );
+    }
+    pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+
+/*------------------------------------------------------------------------*\
     First execute loop back deliveries
 \*------------------------------------------------------------------------*/
     while( ictx->deviceLoopback && ictx->deviceLoopback->outQueue ) {
@@ -420,12 +440,14 @@ void *_ickMainThread( void *arg )
 
 /*------------------------------------------------------------------------*\
     Get rid of libwebsocket context
+    This will close all connections send disconnected messages
 \*------------------------------------------------------------------------*/
   libwebsocket_context_destroy( ictx->lwsContext );
 
 /*------------------------------------------------------------------------*\
     Stop SSDP services and announce termination,
-    this will also delete the device list
+    this will also delete the device list and send termination messages
+    (loopback device receives its disconnected message here)
 \*------------------------------------------------------------------------*/
   _ickSsdpEndDiscovery( ictx );
 

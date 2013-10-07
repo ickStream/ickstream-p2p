@@ -518,15 +518,7 @@ void _ickLibDestruct( ickP2pContext_t *ictx )
 ickErrcode_t ickP2pRegisterDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDiscoveryCb_t callback )
 {
   struct _cblist *new;
-  ickDevice_t    *device;
   debug( "ickP2pRegisterDiscoveryCallback (%p): %p", ictx, callback );
-
-
-/*------------------------------------------------------------------------*\
-    Should not be used after startup
-\*------------------------------------------------------------------------*/
-  if( ictx->state!=ICKLIB_CREATED )
-    logwarn( "ickP2pRegisterDiscoveryCallback: usage after first resume is deprecated!" );
 
 /*------------------------------------------------------------------------*\
     Lock list of callbacks
@@ -554,6 +546,7 @@ ickErrcode_t ickP2pRegisterDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDisco
     return ICKERR_NOMEM;
   }
   new->callback = callback;
+  new->isNew    = 1;
 
 /*------------------------------------------------------------------------*\
     Add to linked list
@@ -562,14 +555,6 @@ ickErrcode_t ickP2pRegisterDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDisco
   if( new->next )
     new->next->prev = new;
   ictx->discoveryCbs = new;
-
-/*------------------------------------------------------------------------*\
-    Signal status quo for all devices
-\*------------------------------------------------------------------------*/
-  _ickLibDeviceListLock( ictx );
-  for( device=ictx->deviceList; device; device=device->next )
-    _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_LEGACY, device->services );
-  _ickLibDeviceListUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
     Unlock list, that's all
@@ -586,12 +571,6 @@ ickErrcode_t ickP2pRemoveDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDiscove
 {
   struct _cblist *walk;
   debug( "ickP2pRemoveDiscoveryCallback (%p): %p", ictx, callback );
-
-/*------------------------------------------------------------------------*\
-    Should not be used after startup
-\*------------------------------------------------------------------------*/
-  if( ictx->state!=ICKLIB_CREATED )
-    logwarn( "ickP2pRemoveDiscoveryCallback: usage after first resume is deprecated!" );
 
 /*------------------------------------------------------------------------*\
     Lock list of callbacks
@@ -636,12 +615,6 @@ ickErrcode_t ickP2pRegisterMessageCallback( ickP2pContext_t *ictx, ickP2pMessage
 {
   struct _cblist *new;
   debug( "ickP2pRegisterMessageCallback (%p): %p", ictx, callback );
-
-/*------------------------------------------------------------------------*\
-    Should not be used after startup
-\*------------------------------------------------------------------------*/
-  if( ictx->state!=ICKLIB_CREATED )
-    logwarn( "ickP2pRegisterMessageCallback: usage after first resume is deprecated!" );
 
 /*------------------------------------------------------------------------*\
     Lock list of callbacks
@@ -693,12 +666,6 @@ ickErrcode_t ickP2pRemoveMessageCallback( ickP2pContext_t *ictx, ickP2pMessageCb
 {
   struct _cblist *walk;
   debug( "ickP2pRemoveMessageCallback (%p): %p", ictx, callback );
-
-/*------------------------------------------------------------------------*\
-    Should not be used after startup
-\*------------------------------------------------------------------------*/
-  if( ictx->state!=ICKLIB_CREATED )
-    logwarn( "ickP2pRemoveMessageCallback: usage after first resume is deprecated!" );
 
 /*------------------------------------------------------------------------*\
     Lock list of callbacks
