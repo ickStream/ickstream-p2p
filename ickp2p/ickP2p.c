@@ -546,7 +546,8 @@ ickErrcode_t ickP2pRegisterDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDisco
     return ICKERR_NOMEM;
   }
   new->callback = callback;
-  new->isNew    = 1;
+  if( ictx->state!=ICKLIB_CREATED )
+    new->isNew = 1;
 
 /*------------------------------------------------------------------------*\
     Add to linked list
