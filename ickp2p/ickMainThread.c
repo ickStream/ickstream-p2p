@@ -345,7 +345,7 @@ void *_ickMainThread( void *arg )
       cb->isNew = 0;
       _ickLibDeviceListLock( ictx );
       for( device=ictx->deviceList; device; device=device->next ) {
-        ((ickP2pDiscoveryCb_t)cb->callback)( ictx, device->uuid, ICKP2P_LEGACY, device->services );
+        ((ickP2pDiscoveryCb_t)cb->callback)( ictx, device->uuid, ICKP2P_INVENTORY, device->services );
         if( device->wsi || device->connectionState==ICKDEVICE_LOOPBACK )
           ((ickP2pDiscoveryCb_t)cb->callback)( ictx, device->uuid, ICKP2P_CONNECTED, device->services );
       }

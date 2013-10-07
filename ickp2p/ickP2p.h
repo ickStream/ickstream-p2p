@@ -79,12 +79,9 @@ typedef enum {
   ICKP2P_BYEBYE,
   ICKP2P_EXPIRED,
   ICKP2P_TERMINATE,
-  ICKP2P_LEGACY,
+  ICKP2P_INVENTORY,
   ICKP2P_ERROR
 } ickP2pDeviceState_t;
-
-#define ICKP2P_NEW ICKP2P_DISCOVERED
-#define ICKP2P_REMOVED ICKP2P_BYEBYE
 
 // Service types
 typedef enum {

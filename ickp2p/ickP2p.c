@@ -652,9 +652,10 @@ ickErrcode_t ickP2pRegisterMessageCallback( ickP2pContext_t *ictx, ickP2pMessage
   ictx->messageCbs = new;
 
 /*------------------------------------------------------------------------*\
-    Unlock list, that's all
+    Unlock list, signal mainthread, that's all
 \*------------------------------------------------------------------------*/
   pthread_mutex_unlock( &ictx->messageCbsMutex );
+  _ickMainThreadBreak( ictx, 'l' );
   return ICKERR_SUCCESS;
 }
 
@@ -735,7 +736,7 @@ const char *ickLibDeviceState2Str( ickP2pDeviceState_t change )
     case ICKP2P_BYEBYE:       return "byebye";
     case ICKP2P_EXPIRED:      return "expired";
     case ICKP2P_TERMINATE:    return "terminating";
-    case ICKP2P_LEGACY:       return "legacy";
+    case ICKP2P_INVENTORY:    return "inventory";
     case ICKP2P_ERROR:        return "error";
   }
 
