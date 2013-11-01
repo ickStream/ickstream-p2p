@@ -128,9 +128,10 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
                                const char *upnpFolder, int lifetime, int port,
                                ickP2pServicetype_t services, ickErrcode_t *error )
 {
-  ickP2pContext_t *ictx;
-  int              rc;
-  struct utsname   utsname;
+  ickP2pContext_t    *ictx;
+  int                 rc;
+  struct utsname      utsname;
+  pthread_mutexattr_t attr;
 
   debug( "ickP2pCreate: \"%s\" (%s) services=0x%02x lt=%ds folder=\"%s\" port=%d",
          deviceName, deviceUuid, services, lifetime, upnpFolder, port );
@@ -167,7 +168,9 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
   pthread_mutex_init( &ictx->messageCbsMutex, NULL );
   pthread_mutex_init( &ictx->timersMutex, NULL );
   pthread_mutex_init( &ictx->wGettersMutex, NULL );
-  pthread_mutex_init( &ictx->deviceListMutex, NULL );
+  pthread_mutexattr_init( &attr );
+  pthread_mutexattr_settype( &attr, PTHREAD_MUTEX_RECURSIVE );
+  pthread_mutex_init( &ictx->deviceListMutex, &attr );
   pthread_mutex_init( &ictx->interfaceListMutex, NULL );
 
 /*------------------------------------------------------------------------*\
@@ -558,9 +561,10 @@ ickErrcode_t ickP2pRegisterDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDisco
   ictx->discoveryCbs = new;
 
 /*------------------------------------------------------------------------*\
-    Unlock list, that's all
+    Unlock list, signal main thread, that's all
 \*------------------------------------------------------------------------*/
   pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+  _ickMainThreadBreak( ictx, 'l' );
   return ICKERR_SUCCESS;
 }
 
@@ -653,10 +657,9 @@ ickErrcode_t ickP2pRegisterMessageCallback( ickP2pContext_t *ictx, ickP2pMessage
   ictx->messageCbs = new;
 
 /*------------------------------------------------------------------------*\
-    Unlock list, signal mainthread, that's all
+    Unlock list, that's all
 \*------------------------------------------------------------------------*/
   pthread_mutex_unlock( &ictx->messageCbsMutex );
-  _ickMainThreadBreak( ictx, 'l' );
   return ICKERR_SUCCESS;
 }
 
