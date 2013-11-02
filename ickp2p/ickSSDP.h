@@ -118,7 +118,7 @@ typedef struct _ickSsdp_t ickSsdp_t;
   Internal prototypes
 \*=========================================================================*/
 int           _ickSsdpCreateListener( in_addr_t ifaddr, int port );
-ickSsdp_t    *_ickSsdpParse( const char *buffer, size_t length, const struct sockaddr *addr );
+ickSsdp_t    *_ickSsdpParse( const char *buffer, size_t length, const struct sockaddr *addr, int port );
 void          _ickSsdpFree( ickSsdp_t *ssdp );
 int           _ickSsdpExecute( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
 ickErrcode_t  _ickSsdpNewDiscovery( ickP2pContext_t *ictx );

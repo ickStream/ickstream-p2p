@@ -203,9 +203,10 @@ int _ickSsdpCreateListener( in_addr_t ifaddr, int port )
     buffer - pointer to data
     length - valid bytes in buffer
     addr   - address of peer
+    port   - expected ssdp port (1900 as default)
   returns a filled ssdp descriptor or NULL on error
 \*=========================================================================*/
-ickSsdp_t *_ickSsdpParse( const char *buffer, size_t length, const struct sockaddr *addr )
+ickSsdp_t *_ickSsdpParse( const char *buffer, size_t length, const struct sockaddr *addr, int port )
 {
   ickSsdp_t  *ssdp;
   int         lineno;
@@ -385,10 +386,10 @@ ickSsdp_t *_ickSsdpParse( const char *buffer, size_t length, const struct sockad
       ssdp->location = value;
 
     else if( !strcasecmp(name,"host") ) {
-      if( strcasecmp(value,"239.255.255.250") &&
-          strcasecmp(value,"239.255.255.250:1900") ) {
-        logwarn("_ickSsdpParse (%s): Invalid HOST header value \"%s\"", peer, value );
-      }
+      char hostval[32];
+      sprintf( hostval, "%s:%d", ICKSSDP_MCASTADDR, port );
+      if( strcasecmp(value,ICKSSDP_MCASTADDR) && strcasecmp(value,hostval) )
+        logwarn("_ickSsdpParse (%s): Invalid HOST header value \"%s\" (expected %s)", peer, value, hostval );
     }
 
     else if( !strcasecmp(name,"server") )

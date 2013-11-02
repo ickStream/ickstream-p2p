@@ -520,7 +520,7 @@ static void _ickServiceSsdpSocket( ickP2pContext_t *ictx, char *buffer, int sd )
 /*------------------------------------------------------------------------*\
     Try to parse SSDP packet to internal representation
 \*------------------------------------------------------------------------*/
-  ssdp = _ickSsdpParse( buffer, len, &address );
+  ssdp = _ickSsdpParse( buffer, len, &address, ictx->upnpListenerPort );
   if( !ssdp )
     return;
 

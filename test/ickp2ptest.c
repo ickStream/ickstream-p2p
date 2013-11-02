@@ -396,8 +396,21 @@ static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDevice
       strcat( tstr, " debugging" );
   }
 
+  // Print discovery event
   printf( "+++ %s -- %s -- %s\n", uuid, ickLibDeviceState2Str(change), tstr );
   printf( "+++ %s -- Location: %s\n", uuid, ickP2pGetDeviceLocation(ictx,uuid) );
+
+  // For new connections send hello
+  if( change==ICKP2P_CONNECTED ) {
+    ickErrcode_t irc;
+    // Broadcast message as string
+    printf( "Sending Hello!\n" );
+    irc = ickP2pSendMsg( ictx, uuid, ICKP2P_SERVICE_ANY, type, "Hello!", 0 );
+    if( irc ) {
+      printf( "ickP2pSendMsg: %s\n", ickStrError(irc) );
+      return;
+    }
+  }
 }
 
 
@@ -423,7 +436,7 @@ static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid,
   if( !strncmp(message,"Message #",strlen("Message #")) ) {
     char *response;
     ickErrcode_t irc;
-    asprintf( &response, "Response from %s for %s", ickP2pGetDeviceUuid(ictx), message );
+    asprintf( &response, "Response for %s", message );
 
     // Broadcast message as string
     printf( "Sending %s\n", response );
