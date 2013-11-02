@@ -567,6 +567,7 @@ static char *_ickDeviceStateJson( ickDevice_t *device, int indent )
                   "%*s\"tDisconnect\": %f,\n"
                   "%*s\"rx\": %d,\n"
                   "%*s\"rxSegmented\": %d,\n"
+                  "%*s\"rxPending\": %d,\n"
                   "%*s\"tx\": %d,\n"
                   "%*s\"txPending\": %d,\n"
                   "%*s\"rxLast\": %f,\n"
@@ -591,8 +592,9 @@ static char *_ickDeviceStateJson( ickDevice_t *device, int indent )
                   indent, "", JSON_REAL( device->tDisconnect ),
                   indent, "", JSON_INTEGER( device->nRx ),
                   indent, "", JSON_INTEGER( device->nRxSegmented ),
+                  indent, "", JSON_INTEGER( _ickDevicePendingInMessages(device) ),
                   indent, "", JSON_INTEGER( device->nTx ),
-                  indent, "", JSON_INTEGER( _ickDevicePendingMessages(device) ),
+                  indent, "", JSON_INTEGER( _ickDevicePendingOutMessages(device) ),
                   indent, "", JSON_REAL( device->tLastRx ),
                   indent, "", JSON_REAL( device->tLastTx ),
                   indent, "", JSON_OBJECT( wsi ),

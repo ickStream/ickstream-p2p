@@ -120,7 +120,25 @@ void _ickDeviceFree( ickDevice_t *device )
       num++;
     }
     device->outQueue = NULL;
-    loginfo( "_ickDeviceFree: Deleted %d unsent messages.", num );
+    loginfo( "_ickDeviceFree: Deleted %d unsent messages in outQueue.", num );
+  }
+
+/*------------------------------------------------------------------------*\
+    Delete undelivered messages
+\*------------------------------------------------------------------------*/
+  if( device->inQueue ) {
+    ickMessage_t *msg, *next;
+    int           num;
+
+    //Loop over output queue, free and count entries
+    for( num=0,msg=device->inQueue; msg; msg=next ) {
+      next = msg->next;
+      Sfree( msg->payload );
+      Sfree( msg )
+      num++;
+    }
+    device->inQueue = NULL;
+    loginfo( "_ickDeviceFree: Deleted %d undelivered messages in inQueue.", num );
   }
 
 /*------------------------------------------------------------------------*\
@@ -198,18 +216,18 @@ ickErrcode_t _ickDeviceSetName( ickDevice_t *device, const char *name )
     container must including LWS padding, while size does NOT include LWS padding
     caller should free the payload in case an error code is returned
 \*=========================================================================*/
-ickErrcode_t _ickDeviceAddMessage( ickDevice_t *device, void *container, size_t size )
+ickErrcode_t _ickDeviceAddOutMessage( ickDevice_t *device, void *container, size_t size )
 {
   ickMessage_t *message;
   ickMessage_t *walk;
-  debug ( "_ickDeviceAddMessage (%s): %ld bytes", device->uuid, (long)size );
+  debug ( "_ickDeviceAddOutMessage (%s): %ld bytes", device->uuid, (long)size );
 
 /*------------------------------------------------------------------------*\
     Allocate and initialize message descriptor
 \*------------------------------------------------------------------------*/
   message = calloc( 1, sizeof(ickMessage_t) );
   if( !message ) {
-    logerr( "_ickDeviceAddMessage: out of memory" );
+    logerr( "_ickDeviceAddOutMessage: out of memory" );
     return ICKERR_NOMEM;
   }
   message->tCreated = _ickTimeNow();
@@ -231,8 +249,8 @@ ickErrcode_t _ickDeviceAddMessage( ickDevice_t *device, void *container, size_t 
 /*------------------------------------------------------------------------*\
     That's it
 \*------------------------------------------------------------------------*/
-  debug( "_ickDeviceAddMessage (%s): output queue has now %d entries (%ld bytes)",
-         device->uuid, _ickDevicePendingMessages(device), _ickDevicePendingBytes(device) );
+  debug( "_ickDeviceAddOutMessage (%s): output queue has now %d entries (%ld bytes)",
+         device->uuid, _ickDevicePendingOutMessages(device), _ickDevicePendingOutBytes(device) );
   return ICKERR_SUCCESS;
 }
 
@@ -242,10 +260,10 @@ ickErrcode_t _ickDeviceAddMessage( ickDevice_t *device, void *container, size_t 
     caller should lock the device
     caller needs also to free the message
 \*=========================================================================*/
-ickErrcode_t _ickDeviceUnlinkMessage( ickDevice_t *device, ickMessage_t *message )
+ickErrcode_t _ickDeviceUnlinkOutMessage( ickDevice_t *device, ickMessage_t *message )
 {
   ickMessage_t *walk;
-  debug( "_ickDeviceUnlinkMessage (%s): message %p (%ld bytes)",
+  debug( "_ickDeviceUnlinkOutMessage (%s): message %p (%ld bytes)",
          device->uuid, message, message->size );
 
 /*------------------------------------------------------------------------*\
@@ -255,7 +273,7 @@ ickErrcode_t _ickDeviceUnlinkMessage( ickDevice_t *device, ickMessage_t *message
     if( walk==message )
       break;
   if( !walk ) {
-    logerr( "_ickDeviceUnlinkMessage (%s): message not member of output queue",
+    logerr( "_ickDeviceUnlinkOutMessage (%s): message not member of output queue",
             device->uuid );
     return ICKERR_NOMEMBER;
   }
@@ -269,6 +287,91 @@ ickErrcode_t _ickDeviceUnlinkMessage( ickDevice_t *device, ickMessage_t *message
     message->prev->next = message->next;
   else
     device->outQueue = message->next;
+
+/*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
+  return ICKERR_SUCCESS;
+}
+
+
+/*=========================================================================*\
+  Add a message container to the input queue
+    caller should lock the device
+    container needs to be allocated and will be freed when the message is destroyed
+    caller should free the payload in case an error code is returned
+\*=========================================================================*/
+ickErrcode_t _ickDeviceAddInMessage( ickDevice_t *device, void *container, size_t size )
+{
+  ickMessage_t *message;
+  ickMessage_t *walk;
+  debug ( "_ickDeviceAddInMessage (%s): %ld bytes", device->uuid, (long)size );
+
+/*------------------------------------------------------------------------*\
+    Allocate and initialize message descriptor
+\*------------------------------------------------------------------------*/
+  message = calloc( 1, sizeof(ickMessage_t) );
+  if( !message ) {
+    logerr( "_ickDeviceAddInMessage: out of memory" );
+    return ICKERR_NOMEM;
+  }
+  message->tCreated = _ickTimeNow();
+  message->payload  = container;
+  message->size     = size;
+  message->issued   = 0;
+
+/*------------------------------------------------------------------------*\
+    Link to end of input queue
+\*------------------------------------------------------------------------*/
+  if( !device->inQueue )
+    device->inQueue = message;
+  else {
+    for( walk=device->inQueue; walk->next; walk=walk->next );
+    message->prev = walk;
+    walk->next    = message;
+  }
+
+/*------------------------------------------------------------------------*\
+    That's it
+\*------------------------------------------------------------------------*/
+  debug( "_ickDeviceAddInMessage (%s): input queue has now %d entries (%ld bytes)",
+         device->uuid, _ickDevicePendingInMessages(device), _ickDevicePendingInBytes(device) );
+  return ICKERR_SUCCESS;
+}
+
+
+/*=========================================================================*\
+  Remove a message container from the input queue
+    caller should lock the device
+    caller needs also to free the message
+\*=========================================================================*/
+ickErrcode_t _ickDeviceUnlinkInMessage( ickDevice_t *device, ickMessage_t *message )
+{
+  ickMessage_t *walk;
+  debug( "_ickDeviceUnlinkInMessage (%s): message %p (%ld bytes)",
+         device->uuid, message, message->size );
+
+/*------------------------------------------------------------------------*\
+    Check if member
+\*------------------------------------------------------------------------*/
+  for( walk=device->inQueue; walk->next; walk=walk->next )
+    if( walk==message )
+      break;
+  if( !walk ) {
+    logerr( "_ickDeviceUnlinkInMessage (%s): message not member of input queue",
+            device->uuid );
+    return ICKERR_NOMEMBER;
+  }
+
+/*------------------------------------------------------------------------*\
+    Unlink
+\*------------------------------------------------------------------------*/
+  if( message->next )
+    message->next->prev = message->prev;
+  if( message->prev )
+    message->prev->next = message->next;
+  else
+    device->inQueue = message->next;
 
 /*------------------------------------------------------------------------*\
     That's all
@@ -311,7 +414,7 @@ ickMessage_t *_ickDeviceOutQueue( ickDevice_t *device )
   Get output queue length of a device
     caller should lock the device
 \*=========================================================================*/
-int _ickDevicePendingMessages( ickDevice_t *device )
+int _ickDevicePendingOutMessages( ickDevice_t *device )
 {
   ickMessage_t *message;
   int           size;
@@ -328,11 +431,12 @@ int _ickDevicePendingMessages( ickDevice_t *device )
   return size;
 }
 
+
 /*=========================================================================*\
   Get accumulated output queue size of a device
     caller should lock the device
 \*=========================================================================*/
-size_t _ickDevicePendingBytes( ickDevice_t *device )
+size_t _ickDevicePendingOutBytes( ickDevice_t *device )
 {
   ickMessage_t *message;
   size_t        size;
@@ -348,6 +452,51 @@ size_t _ickDevicePendingBytes( ickDevice_t *device )
 \*------------------------------------------------------------------------*/
   return size;
 }
+
+
+/*=========================================================================*\
+  Get input queue length of a device
+    caller should lock the device
+\*=========================================================================*/
+int _ickDevicePendingInMessages( ickDevice_t *device )
+{
+  ickMessage_t *message;
+  int           size;
+
+/*------------------------------------------------------------------------*\
+    Loop over output queue and count entries
+\*------------------------------------------------------------------------*/
+  for( size=0,message=device->inQueue; message; message=message->next )
+    size++;
+
+/*------------------------------------------------------------------------*\
+    Return result
+\*------------------------------------------------------------------------*/
+  return size;
+}
+
+
+/*=========================================================================*\
+  Get accumulated input queue size of a device
+    caller should lock the device
+\*=========================================================================*/
+size_t _ickDevicePendingInBytes( ickDevice_t *device )
+{
+  ickMessage_t *message;
+  size_t        size;
+
+/*------------------------------------------------------------------------*\
+    Loop over output queue and count bytes
+\*------------------------------------------------------------------------*/
+  for( size=0,message=device->inQueue; message; message=message->next )
+    size += message->size;
+
+/*------------------------------------------------------------------------*\
+    Return result
+\*------------------------------------------------------------------------*/
+  return size;
+}
+
 
 /*=========================================================================*\
   Convert SSDP state to string
@@ -375,6 +524,7 @@ const char *_ickDeviceConnState2Str( ickDeviceConnState_t state )
     case ICKDEVICE_LOOPBACK:          return "loopback (connected)";
     case ICKDEVICE_CLIENTCONNECTING:  return "client connecting";
     case ICKDEVICE_ISCLIENT:          return "client (connected)";
+    case ICKDEVICE_SERVERCONNECTING:  return "server (connecting)";
     case ICKDEVICE_ISSERVER:          return "server (connected)";
   }
 

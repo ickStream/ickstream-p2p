@@ -282,8 +282,22 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
 
       // Signal device readiness to user code
       _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_INITIALIZED, device->services );
-      if( device->connectionState==ICKDEVICE_ISSERVER )
+      if( device->connectionState==ICKDEVICE_SERVERCONNECTING ) {
+
+        // We are server, set connection timestamp
+        device->connectionState = ICKDEVICE_ISSERVER;
+        device->tConnect        = _ickTimeNow();
+
         _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
+
+        // Deliver messages received by servers prior to XML completion
+        while( device->inQueue ) {
+          ickMessage_t *message = device->inQueue;
+          _ickP2pExecMessageCallback( ictx, device, message->payload, message->size );
+          _ickDeviceUnlinkInMessage( device, message );
+          _ickDeviceFreeMessage( message );
+        }
+      }
 
       break;
   }

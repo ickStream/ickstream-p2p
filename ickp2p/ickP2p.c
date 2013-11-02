@@ -1238,7 +1238,7 @@ int ickP2pGetDeviceMessagesPending( const ickP2pContext_t *ictx, const char *uui
   ickDevice_t *device = _ickLibDeviceFindByUuid( ictx, uuid );
   if( !device )
     return -1;
-  return _ickDevicePendingMessages( device );
+  return _ickDevicePendingOutMessages( device );
 }
 
 

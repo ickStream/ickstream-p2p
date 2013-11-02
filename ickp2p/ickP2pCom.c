@@ -54,8 +54,6 @@ Remarks         : refactored from ickP2PComm.c
 /*=========================================================================*\
   Private prototypes
 \*=========================================================================*/
-static void  _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t *device,
-                                         const void *message, size_t mSize );
 static int   _ickP2pComTransmit( struct libwebsocket *wsi, ickMessage_t *message );
 static char *_ickLwsDupToken( struct libwebsocket *wsi, enum lws_token_indexes h );
 #ifdef ICK_DEBUG
@@ -190,7 +188,7 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
     Try queue message for transmission
 \*------------------------------------------------------------------------*/
     _ickDeviceLock( device );
-    irc = _ickDeviceAddMessage( device, container, pSize );
+    irc = _ickDeviceAddOutMessage( device, container, pSize );
     _ickDeviceUnlock( device );
     if( irc ) {
       Sfree( container );
@@ -312,9 +310,9 @@ ickErrcode_t _ickP2pSendNullMessage( ickP2pContext_t *ictx, ickDevice_t *device 
   container[LWS_SEND_BUFFER_PRE_PADDING] = 0;
 
 /*------------------------------------------------------------------------*\
-    Try queue message for transmission
+    Try to queue message for transmission
 \*------------------------------------------------------------------------*/
-  irc = _ickDeviceAddMessage( device, container, 1 );
+  irc = _ickDeviceAddOutMessage( device, container, 1 );
   if( irc ) {
     Sfree( container );
     return irc;
@@ -357,7 +355,7 @@ ickErrcode_t _ickDeliverLoopbackMessage( ickP2pContext_t *ictx )
     logerr( "_ickDeliverLoopbackMessage: empty out queue for \"%s\"!", device->uuid  );
     return ICKERR_INVALID;
   }
-  _ickDeviceUnlinkMessage( device, message );
+  _ickDeviceUnlinkOutMessage( device, message );
   _ickDeviceUnlock( device );
 
 /*------------------------------------------------------------------------*\
@@ -582,7 +580,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       socket = libwebsocket_get_socket_fd( wsi );
       device = psd->device;
       debug( "_lwsP2pCb %d: client connection established, %d messages pending",
-             socket, _ickDevicePendingMessages(device) );
+             socket, _ickDevicePendingOutMessages(device) );
 
       // Drop this connection if already connected
       if( device->wsi ) {
@@ -698,6 +696,10 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         Sfree( device->location );
         device->location = dscrPath;
 
+        // We are server, set connection timestamp
+        device->connectionState = ICKDEVICE_ISSERVER;
+        device->tConnect        = _ickTimeNow();
+
         // Execute discovery callback
         _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
       }
@@ -727,7 +729,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         }
         device->location = dscrPath;
 
-        // fixme: there might be lws messages received before the xml file is interpreted, ...
+        // We are server without XML
+        device->connectionState = ICKDEVICE_SERVERCONNECTING;
 
         // Link new device to discovery handler
         _ickLibDeviceAdd( ictx, device );
@@ -775,9 +778,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       }
       _ickTimerListUnlock( ictx );
 
-      // We are server, set connection timestamp
-      device->connectionState = ICKDEVICE_ISSERVER;
-      device->tConnect        = _ickTimeNow();
+      // Store wsi and device
       device->wsi             = wsi;
       psd->device             = device;
 
@@ -823,7 +824,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         logerr( "_lwsP2pCb %d: error writing to \"%s\"", socket, device->uuid );
         // Execute discovery callback
         _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_ERROR, device->services );
-        _ickDeviceUnlinkMessage( device, message );
+        _ickDeviceUnlinkOutMessage( device, message );
         _ickDeviceFreeMessage( message );
         if( _ickDeviceOutQueue(device) )
           libwebsocket_callback_on_writable( context, wsi );
@@ -840,7 +841,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
       // If complete, delete message and check for a next one
       else {
-        _ickDeviceUnlinkMessage( device, message );
+        _ickDeviceUnlinkOutMessage( device, message );
         _ickDeviceFreeMessage( message );
         device->nTx++;
         if( _ickDeviceOutQueue(device) )
@@ -878,9 +879,33 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       // Set timestamp of last (partial) receive
       device->tLastRx = _ickTimeNow();
 
-      // No fragmentation? Execute callbacks directly
+      // No fragmentation? Process message directly
       if( !psd->inBuffer && !rlen && final) {
-        _ickP2pExecMessageCallback( ictx, device, in, len );
+
+        // buffer messages for servers, which are not yet in connected state
+        if( device->connectionState==ICKDEVICE_SERVERCONNECTING ) {
+          ickErrcode_t irc;
+          ptr = malloc( len );
+          if( !ptr ) {
+            logerr( "_lwsP2pCb (%s): out of memory", device->uuid );
+            _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_ERROR, device->services );
+            return -1;
+          }
+          memcpy( ptr, in, len );
+          irc = _ickDeviceAddInMessage( device, ptr, len );
+          if( irc ) {
+            logerr( "_lwsP2pCb (%s): could not add message to input queue (%s)",
+                      device->uuid, ickStrError(irc) );
+            _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_ERROR, device->services );
+            return -1;
+          }
+        }
+
+        // else deliver message
+        else
+          _ickP2pExecMessageCallback( ictx, device, in, len );
+
+        // Count message
         device->nRx++;
         break;
       }
@@ -900,10 +925,27 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
       // If complete: execute callbacks and clean up
       if( !rlen && final ) {
-        _ickP2pExecMessageCallback( ictx, device, psd->inBuffer, psd->inBufferSize );
+        // buffer messages for servers, which are not yet in connected state
+        if( device->connectionState==ICKDEVICE_SERVERCONNECTING ) {
+          ickErrcode_t irc;
+          irc = _ickDeviceAddInMessage( device, psd->inBuffer, psd->inBufferSize );
+          if( irc ) {
+            logerr( "_lwsP2pCb (%s): could not add message to input queue (%s)",
+                      device->uuid, ickStrError(irc) );
+            _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_ERROR, device->services );
+            return -1;
+          }
+        }
+
+        // else deliver and free message
+        else {
+          _ickP2pExecMessageCallback( ictx, device, psd->inBuffer, psd->inBufferSize );
+          Sfree( psd->inBuffer );
+          psd->inBufferSize = 0;
+        }
+
+        // Count segmented message
         device->nRxSegmented++;
-        Sfree( psd->inBuffer );
-        psd->inBufferSize = 0;
       }
 
       break;
@@ -987,8 +1029,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
   Execute a messaging callback
     Message is the raw message including preamble
 \*=========================================================================*/
-static void _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t *device,
-                                        const void *message, size_t mSize )
+void _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t *device,
+                                 const void *message, size_t mSize )
 {
   ickP2pLevel_t        p2pLevel;
   ickP2pServicetype_t  targetServices = ICKP2P_SERVICE_GENERIC;

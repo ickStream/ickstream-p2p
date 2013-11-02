@@ -73,6 +73,8 @@ typedef struct {
 ickErrcode_t _ickP2pSendNullMessage( ickP2pContext_t *ictx, ickDevice_t *device );
 ickErrcode_t _ickDeliverLoopbackMessage( ickP2pContext_t *ictx );
 ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_t *device );
+void         _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t *device,
+                                         const void *message, size_t mSize );
 
 int    _lwsP2pCb( struct libwebsocket_context *context,
                   struct libwebsocket *wsi,
