@@ -658,10 +658,16 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
         // Already connected?
         if( device->wsi ) {
-          debug( "_lwsP2pCb (%s): Connection rejected, already connected", device->uuid );
+          debug( "_lwsP2pCb (%s): Connection rejected (exiting or dead connection)", device->uuid );
           _ickLibDeviceListUnlock( ictx );
+
+          // immediately terminate this connection
           psd->kill = 1;
           libwebsocket_callback_on_writable( context, wsi );
+
+          // Queue a heartbeat message to terminate for dead connections
+          _ickP2pSendNullMessage( ictx, device );
+
           return -1; // No effect for LWS_CALLBACK_ESTABLISHED
         }
 

@@ -606,9 +606,11 @@ static struct libwebsocket_context *_ickCreateLwsContext( ickP2pContext_t *ictx,
   info.user                     = ictx;
 
   // Enable TCP keep alive
+#if 0
   info.ka_time                  = 10; // or better ictx->lifetime;  ?
   info.ka_interval              = 2;
   info.ka_probes                = 3;
+#endif
 
 /*------------------------------------------------------------------------*\
     Try to create the context
