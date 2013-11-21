@@ -70,7 +70,7 @@ typedef enum {
   SSDPMSGLEVEL_GLOBAL,
   SSDPMSGLEVEL_ROOT,
   SSDPMSGLEVEL_UUID,
-  SSDPMSGLEVEL_SERVICE
+  SSDPMSGLEVEL_DEVICEORSERVICE
 } ssdpMsgLevel_t;
 
 
@@ -977,7 +977,7 @@ void _ickSsdpEndDiscovery( ickP2pContext_t *ictx )
                          0, 0 );
   _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_UUID,
                          0, 0 );
-  _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_SERVICE,
+  _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_DEVICEORSERVICE,
                          0, 0 );
 
 /*------------------------------------------------------------------------*\
@@ -1040,7 +1040,7 @@ static void _ickSsdpSearchCb( const ickTimer_t *timer, void *data, int tag )
 /*------------------------------------------------------------------------*\
     Schedule an M-Search for ickstream root devices
 \*------------------------------------------------------------------------*/
-  irc = _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_MSEARCH, SSDPMSGLEVEL_SERVICE,
+  irc = _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_MSEARCH, SSDPMSGLEVEL_DEVICEORSERVICE,
                                1 /*ICKSSDP_REPEATS*/, 0 );
   if( irc ) {
     logerr( "_ickSsdpSearchCb: could not send alive announcements (%s).",
@@ -1113,7 +1113,7 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     Specific search for a ickstream device
 \*------------------------------------------------------------------------*/
   else if( !_ssdpVercmp(ssdp->st,ICKDEVICE_TYPESTR_ROOT) )
-    _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_SERVICE,
+    _ssdpSendDiscoveryMsg( ictx, &ssdp->addr, SSDPMSGTYPE_MRESPONSE, SSDPMSGLEVEL_DEVICEORSERVICE,
                            ICKSSDP_REPEATS, 0 );
 
 /*------------------------------------------------------------------------*\
@@ -1132,6 +1132,7 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     addr    - NULL for mcast,
               else unicast target in network byte order (for M-Search responses)
     type    - message type (alive or m-search response)
+              don't use for updates, use _ssdpNewInterface() instead!
     Caller should lock timer list (which is already the case in timer callbacks)
 \*=========================================================================*/
 static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
@@ -1160,7 +1161,7 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
 /*------------------------------------------------------------------------*\
     Advertise ickStream root device
 \*------------------------------------------------------------------------*/
-  irc = _ssdpSendDiscoveryMsg( ictx, addr, type, SSDPMSGLEVEL_SERVICE,
+  irc = _ssdpSendDiscoveryMsg( ictx, addr, type, SSDPMSGLEVEL_DEVICEORSERVICE,
                                ICKSSDP_REPEATS, delay );
   if( irc )
     return irc;
@@ -1169,6 +1170,65 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
     That's it
 \*------------------------------------------------------------------------*/
   return ICKERR_SUCCESS;
+}
+
+
+/*=========================================================================*\
+  Send update messages (if an interface was added)
+    See "UPnP Device Architecture 1.1": chapter 1.2.4
+    ictx    - the ickstream context
+    Caller should lock timer list (which is already the case in timer callbacks)
+\*=========================================================================*/
+ickErrcode_t _ssdpNewInterface( ickP2pContext_t *ictx )
+{
+  ickInterface_t *interface;
+  ickErrcode_t    irc = ICKERR_SUCCESS;
+  debug( "_ssdpNewInterface (%p)", ictx );
+
+/*------------------------------------------------------------------------*\
+    Set nextbootid to be announced
+\*------------------------------------------------------------------------*/
+  ictx->upnpNextBootId = ictx->upnpBootId+1;
+
+/*------------------------------------------------------------------------*\
+    Loop over all interfaces and send SSDP updates
+\*------------------------------------------------------------------------*/
+  for( interface=ictx->interfaces; interface; interface=interface->next ) {
+
+    // Ignore new interface for updates
+    if( !interface->announcedBootId )
+      continue;
+
+    // Advertise UPNP root
+    irc = __ssdpSendDiscoveryMsg( ictx, interface, NULL, SSDPMSGTYPE_UPDATE, SSDPMSGLEVEL_ROOT, 1, 0 );
+    if( irc )
+      break;
+
+    // Advertise UUID
+    irc = __ssdpSendDiscoveryMsg( ictx, interface, NULL, SSDPMSGTYPE_UPDATE, SSDPMSGLEVEL_UUID, 1, 0 );
+    if( irc )
+      break;
+
+    // Advertise ickStream root device
+    irc = __ssdpSendDiscoveryMsg( ictx, interface, NULL, SSDPMSGTYPE_UPDATE, SSDPMSGLEVEL_DEVICEORSERVICE, 1, 0 );
+    if( irc )
+      break;
+  }
+
+/*------------------------------------------------------------------------*\
+    Use new bootid from now on
+\*------------------------------------------------------------------------*/
+  ictx->upnpBootId = ictx->upnpNextBootId;
+
+/*------------------------------------------------------------------------*\
+    Now reannounce existing and new interfaces
+\*------------------------------------------------------------------------*/
+  irc = _ssdpSendInitialDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_ALIVE, 0 );
+
+/*------------------------------------------------------------------------*\
+    That's it
+\*------------------------------------------------------------------------*/
+  return irc;
 }
 
 
@@ -1202,17 +1262,13 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
     // Lock interface list
     _ickLibInterfaceListLock( ictx );
 
-    // fixme: is there a new interface-> set nextBootId and differentiate between alive/update
-
     // Loop over all interfaces
     for( interface=ictx->interfaces; interface; interface=interface->next ) {
+      interface->announcedBootId = ictx->upnpBootId;
       irc = __ssdpSendDiscoveryMsg( ictx, interface, NULL, type, level, repeat, delay );
       if( irc )
         break;
     }
-
-    // Adjust bootId to nextBootId
-    ictx->upnpBootId = ictx->upnpNextBootId;
 
     // Unlock interface list and return
     _ickLibInterfaceListUnlock( ictx );
@@ -1233,8 +1289,10 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
 /*------------------------------------------------------------------------*\
     Do the unicasts
 \*------------------------------------------------------------------------*/
-  else
+  else {
+    interface->announcedBootId = ictx->upnpBootId;
     irc = __ssdpSendDiscoveryMsg( ictx, interface, addr, type, level, repeat, delay );
+  }
   _ickLibInterfaceListUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
@@ -1309,7 +1367,7 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
       asprintf( &usn, "uuid:%s", ictx->deviceUuid );
       break;
 
-    case SSDPMSGLEVEL_SERVICE:
+    case SSDPMSGLEVEL_DEVICEORSERVICE:
       sstr = ICKDEVICE_STRING_ROOT;
       nst  = ICKDEVICE_TYPESTR_ROOT;
       asprintf( &usn, "uuid:%s::%s", ictx->deviceUuid, nst );

@@ -56,6 +56,7 @@ struct  _ickInterface {
   in_addr_t       addr;          // network byte order
   in_addr_t       netmask;       // network byte order
   char           *hostname;      // strong
+  long            announcedBootId;
   int             upnpComSocket;
   int             upnpComPort;
 };

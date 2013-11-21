@@ -334,6 +334,16 @@ void *_ickMainThread( void *arg )
              i, plist.fds[i].fd, plist.fds[i].revents );
 
 /*------------------------------------------------------------------------*\
+    Detect and announce any newly registered interfaces
+\*------------------------------------------------------------------------*/
+    for( interface=ictx->interfaces; interface; interface=interface->next ) {
+      if( !interface->announcedBootId )
+        break;
+    }
+    if( interface )
+      _ssdpNewInterface( ictx );
+
+/*------------------------------------------------------------------------*\
     Detect any newly registered callbacks and send current device states
 \*------------------------------------------------------------------------*/
     struct _cblist *cb;

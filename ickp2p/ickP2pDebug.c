@@ -479,12 +479,14 @@ static char *_ickInterfaceStateJson( ickInterface_t *interface, int indent )
                   "%*s\"address\": \"%s\",\n"
                   "%*s\"netmask\": \"%s\",\n"
                   "%*s\"upnpComPort\": %d\n"
+                  "%*s\"announceBootId\": %ld\n"
                   "%*s}",
                   indent, "", JSON_STRING( interface->name ),
                   indent, "", JSON_STRING( interface->hostname ),
                   indent, "", _buf1,
                   indent, "", _buf2,
                   indent, "", JSON_INTEGER( _ickIpGetSocketPort(interface->upnpComSocket) ),
+                  indent, "", JSON_LONG( interface->announcedBootId ),
                   indent-JSON_INDENT, ""
                 );
 

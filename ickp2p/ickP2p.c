@@ -315,10 +315,8 @@ ickErrcode_t ickP2pResume( ickP2pContext_t *ictx )
     return irc ? irc : ICKERR_NOTHREAD;
   }
 
-  // fixme: Need to add localhost??
-
 /*------------------------------------------------------------------------*\
-    Start SSDP services
+    Start SSDP services - this will also init preregistered interfaces
 \*------------------------------------------------------------------------*/
   irc = _ickSsdpNewDiscovery( ictx );
   if( irc ) {
@@ -839,6 +837,7 @@ ickErrcode_t ickP2pAddInterface( ickP2pContext_t *ictx, const char *ifname, cons
 
 /*------------------------------------------------------------------------*\
   Add socket to multicast group on target interface
+  fixme: move this to _ssdpNewInterface() ?
 \*------------------------------------------------------------------------*/
   rc = _ickIpAddMcast( ictx->upnpListenerSocket, ifaddr, inet_addr(ICKSSDP_MCASTADDR) );
   if( rc<0 ) {
@@ -860,9 +859,10 @@ ickErrcode_t ickP2pAddInterface( ickP2pContext_t *ictx, const char *ifname, cons
   _ickLibUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
-  fixme: if running: increment bootid, announce updates on existing and alive on new interface
+  Fixme: if running, break main loop to announce new interface
 \*------------------------------------------------------------------------*/
-
+  if( ictx->state==ICKLIB_RUNNING )
+    _ickMainThreadBreak( ictx, 'i' );
 
 /*------------------------------------------------------------------------*\
   That's all

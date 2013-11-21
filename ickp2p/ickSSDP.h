@@ -124,6 +124,7 @@ void          _ickSsdpFree( ickSsdp_t *ssdp );
 int           _ickSsdpExecute( ickP2pContext_t *ictx, const ickSsdp_t *ssdp );
 ickErrcode_t  _ickSsdpNewDiscovery( ickP2pContext_t *ictx );
 void          _ickSsdpEndDiscovery( ickP2pContext_t *ictx );
+ickErrcode_t  _ssdpNewInterface( ickP2pContext_t *ictx );
 
 void          _ickDeviceExpireTimerCb( const ickTimer_t *timer, void *data, int tag );
 
