@@ -104,6 +104,8 @@ struct _ickDevice {
   double                tDisconnect;
   ickDeviceConnState_t  connectionState;
   ickDeviceSsdpState_t  ssdpState;
+  long                  ssdpBootId;
+  long                  ssdpConfigId;
   int                   nRx;
   int                   nRxSegmented;
   int                   nTx;
@@ -133,6 +135,7 @@ struct _ickDevice {
 \*=========================================================================*/
 ickDevice_t  *_ickDeviceNew( const char *uuid );
 void          _ickDeviceFree( ickDevice_t *device );
+void          _ickDevicePurgeMessages( ickDevice_t *device );
 void          _ickDeviceLock( ickDevice_t *device );
 void          _ickDeviceUnlock( ickDevice_t *device );
 

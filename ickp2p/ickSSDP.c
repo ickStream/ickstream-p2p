@@ -515,10 +515,8 @@ int _ickSsdpExecute( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
       break;
 
     case SSDP_METHOD_NOTIFY:
-      if( ssdp->nts==SSDP_NTS_ALIVE )
+      if( ssdp->nts==SSDP_NTS_ALIVE || ssdp->nts==SSDP_NTS_UPDATE )
         retval = _ickDeviceAlive( ictx, ssdp );
-      else if( ssdp->nts==SSDP_NTS_UPDATE )
-        retval = 0;                             // fixme: should check new boot id and remove devices if not equal
       else if( ssdp->nts==SSDP_NTS_BYEBYE )
         retval = _ickDeviceRemove( ictx, ssdp );
       else {
@@ -594,12 +592,67 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   _ickTimerListLock( ictx );
 
 /*------------------------------------------------------------------------*\
-    New device?
+    Known device?
 \*------------------------------------------------------------------------*/
   device = _ickLibDeviceFindByUuid( ictx, ssdp->uuid );
   if( device ) {
     debug ( "_ickDeviceUpdate (%s): found an instance (updating or reconnecting).", ssdp->usn );
+
+    // If this is an update, only the peer's network topology has changed
+    if( ssdp->nts==SSDP_NTS_UPDATE ) {
+      debug ( "_ickDeviceUpdate (%s): bootId updated %ld -> %ld.",
+              ssdp->usn, device->ssdpBootId, ssdp->bootid );
+      device->ssdpBootId = ssdp->bootid;
+
+      // Actually this should not affect the existing connection.
+      // However, queue a heartbeat message to terminate for dead connections
+      _ickP2pSendNullMessage( ictx, device );
+    }
+
+    // New boot Id with SSDP_NTS_ALIVE: the device was disconnected
+    else if( device->ssdpBootId!=ssdp->bootid ) {
+      debug ( "_ickDeviceUpdate (%s): bootId changed (reconnecting) %ld -> %ld.",
+              ssdp->usn, device->ssdpBootId, ssdp->bootid );
+      device->ssdpBootId = ssdp->bootid;
+
+      // If there is a dangling connection, we need to reset it
+      if( device->wsi /* device->connectionState==ICKDEVICE_ISCLIENT ||
+          device->connectionState==ICKDEVICE_ISSERVER */ ) {
+
+        // Trigger wsi destruction, detach wsi from device
+        libwebsocket_callback_on_writable( ictx->lwsContext, device->wsi );
+        device->wsi = NULL;
+
+        // Reset device state and notify delegates
+        device->connectionState = ICKDEVICE_NOTCONNECTED;
+        device->ssdpState       = ICKDEVICE_SSDPUNSEEN;
+        device->tDisconnect     = _ickTimeNow();
+        _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_DISCONNECTED, device->services );
+        device->tXmlComplete    = 0.0;
+
+        // Remove pending messages
+        _ickDevicePurgeMessages( device );
+
+        // Location changed?
+        if( strcmp(device->location,ssdp->location) ) {
+          debug ( "_ickDeviceUpdate (%s): updating location (\"%s\"->\"%s\".",
+                  ssdp->usn, device->location, ssdp->location );
+          char *ptr = strdup( ssdp->location );
+          if( !ptr ) {
+            logerr( "_ickDeviceUpdate: out of memory" );
+            retval = -1;
+            goto bail;
+          }
+          Sfree( device->location );
+          device->location = ptr;
+        }
+      }
+    }
   }
+
+/*------------------------------------------------------------------------*\
+    New device!
+\*------------------------------------------------------------------------*/
   else {
     debug ( "_ickDeviceUpdate (%s): adding new ickstream device (%s)",
             ssdp->usn, ssdp->location );
@@ -614,6 +667,9 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     device->services       = ICKP2P_SERVICE_GENERIC;
     device->ickUpnpVersion = _ssdpGetVersion( ssdp->usn );
     device->location       = strdup( ssdp->location );
+    device->ssdpBootId     = ssdp->bootid;
+    device->ssdpConfigId   = ssdp->configid;
+
     if( !device->location ) {
       logerr( "_ickDeviceUpdate: out of memory" );
       _ickDeviceFree( device );
@@ -729,25 +785,6 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     // This might be rejected if a connection was initiated by peer
     _ickWebSocketOpen( ictx->lwsContext, device );
   }
-
-/*------------------------------------------------------------------------*\
-    Location changed?
-\*------------------------------------------------------------------------*/
-/*
-  if( strcmp(device->location,ssdp->location) ) {
-    debug ( "_ickDeviceUpdate (%s): updating location (\"%s\"->\"%s\".",
-        ssdp->usn, device->location, ssdp->location );
-    char *ptr = strdup( ssdp->location );
-    if( !ptr ) {
-      logerr( "_ickDeviceUpdate: out of memory" );
-      _ickDiscoveryDeviceListUnlock( dh );
-      pthread_mutex_unlock( &_sendListMutex );
-      return -1;
-    }
-    Sfree( device->location );
-    device->location = ptr;
-  }
-*/
 
 /*------------------------------------------------------------------------*\
     Release all locks and return result
@@ -1121,7 +1158,7 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
     return irc;
 
 /*------------------------------------------------------------------------*\
-    Advertise ickstream root device
+    Advertise ickStream root device
 \*------------------------------------------------------------------------*/
   irc = _ssdpSendDiscoveryMsg( ictx, addr, type, SSDPMSGLEVEL_SERVICE,
                                ICKSSDP_REPEATS, delay );
@@ -1158,18 +1195,27 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
   ickErrcode_t    irc = ICKERR_SUCCESS;
 
 /*------------------------------------------------------------------------*\
-    In broadcats mode loop over all interfaces
+    In broadcast mode loop over all interfaces
 \*------------------------------------------------------------------------*/
   if( !addr ) {
 
+    // Lock interface list
     _ickLibInterfaceListLock( ictx );
+
+    // fixme: is there a new interface-> set nextBootId and differentiate between alive/update
+
+    // Loop over all interfaces
     for( interface=ictx->interfaces; interface; interface=interface->next ) {
       irc = __ssdpSendDiscoveryMsg( ictx, interface, NULL, type, level, repeat, delay );
       if( irc )
         break;
     }
-    _ickLibInterfaceListUnlock( ictx );
 
+    // Adjust bootId to nextBootId
+    ictx->upnpBootId = ictx->upnpNextBootId;
+
+    // Unlock interface list and return
+    _ickLibInterfaceListUnlock( ictx );
     return irc;
   }
 
@@ -1324,6 +1370,25 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
         ICKSSDP_MCASTADDR, ictx->upnpListenerPort, nst, usn,
         ictx->upnpBootId, ictx->upnpConfigId );
       break;
+
+      // See "UPnP Device Architecture 1.1": chapter 1.2.4
+      case SSDPMSGTYPE_UPDATE:
+        asprintf( &message,
+          "NOTIFY * HTTP/1.1\r\n"
+          "HOST: %s:%d\r\n"
+          "LOCATION: http://%s:%d/%s.xml\r\n"
+          "NT: %s\r\n"
+          "NTS: ssdp:update\r\n"
+          "USN: %s\r\n"
+          "BOOTID.UPNP.ORG: %ld\r\n"
+          "CONFIGID.UPNP.ORG: %ld\r\n"
+          "NEXTBOOTID.UPNP.ORG: %ld\r\n"
+          "\r\n",
+          ICKSSDP_MCASTADDR, ictx->upnpListenerPort,
+          interface->hostname, ictx->lwsPort, sstr,
+          nst, usn,
+          ictx->upnpBootId, ictx->upnpConfigId, ictx->upnpNextBootId );
+        break;
 
       // See "UPnP Device Architecture 1.1": chapter 1.3.2
     case SSDPMSGTYPE_MSEARCH:

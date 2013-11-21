@@ -60,6 +60,7 @@ Remarks         : Library needs to be compiled with ICK_P2PENABLEDEBUGAPI
 #define JSON_OBJECT(o)  ((o)?(o):"null")
 #define JSON_REAL(r)    ((double)(r))
 #define JSON_INTEGER(i) ((int)(i))
+#define JSON_LONG(i)    ((long)(i))
 
 
 /*=========================================================================*\
@@ -399,8 +400,8 @@ static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
                   "%*s\"p2pVersion\": \"%s\",\n"
                   "%*s\"p2pLevel\": %d,\n"
                   "%*s\"lwsVersion\": \"%s\",\n"
-                  "%*s\"bootId\": %d,\n"
-                  "%*s\"configId\": %d,\n"
+                  "%*s\"bootId\": %ld,\n"
+                  "%*s\"configId\": %ld,\n"
                   "%*s\"interfaces\": %s\n"
                   "%*s\"devices\": %s\n"
                         "%*s}\n",
@@ -421,15 +422,14 @@ static char *_ickContextStateJson( ickP2pContext_t *ictx, int indent )
                   indent, "", JSON_STRING( ickP2pGetVersion(NULL,NULL) ),
                   indent, "", JSON_INTEGER( ICKP2PLEVEL_SUPPORTED ),
                   indent, "", JSON_STRING( lws_get_library_version() ),
-                  indent, "", JSON_INTEGER(ictx->upnpBootId ),
-                  indent, "", JSON_INTEGER(ictx->upnpConfigId ),
+                  indent, "", JSON_LONG( ictx->upnpBootId ),
+                  indent, "", JSON_LONG( ictx->upnpConfigId ),
                   indent, "", JSON_OBJECT( interfaces ),
                   indent, "", JSON_OBJECT( devices ),
                   indent-JSON_INDENT, ""
                 );
   Sfree( devices );
   Sfree( interfaces );
-
 
 /*------------------------------------------------------------------------*\
     Error
@@ -561,6 +561,8 @@ static char *_ickDeviceStateJson( ickDevice_t *device, int indent )
                   "%*s\"getXml\": \"%s\",\n"
                   "%*s\"doConnect\": %s,\n"
                   "%*s\"ssdpState\": \"%s\",\n"
+                  "%*s\"bootId\": \"%ld\",\n"
+                  "%*s\"configId\": \"%ld\",\n"
                   "%*s\"connectionState\": \"%s\",\n"
                   "%*s\"tXmlComplete\": %f,\n"
                   "%*s\"tConnect\": %f,\n"
@@ -586,6 +588,8 @@ static char *_ickDeviceStateJson( ickDevice_t *device, int indent )
                   indent, "", JSON_STRING( device->wget?_ickWGetUri(device->wget) : NULL ),
                   indent, "", JSON_BOOL( device->doConnect ),
                   indent, "", JSON_STRING( _ickDeviceSsdpState2Str(device->ssdpState) ),
+                  indent, "", JSON_LONG( device->ssdpBootId ),
+                  indent, "", JSON_LONG( device->ssdpConfigId ),
                   indent, "", JSON_STRING( _ickDeviceConnState2Str(device->connectionState) ),
                   indent, "", JSON_REAL( device->tXmlComplete ),
                   indent, "", JSON_REAL( device->tConnect ),

@@ -106,40 +106,9 @@ void _ickDeviceFree( ickDevice_t *device )
   pthread_mutex_destroy( &device->mutex );
 
 /*------------------------------------------------------------------------*\
-    Delete unsent messages
+    Clean up message queues
 \*------------------------------------------------------------------------*/
-  if( device->outQueue ) {
-    ickMessage_t *msg, *next;
-    int           num;
-
-    //Loop over output queue, free and count entries
-    for( num=0,msg=device->outQueue; msg; msg=next ) {
-      next = msg->next;
-      Sfree( msg->payload );
-      Sfree( msg )
-      num++;
-    }
-    device->outQueue = NULL;
-    loginfo( "_ickDeviceFree: Deleted %d unsent messages in outQueue.", num );
-  }
-
-/*------------------------------------------------------------------------*\
-    Delete undelivered messages
-\*------------------------------------------------------------------------*/
-  if( device->inQueue ) {
-    ickMessage_t *msg, *next;
-    int           num;
-
-    //Loop over output queue, free and count entries
-    for( num=0,msg=device->inQueue; msg; msg=next ) {
-      next = msg->next;
-      Sfree( msg->payload );
-      Sfree( msg )
-      num++;
-    }
-    device->inQueue = NULL;
-    loginfo( "_ickDeviceFree: Deleted %d undelivered messages in inQueue.", num );
-  }
+  _ickDevicePurgeMessages( device );
 
 /*------------------------------------------------------------------------*\
     Free memory
@@ -148,6 +117,50 @@ void _ickDeviceFree( ickDevice_t *device )
   Sfree( device->location );
   Sfree( device->friendlyName );
   Sfree( device );
+}
+
+
+/*=========================================================================*\
+  Clean up message queues
+\*=========================================================================*/
+void _ickDevicePurgeMessages( ickDevice_t *device )
+{
+  ickMessage_t *msg, *next;
+  int           num;
+
+  debug( "_ickDevicePurgeMessages: uuid=\"%s\"", device->uuid );
+
+/*------------------------------------------------------------------------*\
+    Delete unsent messages
+\*------------------------------------------------------------------------*/
+  if( device->outQueue ) {
+    for( num=0,msg=device->outQueue; msg; msg=next ) {
+      next = msg->next;
+      Sfree( msg->payload );
+      Sfree( msg )
+      num++;
+    }
+    device->outQueue = NULL;
+    loginfo( "_ickDevicePurgeMessages: Deleted %d unsent messages in outQueue.", num );
+  }
+
+/*------------------------------------------------------------------------*\
+    Delete undelivered messages
+\*------------------------------------------------------------------------*/
+  if( device->inQueue ) {
+    for( num=0,msg=device->inQueue; msg; msg=next ) {
+      next = msg->next;
+      Sfree( msg->payload );
+      Sfree( msg )
+      num++;
+    }
+    device->inQueue = NULL;
+    loginfo( "_ickDevicePurgeMessages: Deleted %d undelivered messages in inQueue.", num );
+  }
+
+/*------------------------------------------------------------------------*\
+    That's it
+\*------------------------------------------------------------------------*/
 }
 
 

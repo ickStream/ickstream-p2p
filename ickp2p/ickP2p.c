@@ -269,8 +269,10 @@ ickErrcode_t ickP2pResume( ickP2pContext_t *ictx )
 /*------------------------------------------------------------------------*\
     Initialize bootID and configID with defaults if necessary
 \*------------------------------------------------------------------------*/
-  if( !ictx->upnpBootId )
-    ictx->upnpBootId  = (long)time(NULL);
+  if( !ictx->upnpNextBootId ) {
+    ictx->upnpNextBootId = (long)time(NULL);
+    ictx->upnpBootId     = ictx->upnpNextBootId;
+  }
   if( !ictx->upnpConfigId )
     ictx->upnpConfigId = (long)time(NULL);
 
@@ -857,6 +859,10 @@ ickErrcode_t ickP2pAddInterface( ickP2pContext_t *ictx, const char *ifname, cons
   ictx->interfaces = interface;
   _ickLibUnlock( ictx );
 
+/*------------------------------------------------------------------------*\
+  fixme: if running: increment bootid, announce updates on existing and alive on new interface
+\*------------------------------------------------------------------------*/
+
 
 /*------------------------------------------------------------------------*\
   That's all
@@ -866,7 +872,7 @@ ickErrcode_t ickP2pAddInterface( ickP2pContext_t *ictx, const char *ifname, cons
 
 
 /*=========================================================================*\
-  Lock device list
+  Lock interface list
 \*=========================================================================*/
 void _ickLibInterfaceListLock( ickP2pContext_t *ictx )
 {
@@ -877,7 +883,7 @@ void _ickLibInterfaceListLock( ickP2pContext_t *ictx )
 
 
 /*=========================================================================*\
-  Unlock device list
+  Unlock interface list
 \*=========================================================================*/
 void _ickLibInterfaceListUnlock( ickP2pContext_t *ictx )
 {

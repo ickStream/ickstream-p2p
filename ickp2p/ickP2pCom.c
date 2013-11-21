@@ -805,11 +805,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         debug( "_lwsP2pCb %d: closing connection on kill request", socket );
         return -1;
       }
-
-      // Check wsi
       if( wsi!=device->wsi ) {
-        logerr( "_lwsP2pCb %d: wsi mismatch for \"%s\"", socket, device->uuid );
-        _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_ERROR, device->services );
+        debug( "_lwsP2pCb %d: closing dangling connection on reconnect", socket );
         return -1;
       }
 
@@ -978,28 +975,19 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         // Set timestamp
         device->tDisconnect = _ickTimeNow();
 
-        // Execute discovery callback
-        _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_DISCONNECTED, device->services );
+        // Reset device state and execute discovery callback
+        // A wsi mismatch indicates shutdown of a dangling wsi on reconnect,
+        // the discovery callback was already called in that case
+        device->connectionState = ICKDEVICE_NOTCONNECTED;
+        if( device->wsi==wsi ) {
+          device->wsi = NULL;
+          _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_DISCONNECTED, device->services );
+        }
+        else
+          device->wsi = NULL;
 
         // Delete unsent messages
-        if( device->outQueue ) {
-          ickMessage_t *msg, *next;
-          int           num;
-
-          //Loop over output queue, free and count entries
-          for( num=0,msg=device->outQueue; msg; msg=next ) {
-            next = msg->next;
-            Sfree( msg->payload );
-            Sfree( msg )
-            num++;
-          }
-          device->outQueue = NULL;
-          loginfo( "_ickDeviceFree: Deleted %d unsent messages.", num );
-        }
-
-        // Reset device state
-        device->connectionState = ICKDEVICE_NOTCONNECTED;
-        device->wsi             = NULL;
+        _ickDevicePurgeMessages( device );
 
         // Get rid of device descriptor if SSDP is not alive
         if( device->ssdpState!=ICKDEVICE_SSDPALIVE ) {

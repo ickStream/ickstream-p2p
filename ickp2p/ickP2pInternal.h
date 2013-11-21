@@ -126,6 +126,7 @@ struct _ickP2pContext {
   char                        *upnpFolder;        // strong
   int                          lifetime;
   long                         upnpBootId;
+  long                         upnpNextBootId;
   long                         upnpConfigId;
   int                          upnpListenerPort;
   int                          upnpListenerSocket;
