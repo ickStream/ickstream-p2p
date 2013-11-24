@@ -340,8 +340,11 @@ void *_ickMainThread( void *arg )
       if( !interface->announcedBootId )
         break;
     }
-    if( interface )
+    if( interface ) {
+      _ickTimerListLock( ictx );
       _ssdpNewInterface( ictx );
+      _ickTimerListUnlock( ictx );
+    }
 
 /*------------------------------------------------------------------------*\
     Detect any newly registered callbacks and send current device states

@@ -837,7 +837,7 @@ ickErrcode_t ickP2pAddInterface( ickP2pContext_t *ictx, const char *ifname, cons
 
 /*------------------------------------------------------------------------*\
   Add socket to multicast group on target interface
-  fixme: move this to _ssdpNewInterface() ?
+  fixme: move this to _ssdpNewInterface() and _ickSsdpNewDiscovery() ?
 \*------------------------------------------------------------------------*/
   rc = _ickIpAddMcast( ictx->upnpListenerSocket, ifaddr, inet_addr(ICKSSDP_MCASTADDR) );
   if( rc<0 ) {
@@ -859,7 +859,7 @@ ickErrcode_t ickP2pAddInterface( ickP2pContext_t *ictx, const char *ifname, cons
   _ickLibUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
-  Fixme: if running, break main loop to announce new interface
+  If running, break main loop to announce new interface
 \*------------------------------------------------------------------------*/
   if( ictx->state==ICKLIB_RUNNING )
     _ickMainThreadBreak( ictx, 'i' );
@@ -868,6 +868,19 @@ ickErrcode_t ickP2pAddInterface( ickP2pContext_t *ictx, const char *ifname, cons
   That's all
 \*------------------------------------------------------------------------*/
   return ICKERR_SUCCESS;
+}
+
+/*=========================================================================*\
+    Remove an interface
+\*=========================================================================*/
+ickErrcode_t ickP2pDeleteInterface( ickP2pContext_t *ictx, const char *ifname )
+{
+  // fixme
+
+/*------------------------------------------------------------------------*\
+  That's all
+\*------------------------------------------------------------------------*/
+  return ICKERR_NOTIMPLEMENTED;
 }
 
 
