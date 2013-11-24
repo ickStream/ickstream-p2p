@@ -627,6 +627,8 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
         device->connectionState = ICKDEVICE_NOTCONNECTED;
         device->ssdpState       = ICKDEVICE_SSDPUNSEEN;
         device->tDisconnect     = _ickTimeNow();
+        debug( "_ickDeviceAlive (%s): device state now \"%s\"",
+               device->uuid, _ickDeviceConnState2Str(device->connectionState) );
         _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_DISCONNECTED, device->services );
         device->tXmlComplete    = 0.0;
 
@@ -700,8 +702,11 @@ static int _ickDeviceAlive( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
       if( ictx->lwsConnectMatrixCb )
         device->doConnect = ictx->lwsConnectMatrixCb( ictx, ictx->ickServices, device->services );
       debug( "_ickDeviceUpdate (%s): %s need to connect", device->uuid, device->doConnect?"Do":"No" );
-      if( device->doConnect )
+      if( device->doConnect ) {
         device->connectionState = ICKDEVICE_LOOPBACK;
+        debug( "_ickDeviceAlive (%s): device state now \"%s\"",
+               device->uuid, _ickDeviceConnState2Str(device->connectionState) );
+      }
 
       // Set timestamp and set pointer to loopback device
       device->tXmlComplete = _ickTimeNow();

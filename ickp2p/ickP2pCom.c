@@ -470,6 +470,8 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
     Initiate connection
 \*------------------------------------------------------------------------*/
   device->connectionState = ICKDEVICE_CLIENTCONNECTING;
+  debug( "_ickWebSocketOpen (%s): device state now \"%s\"",
+         device->uuid, _ickDeviceConnState2Str(device->connectionState) );
   wsi = libwebsocket_client_connect_extended(
                     context,
                     address,
@@ -486,6 +488,8 @@ ickErrcode_t _ickWebSocketOpen( struct libwebsocket_context *context, ickDevice_
             device->uuid );
     irc = ICKERR_LWSERR;
     device->connectionState = ICKDEVICE_NOTCONNECTED;
+    debug( "_ickWebSocketOpen (%s): device state now \"%s\"",
+           device->uuid, _ickDeviceConnState2Str(device->connectionState) );
   }
 
 /*------------------------------------------------------------------------*\
@@ -545,6 +549,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       // Execute discovery callback
       if( device ) {
         device->connectionState = ICKDEVICE_NOTCONNECTED;
+        debug( "_lwsP2pCb (%s): device state now \"%s\"",
+               device->uuid, _ickDeviceConnState2Str(device->connectionState) );
         _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_ERROR, device->services );
       }
 
@@ -610,6 +616,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
       device->tConnect        = _ickTimeNow();
       device->connectionState = ICKDEVICE_ISCLIENT;
       device->wsi             = wsi;
+      debug( "_lwsP2pCb (%s): device state now \"%s\"",
+             device->uuid, _ickDeviceConnState2Str(device->connectionState) );
+
 
       // Execute discovery callback
       _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
@@ -654,7 +663,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
       // Device already known?
       if( device ) {
-        debug( "_lwsP2pCb (%s): (Re)connected already initialized device", device->uuid );
+        debug( "_lwsP2pCb (%s): (Re)connected already initialized device, state \"%s\"",
+               device->uuid, _ickDeviceConnState2Str(device->connectionState) );
 
         // Already connected?
         if( device->wsi ) {
@@ -665,7 +675,7 @@ int _lwsP2pCb( struct libwebsocket_context *context,
           psd->kill = 1;
           libwebsocket_callback_on_writable( context, wsi );
 
-          // Queue a heartbeat message to terminate for dead connections
+          // Queue a heartbeat message to terminate dead connections
           _ickP2pSendNullMessage( ictx, device );
 
           return -1; // No effect for LWS_CALLBACK_ESTABLISHED
@@ -673,12 +683,19 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
         // Device initializing: a wget task exists
         else if( device->wget ) {
-          debug( "_lwsP2pCb (%s): Connection rejected, XML retriever running \"%s\"",
+#if 0
+          debug( "_lwsP2pCb (%s): Incoming connection has higher priority, deleting running XML retriever \"%s\"",
                  device->uuid, device->location );
+          _ickWGetDestroy( device->wget );
+          device->wget = NULL;
           _ickLibDeviceListUnlock( ictx );
+#else
+          debug( "_lwsP2pCb (%s): Connection rejected, XML retriever running", device->uuid );
+                    _ickLibDeviceListUnlock( ictx );
           psd->kill = 1;
           libwebsocket_callback_on_writable( context, wsi );
           return -1; // No effect for LWS_CALLBACK_ESTABLISHED
+#endif
         }
 
         // Incoming connect from a device we don't want to connect to (should not happen)
@@ -705,6 +722,9 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         // We are server, set connection timestamp
         device->connectionState = ICKDEVICE_ISSERVER;
         device->tConnect        = _ickTimeNow();
+        debug( "_lwsP2pCb (%s): device state now \"%s\"",
+               device->uuid, _ickDeviceConnState2Str(device->connectionState) );
+
 
         // Execute discovery callback
         _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
@@ -737,6 +757,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
 
         // We are server without XML
         device->connectionState = ICKDEVICE_SERVERCONNECTING;
+        debug( "_lwsP2pCb (%s): device state now \"%s\"",
+               device->uuid, _ickDeviceConnState2Str(device->connectionState) );
 
         // Link new device to discovery handler
         _ickLibDeviceAdd( ictx, device );
@@ -979,6 +1001,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         // A wsi mismatch indicates shutdown of a dangling wsi on reconnect,
         // the discovery callback was already called in that case
         device->connectionState = ICKDEVICE_NOTCONNECTED;
+        debug( "_lwsP2pCb (%s): device state now \"%s\"",
+               device->uuid, _ickDeviceConnState2Str(device->connectionState) );
         if( device->wsi==wsi ) {
           device->wsi = NULL;
           _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_DISCONNECTED, device->services );

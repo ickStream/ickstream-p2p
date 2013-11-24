@@ -70,6 +70,8 @@ typedef struct {
   ickP2pLevel_t        protocolLevel;
   ickP2pServicetype_t  services;
   int                  lifetime;
+  long                 bootId;
+  long                 configId;
 
 } ickXmlUserData_t;
 
@@ -124,6 +126,8 @@ char *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket 
                     "  <protocolLevel>%d</protocolLevel>\r\n"
                     "  <services>%d</services>\r\n"
                     "  <lifetime>%d</lifetime>\r\n"
+                    "  <bootId>%ld</bootId>\r\n"
+                    "  <configId>%ld</configId>\r\n"
                     " </device>\r\n"
                     "</root>",
 
@@ -138,7 +142,9 @@ char *_ickDescrGetDeviceDescr( const ickP2pContext_t *ictx, struct libwebsocket 
                     ictx->deviceUuid,
                     ICKP2PLEVEL_SUPPORTED,
                     ictx->ickServices,
-                    ictx->lifetime
+                    ictx->lifetime,
+                    ictx->upnpBootId,
+                    ictx->upnpConfigId
                   );
 
 /*------------------------------------------------------------------------*\
@@ -251,6 +257,8 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
       _ickDeviceLock( device );
       _ickDeviceSetName( device, _xmlUserData.deviceName );
       device->ickP2pLevel  = _xmlUserData.protocolLevel;
+      device->ssdpBootId   = _xmlUserData.bootId;
+      device->ssdpConfigId = _xmlUserData.configId;
       if( device->services && (_xmlUserData.services&~device->services) )
         logwarn( "_ickWGetXmlCb (%s): found superset of already known services (was:0x%02x new:0x%02x)",
                   uri, device->services, _xmlUserData.services );
@@ -287,6 +295,8 @@ ickErrcode_t _ickWGetXmlCb( ickWGetContext_t *context, ickWGetAction_t action, i
         // We are server, set connection timestamp
         device->connectionState = ICKDEVICE_ISSERVER;
         device->tConnect        = _ickTimeNow();
+        debug( "_ickWGetXmlCb (%s): device state now \"%s\"",
+               device->uuid, _ickDeviceConnState2Str(device->connectionState) );
 
         _ickLibExecDiscoveryCallback( ictx, device, ICKP2P_CONNECTED, device->services );
 
@@ -455,6 +465,34 @@ static void _ickParsexmlProcessData( void *data, const char *content, int len )
     }
     // should be terminated by non-digit, so it's safe to ignore len here
     xmlUserData->lifetime = atoi( content );
+    return;
+  }
+
+/*------------------------------------------------------------------------*\
+  Found bootId
+\*------------------------------------------------------------------------*/
+  if( !_strmcmp("bootId",xmlUserData->eltPtr,xmlUserData->eltLen)) {
+    debug( "_ickParsexmlProcessData: found bootId \"%.*s\"", len, content );
+    if( xmlUserData->bootId ) {
+      logwarn( "_ickParsexmlProcessData: found more then one bootId (ignoring)" );
+      return;
+    }
+    // should be terminated by non-digit, so it's safe to ignore len here
+    xmlUserData->bootId = atol( content );
+    return;
+  }
+
+/*------------------------------------------------------------------------*\
+  Found configId
+\*------------------------------------------------------------------------*/
+  if( !_strmcmp("configId",xmlUserData->eltPtr,xmlUserData->eltLen)) {
+    debug( "_ickParsexmlProcessData: found configId \"%.*s\"", len, content );
+    if( xmlUserData->configId ) {
+      logwarn( "_ickParsexmlProcessData: found more then one configId (ignoring)" );
+      return;
+    }
+    // should be terminated by non-digit, so it's safe to ignore len here
+    xmlUserData->configId = atol( content );
     return;
   }
 
