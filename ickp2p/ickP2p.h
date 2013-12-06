@@ -162,7 +162,7 @@ ickErrcode_t         ickP2pEnd( ickP2pContext_t *ictx, ickP2pEndCb_t callback );
 
 // Context configuration
 ickErrcode_t         ickP2pAddInterface( ickP2pContext_t *ictx, const char *ifname, const char *hostname );
-ickErrcode_t         ickP2pDeleteInterface( ickP2pContext_t *ictx, const char *ifname );
+ickErrcode_t         ickP2pDeleteInterface( ickP2pContext_t *ictx, const char *ifname, int proactive );
 ickErrcode_t         ickP2pUpnpLoopback( ickP2pContext_t *ictx, int enable );
 ickErrcode_t         ickP2pSetConnectMatrix( ickP2pContext_t *ictx, ickP2pConnectMatrixCb_t matrixCb );
 ickErrcode_t         ickP2pRegisterDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDiscoveryCb_t callback );

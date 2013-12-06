@@ -56,8 +56,7 @@ Remarks         : -
 /*=========================================================================*\
   Private prototypes
 \*=========================================================================*/
-static void _ickLibInterfaceDestruct( ickInterface_t *interface );
-
+// none
 
 
 #pragma mark -- Global functions not bound to an inckStream context
@@ -853,10 +852,10 @@ ickErrcode_t ickP2pAddInterface( ickP2pContext_t *ictx, const char *ifname, cons
 /*------------------------------------------------------------------------*\
   Link to context
 \*------------------------------------------------------------------------*/
-  _ickLibLock( ictx );
+  _ickLibInterfaceListLock( ictx );
   interface->next  = ictx->interfaces;
   ictx->interfaces = interface;
-  _ickLibUnlock( ictx );
+  _ickLibInterfaceListUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
   If running, break main loop to announce new interface
@@ -870,17 +869,47 @@ ickErrcode_t ickP2pAddInterface( ickP2pContext_t *ictx, const char *ifname, cons
   return ICKERR_SUCCESS;
 }
 
+
 /*=========================================================================*\
     Remove an interface
+      ictx      - an ickstream context
+      ifname    - the name the interface was registered under
+      proactive - if !=0, a byebye message will be sent on interface
+    returns an ickstream error code
 \*=========================================================================*/
-ickErrcode_t ickP2pDeleteInterface( ickP2pContext_t *ictx, const char *ifname )
+ickErrcode_t ickP2pDeleteInterface( ickP2pContext_t *ictx, const char *ifname, int proactive )
 {
-  // fixme
+  ickInterface_t *interface;
+  debug ( "ickP2pDeleteInterface (%p): \"%s\" (%s)", ictx, ifname, proactive?"proactive":"ex post" );
 
 /*------------------------------------------------------------------------*\
-  That's all
+  Lock interface list and find interface
 \*------------------------------------------------------------------------*/
-  return ICKERR_NOTIMPLEMENTED;
+  _ickLibInterfaceListLock( ictx );
+  interface = _ickLibInterfaceByName( ictx, ifname );
+  if( !interface ) {
+    debug ( "ickP2pDeleteInterface (%p): interface \"%s\" not registered", ictx, ifname );
+    _ickLibInterfaceListUnlock( ictx );
+    return ICKERR_NOINTERFACE;
+  }
+
+/*------------------------------------------------------------------------*\
+  Mark for deletion
+\*------------------------------------------------------------------------*/
+  interface->shutdownMode = proactive ? ICKP2P_INTSHUTDOWN_PROACTIVE :
+                                        ICKP2P_INTSHUTDOWN_EXPOST;
+
+/*------------------------------------------------------------------------*\
+  If running, break main loop to announce new interface
+\*------------------------------------------------------------------------*/
+  if( ictx->state==ICKLIB_RUNNING )
+    _ickMainThreadBreak( ictx, 'i' );
+
+/*------------------------------------------------------------------------*\
+  Unlock interface list, that's all
+\*------------------------------------------------------------------------*/
+  _ickLibInterfaceListUnlock( ictx );
+  return ICKERR_SUCCESS;
 }
 
 
@@ -906,12 +935,51 @@ void _ickLibInterfaceListUnlock( ickP2pContext_t *ictx )
 
 
 /*=========================================================================*\
+    Unlink interface from list
+      This will not delete the descriptor!
+      Caller should lock the interface list
+\*=========================================================================*/
+ickErrcode_t _ickLibInterfaceUnlink( ickP2pContext_t *ictx, ickInterface_t *interface )
+{
+  ickInterface_t *walk;
+  debug( "_ickLibInterfaceUnlink (%p): \"%s\"", ictx, interface->name );
+
+/*------------------------------------------------------------------------*\
+    Check if interface is in list
+\*------------------------------------------------------------------------*/
+  for( walk=ictx->interfaces; walk; walk=walk->next )
+    if( walk==interface )
+      break;
+  if( interface ) {
+    logerr( "_ickLibInterfaceUnlink: interface \"%s\" not part of list",
+             interface->name );
+    return ICKERR_NOINTERFACE;
+  }
+
+/*------------------------------------------------------------------------*\
+    Unlink from list
+\*------------------------------------------------------------------------*/
+  if( interface->next )
+    interface->next->prev = interface->prev;
+  if( interface->prev )
+    interface->prev->next = interface->next;
+  if( interface==ictx->interfaces )
+    ictx->interfaces = interface->next;
+
+/*------------------------------------------------------------------------*\
+    That's all
+\*------------------------------------------------------------------------*/
+  return ICKERR_SUCCESS;
+}
+
+
+/*=========================================================================*\
     Free an interface descriptor
       This will not unlink the descriptor form the interface list
 \*=========================================================================*/
-static void _ickLibInterfaceDestruct( ickInterface_t *interface )
+void _ickLibInterfaceDestruct( ickInterface_t *interface )
 {
-  debug( "_ickLibInterfaceDestruct: %s", interface->name );
+  debug( "_ickLibInterfaceDestruct: \"%s\"", interface->name );
 
 /*------------------------------------------------------------------------*\
     Close SSDP socket (if any)
@@ -925,6 +993,33 @@ static void _ickLibInterfaceDestruct( ickInterface_t *interface )
   Sfree( interface->name );
   Sfree( interface->hostname );
   Sfree( interface );
+}
+
+
+/*=========================================================================*\
+    Get interface by name
+      ictx   - context
+      ifname - the name the interface was registered with
+      Caller should lock interface list
+      returns first matching interface or NULL, if not found
+\*=========================================================================*/
+ickInterface_t *_ickLibInterfaceByName( const ickP2pContext_t *ictx, const char *ifname )
+{
+  ickInterface_t *interface;
+  debug( "_ickLibInterfaceByName (%p): \"%s\"", ictx, ifname );
+
+/*------------------------------------------------------------------------*\
+    Loop over interfaces
+\*------------------------------------------------------------------------*/
+  for( interface=ictx->interfaces; interface; interface=interface->next )
+    if( !strcmp(interface->name,ifname) )
+      break;
+
+/*------------------------------------------------------------------------*\
+    Return result
+\*------------------------------------------------------------------------*/
+  debug( "_ickLibInterfaceByName (%p): found %p", ictx, interface );
+  return interface;
 }
 
 

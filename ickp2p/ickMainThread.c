@@ -334,8 +334,21 @@ void *_ickMainThread( void *arg )
              i, plist.fds[i].fd, plist.fds[i].revents );
 
 /*------------------------------------------------------------------------*\
-    Detect and announce any newly registered interfaces
+    Process changes in interface list
 \*------------------------------------------------------------------------*/
+    _ickLibInterfaceListLock( ictx );
+
+    // Delete interfaces
+    for( interface=ictx->interfaces; interface; interface=interface->next ) {
+      if( interface->shutdownMode==ICKP2P_INTSHUTDOWN_NONE )
+        continue;
+      if( interface->shutdownMode==ICKP2P_INTSHUTDOWN_PROACTIVE )
+        _ssdpByebyeInterface( ictx, interface );
+      _ickLibInterfaceUnlink( ictx, interface );
+      _ickLibInterfaceDestruct( interface );
+    }
+
+    // Announce any newly registered interfaces
     for( interface=ictx->interfaces; interface; interface=interface->next ) {
       if( !interface->announcedBootId )
         break;
@@ -345,6 +358,8 @@ void *_ickMainThread( void *arg )
       _ssdpNewInterface( ictx );
       _ickTimerListUnlock( ictx );
     }
+
+    _ickLibInterfaceListUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
     Detect any newly registered callbacks and send current device states

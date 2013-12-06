@@ -1238,6 +1238,40 @@ ickErrcode_t _ssdpNewInterface( ickP2pContext_t *ictx )
 
 
 /*=========================================================================*\
+  Send byebye messages (if an interface is to be removed)
+    See "UPnP Device Architecture 1.1": chapter 1.2.3
+    ictx      - the ickstream context
+    interface - interface to be removed (might NOt be NULL)
+  Note: sending byebyes on interfaces that are already down will result in
+        error messages
+  Note: this will not remove the interface
+\*=========================================================================*/
+ickErrcode_t _ssdpByebyeInterface( ickP2pContext_t *ictx, ickInterface_t *interface )
+{
+  ickErrcode_t irc, retcode = ICKERR_SUCCESS;
+  debug( "_ssdpByebyeInterface (%p): \"%s\"", ictx, interface->name );
+
+/*------------------------------------------------------------------------*\
+    Immediately send byebye without any delay
+\*------------------------------------------------------------------------*/
+  irc = __ssdpSendDiscoveryMsg( ictx, interface, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_ROOT, 0, 0 );
+  if( irc )
+    retcode = irc;
+  irc = __ssdpSendDiscoveryMsg( ictx, interface, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_UUID, 0, 0 );
+  if( irc )
+    retcode = irc;
+  irc = __ssdpSendDiscoveryMsg( ictx, interface, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_DEVICEORSERVICE, 0, 0 );
+  if( irc )
+    retcode = irc;
+
+/*------------------------------------------------------------------------*\
+    That's it
+\*------------------------------------------------------------------------*/
+  return retcode;
+}
+
+
+/*=========================================================================*\
   Queue an outgoing discovery message
     ictx    - the ickstream context to use
     addr    - NULL for mcast (on all interfaces),

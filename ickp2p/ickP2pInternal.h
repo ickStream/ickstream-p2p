@@ -46,19 +46,27 @@ Remarks         : -
   Macro and type definitions
 \*=========================================================================*/
 
+// Flags for interface shutdown
+typedef enum {
+  ICKP2P_INTSHUTDOWN_NONE     = 0,
+  ICKP2P_INTSHUTDOWN_EXPOST,
+  ICKP2P_INTSHUTDOWN_PROACTIVE
+} ickInterfaceShutdown_t;
+
 // An interface  (from ickP2p.c)
 struct _ickInterface;
 typedef struct _ickInterface ickInterface_t;
 struct  _ickInterface {
-  ickInterface_t *next;
-  ickInterface_t *prev;
-  char           *name;          // strong
-  in_addr_t       addr;          // network byte order
-  in_addr_t       netmask;       // network byte order
-  char           *hostname;      // strong
-  long            announcedBootId;
-  int             upnpComSocket;
-  int             upnpComPort;
+  ickInterface_t        *next;
+  ickInterface_t        *prev;
+  char                  *name;          // strong
+  in_addr_t              addr;          // network byte order
+  in_addr_t              netmask;       // network byte order
+  char                  *hostname;      // strong
+  long                   announcedBootId;
+  ickInterfaceShutdown_t shutdownMode;
+  int                    upnpComSocket;
+  int                    upnpComPort;
 };
 
 // A timer managed by ickp2p (from ickMainThread.c)
@@ -194,11 +202,13 @@ void _ickLibLock( ickP2pContext_t *ictx );
 void _ickLibUnlock( ickP2pContext_t *ictx );
 void _ickLibDestruct( ickP2pContext_t *ictx );
 
+ickErrcode_t    _ickLibInterfaceUnlink( ickP2pContext_t *ictx, ickInterface_t *interface );
+void            _ickLibInterfaceDestruct( ickInterface_t *interface );
+ickInterface_t *_ickLibInterfaceByName( const ickP2pContext_t *ictx, const char *ifname );
 ickInterface_t *_ickLibInterfaceForAddr( const ickP2pContext_t *ictx, in_addr_t addr );
 ickInterface_t *_ickLibInterfaceForHost( const ickP2pContext_t *ictx, const char *hostname, in_addr_t *addr );
-
-void _ickLibInterfaceListLock( ickP2pContext_t *ictx );
-void _ickLibInterfaceListUnlock( ickP2pContext_t *ictx );
+void            _ickLibInterfaceListLock( ickP2pContext_t *ictx );
+void            _ickLibInterfaceListUnlock( ickP2pContext_t *ictx );
 
 void _ickLibDeviceListLock( ickP2pContext_t *ictx );
 void _ickLibDeviceListUnlock( ickP2pContext_t *ictx );
