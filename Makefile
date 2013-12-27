@@ -42,9 +42,9 @@ MKDEPFLAGS      = -Y
 ICKP2PSRCS      = ickP2p.c ickMainThread.c ickDevice.c ickSSDP.c ickDescription.c ickP2pCom.c ickP2pDebug.c ickErrors.c ickWGet.c ickIpTools.c logutils.c
 MINIUPNPSRCS    = miniupnp/miniupnpc/connecthostport.c miniupnp/miniupnpc/miniwget.c \
                   miniupnp/miniupnpc/minixml.c miniupnp/miniupnpc/receivedata.c
-TESTSRC         = test/ickp2ptest.c test/config.c
+TESTSRC         = test/ickp2ptest.c test/testmisc.c test/config.c
 TESTOBJ         = $(TESTSRC:.c=.o)
-MTESTSRC        = test/ickp2pmtest.c test/config.c
+MTESTSRC        = test/ickp2pmtest.c test/testmisc.c test/config.c
 MTESTOBJ        = $(MTESTSRC:.c=.o)
 P2PSHSRC        = test/ickp2psh.c test/config.c
 P2PSHOBJ        = $(P2PSHSRC:.c=.o)

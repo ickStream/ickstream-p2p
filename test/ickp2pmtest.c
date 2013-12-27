@@ -36,8 +36,9 @@ Remarks         : -
 #include <sys/select.h>
 #include <sys/time.h>
 
-#include "config.h"
 #include "ickP2p.h"
+#include "config.h"
+#include "testmisc.h"
 
 
 /*=========================================================================*\
@@ -53,9 +54,6 @@ Remarks         : -
 #define DEVICENAME  "ickp2pmtest"
 #define IFNAME      "wlan0"
 
-#define VLP_SIZE    23456L
-#define VLP_MODUL   251
-
 static volatile int stop_signal;
 
 
@@ -63,8 +61,6 @@ static volatile int stop_signal;
   Private prototypes
 \*=========================================================================*/
 static void sigHandler( int sig, siginfo_t *siginfo, void *context );
-static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDeviceState_t change, ickP2pServicetype_t type );
-static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid, ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices, const char* message, size_t mSize, ickP2pMessageFlag_t mFlags );
 
 
 /*=========================================================================*\
@@ -92,6 +88,7 @@ int main( int argc, char *argv[] )
   int                  cntr;
   char                *vlp;
   long                 i;
+  char                *eptr;
 
 /*-------------------------------------------------------------------------*\
         Set up command line switches
@@ -141,7 +138,6 @@ int main( int argc, char *argv[] )
     Set verbosity level
 \*------------------------------------------------------------------------*/
   if( verb_arg ) {
-    char *eptr;
     int   level = (int)strtol( verb_arg, &eptr, 10 );
     while( isspace(*eptr) )
       eptr++;
@@ -163,7 +159,6 @@ int main( int argc, char *argv[] )
     Get SSDP listener port
 \*------------------------------------------------------------------------*/
   if( port_arg ) {
-    char *eptr;
     port = (int)strtol( port_arg, &eptr, 0 );
     while( isspace(*eptr) )
       eptr++;
@@ -177,7 +172,6 @@ int main( int argc, char *argv[] )
     Get wait time windows
 \*------------------------------------------------------------------------*/
   if( wait_arg ) {
-    char *eptr;
     waitspan = (int)strtol( wait_arg, &eptr, 0 );
     while( isspace(*eptr) )
       eptr++;
@@ -190,13 +184,9 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Create a very large payload message
 \*------------------------------------------------------------------------*/
-  vlp = malloc( VLP_SIZE );
-  if( !vlp ) {
-    printf( "%s: could not allocate %ld bytes\n", argv[0], VLP_SIZE );
+  vlp = createVlp();
+  if( !vlp )
     return -1;
-  }
-  for( i=0; i<VLP_SIZE; i++ )
-    vlp[i] = (char)(i%VLP_MODUL);
 
 /*------------------------------------------------------------------------*\
     OK, from here on we catch some terminating signals and ignore others
@@ -211,15 +201,12 @@ int main( int argc, char *argv[] )
 /*------------------------------------------------------------------------*\
     Get number of contexts and init context table
 \*------------------------------------------------------------------------*/
-  if( cnt_arg ) {
-    char *eptr;
-    cnt_count = (int)strtol( cnt_arg, &eptr, 0 );
-    while( isspace(*eptr) )
-      eptr++;
-    if( *eptr || cnt_count<1 ) {
-      fprintf( stderr, "Bad number of contexts: '%s'\n", cnt_arg );
-      return 1;
-    }
+  cnt_count = (int)strtol( cnt_arg, &eptr, 0 );
+  while( isspace(*eptr) )
+    eptr++;
+  if( *eptr || cnt_count<1 ) {
+    fprintf( stderr, "Bad number of contexts: '%s'\n", cnt_arg );
+    return 1;
   }
   cnt_tab = calloc( cnt_count, sizeof(ickP2pContext_t*) );
   if( !cnt_tab ) {
@@ -256,7 +243,6 @@ int main( int argc, char *argv[] )
 
     // Which service to use? (given or randomized per instance)
     if( service_arg ) {
-      char *eptr;
       service = (int)strtol( service_arg, &eptr, 0 );
       while( isspace(*eptr) )
         eptr++;
@@ -412,107 +398,6 @@ end:
   free( vlp );
   printf( "%s: main thread terminated\n", argv[0] );
   return 0;
-}
-
-
-/*=========================================================================*\
-    Called when devices or services are found or terminated
-\*=========================================================================*/
-static void ickDiscoverCb( ickP2pContext_t *ictx, const char *uuid, ickP2pDeviceState_t change, ickP2pServicetype_t type )
-{
-  char  tstr[128];
-
-  *tstr = 0;
-  if( type==ICKP2P_SERVICE_GENERIC )
-    strcpy( tstr, "root device" );
-  else {
-    strcpy( tstr, "services:" );
-    if( type&ICKP2P_SERVICE_PLAYER )
-      strcat( tstr, " player");
-    if( type&ICKP2P_SERVICE_CONTROLLER )
-      strcat( tstr, " controller" );
-    if( type&ICKP2P_SERVICE_SERVER_GENERIC )
-      strcat( tstr, " generic_server" );
-    if( type&ICKP2P_SERVICE_DEBUG )
-      strcat( tstr, " debugging" );
-  }
-
-  // Print discovery event
-  printf( "+++ %s: %s -- %s -- %s\n", ickP2pGetDeviceUuid(ictx),
-           uuid, ickLibDeviceState2Str(change), tstr );
-  printf( "+++ %s: %s -- Location: %s\n", ickP2pGetDeviceUuid(ictx),
-           uuid, ickP2pGetDeviceLocation(ictx,uuid) );
-
-  // For new connections send hello
-  if( change==ICKP2P_CONNECTED ) {
-    ickErrcode_t irc;
-    // Broadcast message as string
-    printf( "+++ %s: %s -- Sending Hello!\n", ickP2pGetDeviceUuid(ictx), uuid );
-    irc = ickP2pSendMsg( ictx, uuid, ICKP2P_SERVICE_ANY, type, "Hello!", 0 );
-    if( irc ) {
-      printf( "ickP2pSendMsg: %s\n", ickStrError(irc) );
-      return;
-    }
-  }
-}
-
-
-/*=========================================================================*\
-    Called for incoming messages
-\*=========================================================================*/
-static void ickMessageCb( ickP2pContext_t *ictx, const char *sourceUuid,
-                          ickP2pServicetype_t sourceService, ickP2pServicetype_t targetServices,
-                          const char* message, size_t mSize, ickP2pMessageFlag_t mFlags )
-{
-  long i;
-
-/*------------------------------------------------------------------------*\
-    Print meta data and message snippet
-\*------------------------------------------------------------------------*/
-  printf( ">>> %s: message from %s,0x%02x -> 0x%02x \"%.30s%s\" (%ld bytes, flags 0x%02x)\n",
-      ickP2pGetDeviceUuid(ictx) , sourceUuid, sourceService, targetServices, message,
-          mSize>30?"...":"", (long)mSize, mFlags );
-
-/*------------------------------------------------------------------------*\
-    Respond to messages
-\*------------------------------------------------------------------------*/
-  if( !strncmp(message,"Message #",strlen("Message #")) ) {
-    char *response;
-    ickErrcode_t irc;
-    asprintf( &response, "Response for %s", message );
-
-    // Broadcast message as string
-    printf( "Sending %s\n", response );
-    irc = ickP2pSendMsg( ictx, sourceUuid, ICKP2P_SERVICE_ANY, targetServices, response, 0 );
-    if( irc ) {
-      printf( "ickP2pSendMsg: %s\n", ickStrError(irc) );
-      return;
-    }
-    free( response );
-  }
-
-/*------------------------------------------------------------------------*\
-    Check integrity of strings
-\*------------------------------------------------------------------------*/
-  if( (mFlags&ICKP2P_MESSAGEFLAG_STRING) && mSize!=strlen(message)+1 ) {
-    printf( "Mismatch in string message size (mSize is %ld, strlen+1 is %ld)",
-        (long)mSize, (long)(strlen(message)+1) );
-  }
-
-/*------------------------------------------------------------------------*\
-    Check integrity of VLP
-\*------------------------------------------------------------------------*/
-  if( mSize>VLP_SIZE-10 ) {
-    for( i=0; i<VLP_SIZE; i++ )
-      if( message[i] != (char)(i%VLP_MODUL) )
-        break;
-    if( i<VLP_SIZE )
-      printf( "VLP is corrupt at position %ld", i );
-  }
-
-/*------------------------------------------------------------------------*\
-    That's all
-\*------------------------------------------------------------------------*/
 }
 
 
