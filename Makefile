@@ -21,6 +21,8 @@ LIBDIR          = lib
 INCLUDEDIR      = include
 LIBNAME         = libickp2p
 TESTEXEC        = ickp2ptest
+MTESTEXEC       = ickp2pmtest
+P2PSHEXEC       = ickp2psh
 SSDPLOGEXEC     = ssdplog
 
 ICKLIB          = $(LIBDIR)/$(LIBNAME).a
@@ -42,6 +44,10 @@ MINIUPNPSRCS    = miniupnp/miniupnpc/connecthostport.c miniupnp/miniupnpc/miniwg
                   miniupnp/miniupnpc/minixml.c miniupnp/miniupnpc/receivedata.c
 TESTSRC         = test/ickp2ptest.c test/config.c
 TESTOBJ         = $(TESTSRC:.c=.o)
+MTESTSRC        = test/ickp2pmtest.c test/config.c
+MTESTOBJ        = $(MTESTSRC:.c=.o)
+P2PSHSRC        = test/ickp2psh.c test/config.c
+P2PSHOBJ        = $(P2PSHSRC:.c=.o)
 SSDPLOGSRC      = test/ssdplog.c test/config.c
 SSDPLOGOBJ      = $(SSDPLOGSRC:.c=.o)
 
@@ -52,19 +58,18 @@ LIBOBJ          = $(LIBSRC:.c=.o)
 PUBLICHEADERS    = ickp2p/ickP2p.h
 INTERNALINCLUDES = -Iminiupnp/miniupnpc
 INCLUDES         =
-GENHEADERS	 = miniupnp/miniupnpc/miniupnpcstrings.h
+GENHEADERS       = miniupnp/miniupnpc/miniupnpcstrings.h
 
 
 # OS specific settings
 ifeq ($(OS),Linux)
-EXTRALIBS	= -luuid
+EXTRALIBS       = -luuid
 TESTFALGS       = -DIF1NAME="lo"
 endif
 ifeq ($(OS),Darwin)
 TESTFALGS       = -DIF1NAME="lo0"
 CFLAGS          += -DICK_USE_SO_REUSEPORT
 endif
-
 
 
 # Default rule: make all
@@ -76,7 +81,7 @@ debug: $(GENHEADERS) $(INCLUDEDIR) $(ICKLIB)
 
 # Variant: make test executable in debug mode
 test: DEBUGFLAGS = -g -DICK_DEBUG
-test: $(TESTEXEC) $(SSDPLOGEXEC)
+test: $(TESTEXEC) $(MTESTEXEC) $(P2PSHEXEC) $(SSDPLOGEXEC)
 
 # How to compile c source files
 %.o: %.c Makefile 
@@ -99,6 +104,18 @@ $(TESTEXEC): $(GENHEADERS) $(INCLUDEDIR) $(TESTSRC) $(ICKLIB) Makefile
 	@echo '*************************************************************'
 	@echo "Building test executable:"
 	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(TESTFLAGS) $(CFLAGS) $(LFLAGS) $(TESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -lpthread $(EXTRALIBS) -o $(TESTEXEC)
+
+# make mtest executable
+$(MTESTEXEC): $(GENHEADERS) $(INCLUDEDIR) $(MTESTSRC) $(ICKLIB) Makefile
+	@echo '*************************************************************'
+	@echo "Building mtest executable:"
+	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(TESTFLAGS) $(CFLAGS) $(LFLAGS) $(MTESTSRC) -L$(LIBDIR) -lickp2p -lwebsockets -lpthread $(EXTRALIBS) -o $(MTESTEXEC)
+	
+# make api shell
+$(P2PSHEXEC): $(GENHEADERS) $(INCLUDEDIR) $(P2PSHSRC) $(ICKLIB) Makefile
+	@echo '*************************************************************'
+	@echo "Building api shell executable:"
+	$(CC) -I$(INCLUDEDIR) $(DEBUGFLAGS) $(TESTFLAGS) $(CFLAGS) $(LFLAGS) $(P2PSHSRC) -L$(LIBDIR) -lreadline -lickp2p -lwebsockets -lpthread $(EXTRALIBS) -o $(P2PSHEXEC)
 
 # make ssdp logger
 $(SSDPLOGEXEC): $(SSDPLOGSRC) Makefile

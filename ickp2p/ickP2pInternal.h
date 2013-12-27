@@ -100,65 +100,66 @@ struct _cblist {
 
 // The context descriptor
 struct _ickP2pContext {
-  ickP2pLibState_t             state;
-  ickErrcode_t                 error;
-  pthread_mutex_t              mutex;
+  ickP2pLibState_t               state;
+  ickErrcode_t                   error;
+  pthread_mutex_t                mutex;
 
-  double                       tCreation;
-  double                       tResume;
+  double                         tCreation;
+  double                         tResume;
 
 #ifdef ICK_P2PENABLEDEBUGAPI
-  int                          debugApiEnabled;
+  int                            debugApiEnabled;
 #endif
 
-  char                        *osName;      // strong
-  char                        *deviceName;  // strong
+  char                          *osName;             // strong
+  char                          *deviceName;         // strong
 
-  struct _cblist              *discoveryCbs;
-  pthread_mutex_t              discoveryCbsMutex;
-  struct _cblist              *messageCbs;
-  pthread_mutex_t              messageCbsMutex;
+  struct _cblist                *discoveryCbs;       // strong
+  pthread_mutex_t                discoveryCbsMutex;
+  struct _cblist                *messageCbs;         // strong
+  pthread_mutex_t                messageCbsMutex;
 
   // Main thread and timer
-  pthread_t                    thread;
-  pthread_cond_t               condIsReady;
-  int                          pollBreakPipe[2];
-  ickTimer_t                  *timers;
-  pthread_mutex_t              timersMutex;
+  pthread_t                      thread;
+  pthread_cond_t                 condIsReady;
+  int                            pollBreakPipe[2];
+  ickTimer_t                    *timers;            // strong
+  pthread_mutex_t                timersMutex;
 
   // Networking
-  ickInterface_t              *interfaces;
-  pthread_mutex_t              interfaceListMutex;
+  ickInterface_t                *interfaces;        // strong
+  pthread_mutex_t                interfaceListMutex;
 
   // Upnp/Ssdp layer
-  char                        *deviceUuid;        // strong
-  char                        *upnpFolder;        // strong
-  int                          lifetime;
-  long                         upnpBootId;
-  long                         upnpNextBootId;
-  long                         upnpConfigId;
-  int                          upnpListenerPort;
-  int                          upnpListenerSocket;
-  int                          upnpLoopback;
+  char                          *deviceUuid;        // strong
+  char                          *upnpFolder;        // strong
+  int                            lifetime;
+  long                           upnpBootId;
+  long                           upnpNextBootId;
+  long                           upnpConfigId;
+  int                            upnpListenerPort;
+  int                            upnpListenerSocket;
+  int                            upnpLoopback;
 
   // List of remote devices seen by this interface
-  ickDevice_t                 *deviceList;
-  ickDevice_t                 *deviceLoopback;
-  pthread_mutex_t              deviceListMutex;
+  ickDevice_t                   *deviceList;        // strong
+  ickDevice_t                   *deviceLoopback;
+  pthread_mutex_t                deviceListMutex;
 
   // List of local services offered to the world
-  ickP2pServicetype_t          ickServices;
+  ickP2pServicetype_t            ickServices;
 
   // Web socket layer
-  ickP2pConnectMatrixCb_t      lwsConnectMatrixCb;
-  struct libwebsocket_context *lwsContext;
-  int                          lwsPort;
-  ickPolllist_t                lwsPolllist;
+  ickP2pConnectMatrixCb_t        lwsConnectMatrixCb;
+  struct libwebsocket_context   *lwsContext;        // strong
+  struct libwebsocket_protocols *lwsProtocols;      // strong
+  int                            lwsPort;
+  ickPolllist_t                  lwsPolllist;
 
-  ickWGetContext_t            *wGetters;
-  pthread_mutex_t              wGettersMutex;
+  ickWGetContext_t              *wGetters;          // strong
+  pthread_mutex_t                wGettersMutex;
 
-  ickP2pEndCb_t                cbEnd;
+  ickP2pEndCb_t                  cbEnd;
 };
 
 

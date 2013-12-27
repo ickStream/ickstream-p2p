@@ -931,8 +931,10 @@ ickErrcode_t _ickSsdpNewDiscovery( ickP2pContext_t *ictx )
 /*------------------------------------------------------------------------*\
     Request immediate advertisements from all reachable upnp devices
 \*------------------------------------------------------------------------*/
+  _ickLibInterfaceListLock( ictx );
   irc = _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_MSEARCH, SSDPMSGLEVEL_GLOBAL,
                                ICKSSDP_REPEATS, 0 );
+  _ickLibInterfaceListUnlock( ictx );
   if( irc ) {
     _ickTimerListUnlock( ictx );
     return irc;
@@ -978,12 +980,14 @@ void _ickSsdpEndDiscovery( ickP2pContext_t *ictx )
 /*------------------------------------------------------------------------*\
     Immediately announce all devices and services as terminated
 \*------------------------------------------------------------------------*/
+  _ickLibInterfaceListLock( ictx );
   _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_ROOT,
                          0, 0 );
   _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_UUID,
                          0, 0 );
   _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_BYEBYE, SSDPMSGLEVEL_DEVICEORSERVICE,
                          0, 0 );
+  _ickLibInterfaceListUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
     Terminate all known device
@@ -1045,8 +1049,10 @@ static void _ickSsdpSearchCb( const ickTimer_t *timer, void *data, int tag )
 /*------------------------------------------------------------------------*\
     Schedule an M-Search for ickstream root devices
 \*------------------------------------------------------------------------*/
+  _ickLibInterfaceListLock( ictx );
   irc = _ssdpSendDiscoveryMsg( ictx, NULL, SSDPMSGTYPE_MSEARCH, SSDPMSGLEVEL_DEVICEORSERVICE,
                                1 /*ICKSSDP_REPEATS*/, 0 );
+  _ickLibInterfaceListUnlock( ictx );
   if( irc ) {
     logerr( "_ickSsdpSearchCb: could not send alive announcements (%s).",
         ickStrError(irc) );
@@ -1085,9 +1091,10 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
   }
 
 /*------------------------------------------------------------------------*\
-    Lock timer list for queuing messages
+    Lock timer list for queuing messages and interface list
 \*------------------------------------------------------------------------*/
   _ickTimerListLock( ictx );
+  _ickLibInterfaceListLock( ictx );
 
 /*------------------------------------------------------------------------*\
     Search for all devices and services
@@ -1122,9 +1129,10 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
                            ICKSSDP_REPEATS, 0 );
 
 /*------------------------------------------------------------------------*\
-    Unlock timer list, that's all
+    Unlock timer and interface list, that's all
 \*------------------------------------------------------------------------*/
   _ickTimerListUnlock( ictx );
+  _ickLibInterfaceListUnlock( ictx );
   return retcode;
 }
 
@@ -1139,6 +1147,7 @@ static int _ssdpProcessMSearch( ickP2pContext_t *ictx, const ickSsdp_t *ssdp )
     type    - message type (alive or m-search response)
               don't use for updates, use _ssdpNewInterface() instead!
     Caller should lock timer list (which is already the case in timer callbacks)
+    Caller should lock interface list
 \*=========================================================================*/
 static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
                                                   const struct sockaddr *addr,
@@ -1183,6 +1192,7 @@ static ickErrcode_t _ssdpSendInitialDiscoveryMsg( ickP2pContext_t *ictx,
     See "UPnP Device Architecture 1.1": chapter 1.2.4
     ictx    - the ickstream context
     Caller should lock timer list (which is already the case in timer callbacks)
+    Caller should lock interface list
 \*=========================================================================*/
 ickErrcode_t _ssdpNewInterface( ickP2pContext_t *ictx )
 {
@@ -1283,6 +1293,7 @@ ickErrcode_t _ssdpByebyeInterface( ickP2pContext_t *ictx, ickInterface_t *interf
     delay   - initial delay of first message (in ms), if repeat>0
     returns -1 on error, 0 on success
     Caller should lock timer list (which is already the case in timer callbacks)
+    Caller should lock interface list
 \*=========================================================================*/
 static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
                                            const struct sockaddr *addr,
@@ -1297,27 +1308,18 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
     In broadcast mode loop over all interfaces
 \*------------------------------------------------------------------------*/
   if( !addr ) {
-
-    // Lock interface list
-    _ickLibInterfaceListLock( ictx );
-
-    // Loop over all interfaces
     for( interface=ictx->interfaces; interface; interface=interface->next ) {
       interface->announcedBootId = ictx->upnpBootId;
       irc = __ssdpSendDiscoveryMsg( ictx, interface, NULL, type, level, repeat, delay );
       if( irc )
         break;
     }
-
-    // Unlock interface list and return
-    _ickLibInterfaceListUnlock( ictx );
     return irc;
   }
 
 /*------------------------------------------------------------------------*\
     In unicast mode find interface matching for target address
 \*------------------------------------------------------------------------*/
-  _ickLibInterfaceListLock( ictx );
   interface = _ickLibInterfaceForAddr( ictx, ((const struct sockaddr_in *)addr)->sin_addr.s_addr );
   if( !interface ) {
     loginfo( "_ssdpSendDiscoveryMsg: no interface found for \"%s\"",
@@ -1332,7 +1334,6 @@ static ickErrcode_t _ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
     interface->announcedBootId = ictx->upnpBootId;
     irc = __ssdpSendDiscoveryMsg( ictx, interface, addr, type, level, repeat, delay );
   }
-  _ickLibInterfaceListUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
     That's it
@@ -1360,7 +1361,7 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
   char                *sstr = NULL;
   char                *message = NULL;
 
-  debug( "_ssdpSendDiscoveryMsg (%p): level=%d, type=%d, repeat=%d",
+  debug( "__ssdpSendDiscoveryMsg (%p): level=%d, type=%d, repeat=%d",
          ictx, level, type, repeat );
 
 /*------------------------------------------------------------------------*\
@@ -1376,7 +1377,7 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
   snprintf( addrstr, sizeof(addrstr), "%s:%d",
          inet_ntoa(((const struct sockaddr_in *)addr)->sin_addr),
          ntohs(((const struct sockaddr_in *)addr)->sin_port));
-  debug( "_ssdpSendDiscoveryMsg (%p): target \"%s\"", ictx, addrstr );
+  debug( "__ssdpSendDiscoveryMsg (%p): target \"%s\"", ictx, addrstr );
 
 /*------------------------------------------------------------------------*\
     Create NT/ST and USN according to level and service
@@ -1386,7 +1387,7 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
     case SSDPMSGLEVEL_GLOBAL:
       // Only possible for M-Searches
       if( type!=SSDPMSGTYPE_MSEARCH ) {
-        logerr( "_ssdpSendDiscoveryMsg: bad message type (%d) for GLOBAL level.", type );
+        logerr( "__ssdpSendDiscoveryMsg: bad message type (%d) for GLOBAL level.", type );
         return ICKERR_INVALID;
       }
       sstr = ICKDEVICE_STRING_ROOT;
@@ -1414,16 +1415,16 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
       break;
 
     default:
-      logerr( "_ssdpSendDiscoveryMsg: bad message level (%d)", level );
+      logerr( "__ssdpSendDiscoveryMsg: bad message level (%d)", level );
       return ICKERR_INVALID;
   }
   if( !nst || !usn ) {
     Sfree( nst );
     Sfree( usn );
-    logerr( "_ssdpSendDiscoveryMsg: out of memory" );
+    logerr( "__ssdpSendDiscoveryMsg: out of memory" );
     return ICKERR_NOMEM;
   }
-  debug( "_ssdpSendDiscoveryMsg (%p): sstr=\"%s\" nst=\"%s\" usn=\"%s\"",
+  debug( "__ssdpSendDiscoveryMsg (%p): sstr=\"%s\" nst=\"%s\" usn=\"%s\"",
          ictx, sstr, nst, usn );
 
 /*------------------------------------------------------------------------*\
@@ -1534,14 +1535,14 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
     default:
       Sfree( nst );
       Sfree( usn );
-      logerr( "_ssdpSendDiscoveryMsg: bad message type (%d)", type );
+      logerr( "__ssdpSendDiscoveryMsg: bad message type (%d)", type );
       return ICKERR_INVALID;
   }
-  debug( "_ssdpSendDiscoveryMsg (%p): msg=\"%s\"", ictx, message );
+  debug( "__ssdpSendDiscoveryMsg (%p): msg=\"%s\"", ictx, message );
   Sfree( nst );
   Sfree( usn );
   if( !message ) {
-    logerr( "_ssdpSendDiscoveryMsg: out of memory" );
+    logerr( "__ssdpSendDiscoveryMsg: out of memory" );
     return ICKERR_NOMEM;
   }
 
@@ -1551,7 +1552,7 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
   if( repeat<=0 ) {
     ssize_t n;
     size_t  len = strlen( message );
-    debug( "_ssdpSendDiscoveryMsg: immediately sending %ld bytes to %s: \"%s\"",
+    debug( "__ssdpSendDiscoveryMsg: immediately sending %ld bytes to %s: \"%s\"",
            (long)len, addrstr, message );
 
     // Try to send packet via communication socket
@@ -1559,12 +1560,12 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
 
     // Any error ?
     if( n<0 ) {
-      logerr( "_ssdpSendDiscoveryMsg: could not send to %s (%s)",
+      logerr( "__ssdpSendDiscoveryMsg: could not send to %s (%s)",
               addrstr, strerror(errno) );
       irc = ICKERR_GENERIC;
     }
     else if( n<len ) {
-      logerr( "_ssdpSendDiscoveryMsg: could not send all data to %s (%d of %d)",
+      logerr( "__ssdpSendDiscoveryMsg: could not send all data to %s (%d of %d)",
               addrstr, n, len );
       irc = ICKERR_GENERIC;
     }
@@ -1577,7 +1578,7 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
 /*------------------------------------------------------------------------*\
     No immediate transmission: prepare timers
 \*------------------------------------------------------------------------*/
-  debug( "_ssdpSendDiscoveryMsg: enqueing %d transmissions of %ld bytes to %s: \"%s\"",
+  debug( "__ssdpSendDiscoveryMsg: enqueing %d transmissions of %ld bytes to %s: \"%s\"",
          repeat, (long)strlen(message), addrstr, message );
 
 /*------------------------------------------------------------------------*\
@@ -1586,7 +1587,7 @@ static ickErrcode_t __ssdpSendDiscoveryMsg( ickP2pContext_t *ictx,
   note = calloc( 1, sizeof(upnp_notification_t) );
   if( !note ) {
     Sfree( message );
-    logerr( "_ssdpSendDiscoveryMsg: out of memory" );
+    logerr( "__ssdpSendDiscoveryMsg: out of memory" );
     return ICKERR_NOMEM;
   }
   note->message  = message;

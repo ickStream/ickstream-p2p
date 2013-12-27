@@ -519,6 +519,8 @@ int _lwsP2pCb( struct libwebsocket_context *context,
   unsigned char     *ptr;
   char              *dscrPath;
 
+  debug( "_lwsP2pCb: lws %p, wsi %p, ictx %p, psd %p", context, wsi, ictx, psd );
+
 /*------------------------------------------------------------------------*\
     What to do?
 \*------------------------------------------------------------------------*/
@@ -655,6 +657,12 @@ int _lwsP2pCb( struct libwebsocket_context *context,
         psd->kill = 1;
         libwebsocket_callback_on_writable( context, wsi );
         return -1; // No effect for LWS_CALLBACK_ESTABLISHED
+      }
+      if( !strncmp(psd->uuid,"http://",7) ) {
+        int i = 0;
+        do {
+          psd->uuid[i] = psd->uuid[i+7];
+        } while( psd->uuid[i++] );
       }
 
       // Lock device list and try to find device
@@ -1221,7 +1229,9 @@ static char *_ickLwsDupToken( struct libwebsocket *wsi, enum lws_token_indexes h
 static void _ickLwsDumpHeaders( struct libwebsocket *wsi )
 {
   static const char *token_names[WSI_TOKEN_COUNT] = {
+
     /*[WSI_TOKEN_GET_URI]                =*/ "GET URI",
+    /*[WSI_TOKEN_POST_URI]               =*/ "POST URI",
     /*[WSI_TOKEN_HOST]                   =*/ "Host",
     /*[WSI_TOKEN_CONNECTION]             =*/ "Connection",
     /*[WSI_TOKEN_KEY1]                   =*/ "key 1",
@@ -1244,6 +1254,17 @@ static void _ickLwsDumpHeaders( struct libwebsocket *wsi )
     /*[WSI_TOKEN_ACCEPT]                 =*/ "Accept",
     /*[WSI_TOKEN_NONCE]                  =*/ "Nonce",
     /*[WSI_TOKEN_HTTP]                   =*/ "Http",
+
+    /*[WSI_TOKEN_HTTP_PRAGMA]            =*/ "Http pragma",
+    /*[WSI_TOKEN_HTTP_CACHE_CONTROL]     =*/ "Http cache",
+    /*[WSI_TOKEN_HTTP_AUTHORIZATION]     =*/ "Http auth",
+    /*[WSI_TOKEN_HTTP_COOKIE]            =*/ "Http cookie",
+    /*[WSI_TOKEN_HTTP_CONTENT_LENGTH]    =*/ "Http content len",
+    /*[WSI_TOKEN_HTTP_CONTENT_TYPE]      =*/ "Http content type",
+    /*[WSI_TOKEN_HTTP_DATE]              =*/ "Http date",
+    /*[WSI_TOKEN_HTTP_RANGE]             =*/ "Http range",
+    /*[WSI_TOKEN_HTTP_REFERER]           =*/ "Http referer",
+    /*[WSI_TOKEN_HTTP_URI_ARGS]          =*/ "Http uri args",
     /*[WSI_TOKEN_MUXURL]                 =*/ "MuxURL",
 
     /* use token storage to stash these */
@@ -1252,6 +1273,7 @@ static void _ickLwsDumpHeaders( struct libwebsocket *wsi )
     /*[_WSI_TOKEN_CLIENT_URI]            =*/ "Client uri",
     /*[_WSI_TOKEN_CLIENT_HOST]           =*/ "Client host",
     /*[_WSI_TOKEN_CLIENT_ORIGIN]         =*/ "Client origin"
+
   };
   char buf[256];
   int  n;

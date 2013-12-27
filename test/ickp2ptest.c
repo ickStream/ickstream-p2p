@@ -1,6 +1,6 @@
 /*$*********************************************************************\
 
-Source File     : ickP2p.c
+sSource File     : ickP2p.c
 
 Description     : implement ickp2p API calls
 
@@ -49,7 +49,7 @@ Remarks         : -
 /*=========================================================================*\
   Private definitions and symbols
 \*=========================================================================*/
-#define TESTVERSION "0.2"
+#define TESTVERSION "0.3"
 #define DEVICENAME  "ickp2plibtester"
 #define IFNAME      "wlan0"
 

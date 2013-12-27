@@ -121,29 +121,7 @@ static int  _ickTimerUnlink( ickP2pContext_t *ictx, ickTimer_t *timer );
   Private symbols
 \*=========================================================================*/
 
-//
-// Protocols handled by libwebsocket
-//
-static struct libwebsocket_protocols _lwsProtocols[] = {
-  // first protocol must always be HTTP handler
-  {
-    "http-only",
-    _lwsHttpCb,
-    sizeof( _ickLwsHttpData_t )
-  },
-
-  // the icktream protocol
-  {
-    ICKP2P_WS_PROTOCOLNAME,
-    _lwsP2pCb,
-    sizeof( _ickLwsP2pData_t )
-  },
-
-  // End of list
-  {
-    NULL, NULL, 0
-  }
-};
+// none
 
 
 /*=========================================================================*\
@@ -156,7 +134,8 @@ void *_ickMainThread( void *arg )
   ickWGetContext_t    *wget, *wgetNext;
   char                *buffer;
 
-  debug( "ickp2p main thread: starting..." );
+  debug( "ickp2p (%p): thread starting for \"%s\" \"%s\"",
+         ictx, ictx->deviceName, ictx->deviceUuid );
   PTHREADSETNAME( "ickP2P" );
 
 /*------------------------------------------------------------------------*\
@@ -235,7 +214,7 @@ void *_ickMainThread( void *arg )
         break;
 
       // Execute timer callback
-      debug( "ickp2p main thread: executing timer %p", timer );
+      debug( "ickp2p main thread (%p): executing timer %p", ictx, timer );
       timer->callback( timer, timer->usrPtr, timer->usrTag );
 
       // Last execution of cyclic timer?
@@ -249,8 +228,8 @@ void *_ickMainThread( void *arg )
         timer->repeatCntr--;
 
       // Update timer with interval
-      debug( "ickp2p main thread: rescheduling timer %p (%.3fs)",
-             timer, timer->interval/1000.0 );
+      debug( "ickp2p main thread (%p): rescheduling timer %p (%.6fs)",
+             ictx, timer, timer->interval/1000.0 );
       _ickTimerUpdate( ictx, timer, timer->interval, timer->repeatCntr );
     }
 
@@ -266,8 +245,8 @@ void *_ickMainThread( void *arg )
                 (ictx->timers->time.tv_usec-now.tv_usec)/1000;
       // debug( "ickp2p main thread: timer: %ld, %ld ", _timerList->time.tv_sec, _timerList->time.tv_usec);
       // debug( "ickp2p main thread:   now: %ld, %ld ", now.tv_sec, now.tv_usec);
-      debug( "ickp2p main thread: next timer %p in %.3fs",
-             ictx->timers, timeout/1000.0 );
+      debug( "ickp2p main thread (%p): next timer %p in %.6fs",
+             ictx, ictx->timers, timeout/1000.0 );
       if( timeout<0 )
         timeout = 0;
       else if( timeout>ICKMAINLOOP_TIMEOUT_MS )
@@ -315,23 +294,23 @@ void *_ickMainThread( void *arg )
 /*------------------------------------------------------------------------*\
     Do the polling...
 \*------------------------------------------------------------------------*/
-    debug( "ickp2p main thread: polling %d sockets (%d lws), timeout %.3fs...",
-            plist.nfds, ictx->lwsPolllist.nfds, timeout/1000.0 );
+    debug( "ickp2p main thread (%p): polling %d sockets (%d lws), timeout %.3fs...",
+            ictx, plist.nfds, ictx->lwsPolllist.nfds, timeout/1000.0 );
     for( i=0; i<plist.nfds; i++ )
-      debug( "ickp2p main thread: poll list element #%d - %d (event mask 0x%02x)",
-             i, plist.fds[i].fd, plist.fds[i].events );
+      debug( "ickp2p main thread (%p): poll list element #%d - %d (event mask 0x%02x)",
+             ictx, i, plist.fds[i].fd, plist.fds[i].events );
     retval = poll( plist.fds, plist.nfds, timeout );
     if( retval<0 ) {
       logerr( "ickp2p main thread: poll failed (%s).", strerror(errno) );
       break;
     }
     if( !retval ) {
-      debug( "ickp2p main thread: timed out." );
+      debug( "ickp2p main thread (%p): timed out.", ictx );
       continue;
     }
     for( i=0; i<plist.nfds; i++ )
-      debug( "ickp2p main thread: poll list element #%d - %d (revent mask 0x%02x)",
-             i, plist.fds[i].fd, plist.fds[i].revents );
+      debug( "ickp2p main thread (%p): poll list element #%d - %d (revent mask 0x%02x)",
+             ictx, i, plist.fds[i].fd, plist.fds[i].revents );
 
 /*------------------------------------------------------------------------*\
     Process changes in interface list
@@ -397,7 +376,8 @@ void *_ickMainThread( void *arg )
         logerr( "ickp2p main thread: Unable to read break request pipe: %s",
                  strerror(errno) );
       else
-        debug( "ickp2p main thread: received break requests (\"%.*s\")", (int)len, buffer );
+        debug( "ickp2p main thread (%p): received break requests (\"%.*s\")",
+                ictx, (int)len, buffer );
       if( retval==1 )
         continue;
     }
@@ -454,8 +434,8 @@ void *_ickMainThread( void *arg )
       // Is this member of the lws set?
       if( _ickPolllistGetIndex(&ictx->lwsPolllist,plist.fds[i].fd)<0 )
         continue;
-      debug( "ickp2p main thread: servicing lws socket %d (event mask 0x%02x)",
-             plist.fds[i].fd, plist.fds[i].revents );
+      debug( "ickp2p main thread (%p): calling libwebsocket_service_fd(%p,%d), event mask 0x%02x",
+             ictx, ictx->lwsContext, plist.fds[i].fd, plist.fds[i].revents );
       if( libwebsocket_service_fd(ictx->lwsContext, &plist.fds[i])<0 ) {
         logerr( "ickp2p main thread: libwebsocket_service_fd returned an error." );
         break;
@@ -463,14 +443,15 @@ void *_ickMainThread( void *arg )
     }
 
   } //  while( icklib->state<ICKLIB_TERMINATING )
-  debug( "ickp2p main thread: terminating..." );
-
+  debug( "ickp2p (%p): thread terminating for \"%s\" \"%s\"",
+         ictx, ictx->deviceName, ictx->deviceUuid );
 
 /*------------------------------------------------------------------------*\
     Get rid of libwebsocket context
     This will close all connections send disconnected messages
 \*------------------------------------------------------------------------*/
   libwebsocket_context_destroy( ictx->lwsContext );
+  Sfree( ictx->lwsProtocols );
 
 /*------------------------------------------------------------------------*\
     Stop SSDP services and announce termination,
@@ -622,10 +603,29 @@ static struct libwebsocket_context *_ickCreateLwsContext( ickP2pContext_t *ictx,
 #endif
 
 /*------------------------------------------------------------------------*\
+    Create protocol list for each instance as lws stores the context in it
+\*------------------------------------------------------------------------*/
+  ictx->lwsProtocols = calloc( 3, sizeof(struct libwebsocket_protocols) );
+  if( !ictx->lwsProtocols ) {
+    logerr( "_ickCreateLwsContext: Out of memory." );
+    return NULL;
+  }
+
+  // first protocol must always be HTTP handler
+  ictx->lwsProtocols[0].name                  = "http-only";
+  ictx->lwsProtocols[0].callback              = _lwsHttpCb;
+  ictx->lwsProtocols[0].per_session_data_size = sizeof( _ickLwsHttpData_t );
+
+  // the icktream protocol
+  ictx->lwsProtocols[1].name                  = ICKP2P_WS_PROTOCOLNAME;
+  ictx->lwsProtocols[1].callback              = _lwsP2pCb;
+  ictx->lwsProtocols[1].per_session_data_size = sizeof( _ickLwsP2pData_t );
+
+/*------------------------------------------------------------------------*\
     Setup rest of configuration vector
 \*------------------------------------------------------------------------*/
   info.iface                    = ifname;
-  info.protocols                = _lwsProtocols;
+  info.protocols                = ictx->lwsProtocols;
   info.ssl_cert_filepath        = NULL;
   info.ssl_private_key_filepath = NULL;
   info.gid                      = -1;
@@ -678,6 +678,8 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
   int                   sent;
   struct sockaddr_in    sin;
   socklen_t             sin_len;
+
+  debug( "_lwsHttpCb: lws %p, wsi %p, ictx %p, psd %p", context, wsi, ictx, psd );
 
 /*------------------------------------------------------------------------*\
     What to do?
@@ -805,7 +807,7 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
           mime = "text/plain";
 
         // through completion or error, close the socket
-        if( libwebsockets_serve_http_file(context,wsi,resource,mime) )
+        if( libwebsockets_serve_http_file(context,wsi,resource,mime,NULL) )
           retval = -1;
       }
       break;
@@ -874,6 +876,19 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
       retval = 0;
       break;
 
+    case LWS_CALLBACK_FILTER_HTTP_CONNECTION:
+      sd = libwebsocket_get_socket_fd( wsi );
+      sin_len = sizeof( sin );
+      if( getpeername(sd,(struct sockaddr *)&sin,&sin_len) )
+        logwarn( "_lwsHttpCb %d: getpeername failed (%s)", sd, strerror(errno) );
+      else
+        loginfo( "_lwsHttpCb %d: Received http connect from %s:%d",
+                 sd, inet_ntoa(sin.sin_addr), ntohs(sin.sin_port) );
+
+      // Accept all connections
+      retval = 0;
+      break;
+
 /*------------------------------------------------------------------------*\
     Append headers (not used)
 \*------------------------------------------------------------------------*/
@@ -918,6 +933,17 @@ static int _lwsHttpCb( struct libwebsocket_context *context,
       debug( "_lwsHttpCb: clear events for socket %d (mask 0x%02x)", fd, (int)(long)len );
       if( _ickPolllistUnset(&ictx->lwsPolllist,fd,(int)(long)len) )
         retval = -1;
+      break;
+
+/*------------------------------------------------------------------------*\
+    Lock/unlock poll list (not used)
+\*------------------------------------------------------------------------*/
+    case LWS_CALLBACK_LOCK_POLL:
+      debug( "_lwsHttpCb: lock poll list" );
+      break;
+
+    case LWS_CALLBACK_UNLOCK_POLL:
+      debug( "_lwsHttpCb: unlock poll list" );
       break;
 
 /*------------------------------------------------------------------------*\
