@@ -22,7 +22,7 @@ INCLUDEDIR      = include
 LIBNAME         = libickp2p
 TESTEXEC        = ickp2ptest
 MTESTEXEC       = ickp2pmtest
-P2PSHEXEC       = ickp2psh
+#P2PSHEXEC       = ickp2psh
 SSDPLOGEXEC     = ssdplog
 
 ICKLIB          = $(LIBDIR)/$(LIBNAME).a
