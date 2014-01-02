@@ -144,6 +144,7 @@ depend:
 	@echo "Creating dependencies:"
 	makedepend $(MKDEPFLAGS) -- $(INTERNALINCLUDES) $(INCLUDES) $(CFLAGS) -- $(LIBSRC) 2>/dev/null
 	makedepend $(MKDEPFLAGS) -a -- -I$(INCLUDEDIR) $(CFLAGS) -- $(TESTSRC) 2>/dev/null
+	makedepend $(MKDEPFLAGS) -a -- -I$(INCLUDEDIR) $(CFLAGS) -- $(MTESTSRC) 2>/dev/null
 
 
 # How to clean tempoarary files
@@ -177,21 +178,22 @@ ickp2p/ickDevice.o: ickp2p/ickWGet.h
 ickp2p/ickSSDP.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h ickp2p/logutils.h
 ickp2p/ickSSDP.o: ickp2p/ickIpTools.h ickp2p/ickDevice.h
 ickp2p/ickSSDP.o: ickp2p/ickDescription.h ickp2p/ickWGet.h
-ickp2p/ickSSDP.o: ickp2p/ickMainThread.h ickp2p/ickSSDP.h
+ickp2p/ickSSDP.o: ickp2p/ickMainThread.h ickp2p/ickSSDP.h ickp2p/ickP2pCom.h
 ickp2p/ickDescription.o: miniupnp/miniupnpc/minixml.h ickp2p/ickP2p.h
 ickp2p/ickDescription.o: ickp2p/ickP2pInternal.h ickp2p/logutils.h
 ickp2p/ickDescription.o: ickp2p/ickDevice.h ickp2p/ickDescription.h
-ickp2p/ickDescription.o: ickp2p/ickWGet.h ickp2p/ickSSDP.h
+ickp2p/ickDescription.o: ickp2p/ickWGet.h ickp2p/ickSSDP.h ickp2p/ickP2pCom.h
 ickp2p/ickDescription.o: ickp2p/ickMainThread.h
 ickp2p/ickP2pCom.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h ickp2p/logutils.h
 ickp2p/ickP2pCom.o: ickp2p/ickMainThread.h ickp2p/ickDescription.h
-ickp2p/ickP2pCom.o: ickp2p/ickWGet.h ickp2p/ickDevice.h ickp2p/ickP2pCom.h
+ickp2p/ickP2pCom.o: ickp2p/ickWGet.h ickp2p/ickDevice.h ickp2p/ickSSDP.h
+ickp2p/ickP2pCom.o: ickp2p/ickP2pCom.h
 ickp2p/ickP2pDebug.o: miniupnp/miniupnpc/miniwget.h
 ickp2p/ickP2pDebug.o: miniupnp/miniupnpc/declspec.h ickp2p/ickP2p.h
 ickp2p/ickP2pDebug.o: ickp2p/ickP2pInternal.h ickp2p/logutils.h
-ickp2p/ickP2pDebug.o: ickp2p/ickDevice.h ickp2p/ickDescription.h
-ickp2p/ickP2pDebug.o: ickp2p/ickWGet.h ickp2p/ickP2pCom.h
-ickp2p/ickP2pDebug.o: ickp2p/ickP2pDebug.h
+ickp2p/ickP2pDebug.o: ickp2p/ickIpTools.h ickp2p/ickDevice.h
+ickp2p/ickP2pDebug.o: ickp2p/ickDescription.h ickp2p/ickWGet.h
+ickp2p/ickP2pDebug.o: ickp2p/ickP2pCom.h ickp2p/ickP2pDebug.h
 ickp2p/ickErrors.o: ickp2p/ickP2p.h
 ickp2p/ickWGet.o: miniupnp/miniupnpc/miniwget.h miniupnp/miniupnpc/declspec.h
 ickp2p/ickWGet.o: ickp2p/ickP2p.h ickp2p/ickP2pInternal.h
@@ -208,5 +210,10 @@ miniupnp/miniupnpc/miniwget.o: miniupnp/miniupnpc/receivedata.h
 miniupnp/miniupnpc/minixml.o: miniupnp/miniupnpc/minixml.h
 miniupnp/miniupnpc/receivedata.o: miniupnp/miniupnpc/receivedata.h
 
-test/ickp2ptest.o: test/config.h include/ickP2p.h
+test/ickp2ptest.o: include/ickP2p.h test/config.h test/testmisc.h
+test/testmisc.o: include/ickP2p.h test/testmisc.h
+test/config.o: test/config.h
+
+test/ickp2pmtest.o: include/ickP2p.h test/config.h test/testmisc.h
+test/testmisc.o: include/ickP2p.h test/testmisc.h
 test/config.o: test/config.h
