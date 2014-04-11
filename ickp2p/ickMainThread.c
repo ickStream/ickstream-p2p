@@ -276,7 +276,7 @@ void *_ickMainThread( void *arg )
       if( _ickPolllistAdd(&plist,_ickWGetSocket(wget),POLLIN) )
         break;
     }
-    _ickLibWGettersUnock( ictx );
+    _ickLibWGettersUnlock( ictx );
     if( wget ) {
       logerr( "ickp2p main thread: out of memory." );
       break;
@@ -315,6 +315,7 @@ void *_ickMainThread( void *arg )
 /*------------------------------------------------------------------------*\
     Process changes in interface list
 \*------------------------------------------------------------------------*/
+    _ickTimerListLock( ictx );
     _ickLibInterfaceListLock( ictx );
 
     // Delete interfaces
@@ -332,13 +333,11 @@ void *_ickMainThread( void *arg )
       if( !interface->announcedBootId )
         break;
     }
-    if( interface ) {
-      _ickTimerListLock( ictx );
+    if( interface )
       _ssdpNewInterface( ictx );
-      _ickTimerListUnlock( ictx );
-    }
 
     _ickLibInterfaceListUnlock( ictx );
+    _ickTimerListUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
     Detect any newly registered callbacks and send current device states
@@ -498,7 +497,7 @@ void *_ickMainThread( void *arg )
 
 
 /*=========================================================================*\
-  Hanlde a readable SSDP socket (mcast listener or unicast)
+  Handle a readable SSDP socket (mcast listener or unicast)
 \*=========================================================================*/
 static void _ickServiceSsdpSocket( ickP2pContext_t *ictx, char *buffer, int sd )
 {
