@@ -238,6 +238,7 @@ ickP2pContext_t *ickP2pCreate( const char *deviceName, const char *deviceUuid,
 ickErrcode_t ickP2pResume( ickP2pContext_t *ictx )
 {
   int              rc;
+  int              perr;
   ickErrcode_t     irc;
   struct timeval   now;
   struct timespec  abstime;
@@ -280,14 +281,17 @@ ickErrcode_t ickP2pResume( ickP2pContext_t *ictx )
 \*------------------------------------------------------------------------*/
   rc = pthread_create( &ictx->thread, NULL, _ickMainThread, &ictx );
   if( rc ) {
-    logerr( "ickP2pInit: Unable to start main thread: %s", strerror(rc) );
+    logerr( "ickP2pResume: Unable to start main thread: %s", strerror(rc) );
     return ICKERR_NOTHREAD;
   }
 
 /*------------------------------------------------------------------------*\
     Wait for max. 5 seconds till thread is up and running
 \*------------------------------------------------------------------------*/
-  pthread_mutex_lock( &ictx->mutex );
+  perr = pthread_mutex_lock( &ictx->mutex );
+  if( perr )
+    logerr( "ickP2pResume: cannot lock mutex (%s)", strerror(perr) );
+
   gettimeofday( &now, NULL );
   abstime.tv_sec  = now.tv_sec + 5;
   abstime.tv_nsec = now.tv_usec*1000UL;
@@ -296,12 +300,14 @@ ickErrcode_t ickP2pResume( ickP2pContext_t *ictx )
     if( rc )
       break;
   }
-  if( !rc )
-    pthread_mutex_unlock( &ictx->mutex );
+
+  perr = pthread_mutex_unlock( &ictx->mutex );
+  if( perr )
+    logerr( "ickP2pResume: cannot unlock mutex (%s)", strerror(perr) );
 
   // Something went terribly wrong. Can't free descriptor, since thread state is undefined.
   if( rc ) {
-    logerr( "ickP2pInit: Unable to wait for main thread: %s", strerror(rc) );
+    logerr( "ickP2pResume: Unable to wait for main thread: %s", strerror(rc) );
     // ictx->state = ICKLIB_TERMINATING;
     ictx = NULL;
     return ICKERR_NOTHREAD;
@@ -319,7 +325,7 @@ ickErrcode_t ickP2pResume( ickP2pContext_t *ictx )
 \*------------------------------------------------------------------------*/
   irc = _ickSsdpNewDiscovery( ictx );
   if( irc ) {
-    logerr( "ickP2pInit: could not start SSDP (%s).",
+    logerr( "ickP2pResume: could not start SSDP (%s).",
             ickStrError( irc ) );
     return irc;
   }
@@ -327,7 +333,7 @@ ickErrcode_t ickP2pResume( ickP2pContext_t *ictx )
 /*------------------------------------------------------------------------*\
     That's it
 \*------------------------------------------------------------------------*/
-  debug( "ickLibInit: created context %p", ictx );
+  debug( "ickP2pResume (%p): context started.", ictx );
   return ICKERR_SUCCESS;
 }
 
@@ -410,8 +416,11 @@ ickErrcode_t ickP2pEnd( ickP2pContext_t *ictx, ickP2pEndCb_t callback )
 \*=========================================================================*/
 void _ickLibLock( ickP2pContext_t *ictx )
 {
+  int perr;
   debug ( "_ickLibLock (%p): locking...", ictx );
-  pthread_mutex_lock( &ictx->mutex );
+  perr = pthread_mutex_lock( &ictx->mutex );
+  if( perr )
+    logerr( "_ickLibLock: %s", strerror(perr) );
   debug ( "_ickLibLock (%p): locked", ictx );
 }
 
@@ -421,8 +430,11 @@ void _ickLibLock( ickP2pContext_t *ictx )
 \*=========================================================================*/
 void _ickLibUnlock( ickP2pContext_t *ictx )
 {
+  int perr;
   debug ( "_ickLibUnlock (%p): unlocked", ictx );
-  pthread_mutex_unlock( &ictx->mutex );
+  perr = pthread_mutex_unlock( &ictx->mutex );
+  if( perr )
+    logerr( "_ickLibUnlock: %s", strerror(perr) );
 }
 
 
@@ -519,13 +531,17 @@ void _ickLibDestruct( ickP2pContext_t *ictx )
 \*=========================================================================*/
 ickErrcode_t ickP2pRegisterDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDiscoveryCb_t callback )
 {
+  int             perr;
   struct _cblist *new;
   debug( "ickP2pRegisterDiscoveryCallback (%p): %p", ictx, callback );
 
 /*------------------------------------------------------------------------*\
     Lock list of callbacks
 \*------------------------------------------------------------------------*/
-  pthread_mutex_lock( &ictx->discoveryCbsMutex );
+  perr = pthread_mutex_lock( &ictx->discoveryCbsMutex );
+  if( perr )
+    logerr( "ickP2pRegisterDiscoveryCallback: cannot lock callback list mutex (%s)",
+            strerror(perr) );
 
 /*------------------------------------------------------------------------*\
     Avoid double subscriptions
@@ -534,7 +550,10 @@ ickErrcode_t ickP2pRegisterDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDisco
     if( new->callback!=callback )
       continue;
     logwarn( "ickP2pRegisterDiscoveryCallback: callback already registered." );
-    pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+    perr = pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+    if( perr )
+      logerr( "ickP2pRegisterDiscoveryCallback: cannot unlock callback list mutex (%s)",
+              strerror(perr) );
     return ICKERR_SUCCESS;
   }
 
@@ -544,7 +563,10 @@ ickErrcode_t ickP2pRegisterDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDisco
   new = calloc( 1, sizeof(struct _cblist) );
   if( !new ) {
     logerr( "ickP2pRegisterDiscoveryCallback: out of memory" );
-    pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+    perr = pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+    if( perr )
+      logerr( "ickP2pRegisterDiscoveryCallback: cannot unlock callback list mutex (%s)",
+              strerror(perr) );
     return ICKERR_NOMEM;
   }
   new->callback = callback;
@@ -562,7 +584,10 @@ ickErrcode_t ickP2pRegisterDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDisco
 /*------------------------------------------------------------------------*\
     Unlock list, signal main thread, that's all
 \*------------------------------------------------------------------------*/
-  pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+  perr = pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+  if( perr )
+    logerr( "ickP2pRegisterDiscoveryCallback: cannot unlock callback list mutex (%s)",
+            strerror(perr) );
   _ickMainThreadBreak( ictx, 'l' );
   return ICKERR_SUCCESS;
 }
@@ -573,13 +598,17 @@ ickErrcode_t ickP2pRegisterDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDisco
 \*=========================================================================*/
 ickErrcode_t ickP2pRemoveDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDiscoveryCb_t callback )
 {
+  int             perr;
   struct _cblist *walk;
   debug( "ickP2pRemoveDiscoveryCallback (%p): %p", ictx, callback );
 
 /*------------------------------------------------------------------------*\
     Lock list of callbacks
 \*------------------------------------------------------------------------*/
-  pthread_mutex_lock( &ictx->discoveryCbsMutex );
+  perr = pthread_mutex_lock( &ictx->discoveryCbsMutex );
+  if( perr )
+    logerr( "ickP2pRemoveDiscoveryCallback: cannot lock callback list mutex (%s)",
+            strerror(perr) );
 
 /*------------------------------------------------------------------------*\
     Find entry, check if member
@@ -589,7 +618,10 @@ ickErrcode_t ickP2pRemoveDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDiscove
       break;
   if( !walk ) {
     logerr( "ickP2pRemoveDiscoveryCallback: callback is not registered." );
-    pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+    perr = pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+    if( perr )
+      logerr( "ickP2pRemoveDiscoveryCallback: cannot unlock callback list mutex (%s)",
+              strerror(perr) );
     return ICKERR_NOMEMBER;
   }
 
@@ -607,7 +639,10 @@ ickErrcode_t ickP2pRemoveDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDiscove
 /*------------------------------------------------------------------------*\
     Unlock list, that's all
 \*------------------------------------------------------------------------*/
-  pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+  perr = pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+  if( perr )
+    logerr( "ickP2pRemoveDiscoveryCallback: cannot unlock callback list mutex (%s)",
+            strerror(perr) );
   return ICKERR_SUCCESS;
 }
 
@@ -617,13 +652,17 @@ ickErrcode_t ickP2pRemoveDiscoveryCallback( ickP2pContext_t *ictx, ickP2pDiscove
 \*=========================================================================*/
 ickErrcode_t ickP2pRegisterMessageCallback( ickP2pContext_t *ictx, ickP2pMessageCb_t callback )
 {
+  int             perr;
   struct _cblist *new;
   debug( "ickP2pRegisterMessageCallback (%p): %p", ictx, callback );
 
 /*------------------------------------------------------------------------*\
     Lock list of callbacks
 \*------------------------------------------------------------------------*/
-  pthread_mutex_lock( &ictx->messageCbsMutex );
+  perr = pthread_mutex_lock( &ictx->messageCbsMutex );
+  if( perr )
+    logerr( "ickP2pRegisterMessageCallback: cannot lock callback list mutex (%s)",
+            strerror(perr) );
 
 /*------------------------------------------------------------------------*\
     Avoid double subscriptions
@@ -632,7 +671,10 @@ ickErrcode_t ickP2pRegisterMessageCallback( ickP2pContext_t *ictx, ickP2pMessage
     if( new->callback!=callback )
       continue;
     logwarn( "ickP2pRegisterMessageCallback: callback already registered." );
-    pthread_mutex_unlock( &ictx->messageCbsMutex );
+    perr = pthread_mutex_unlock( &ictx->messageCbsMutex );
+    if( perr )
+      logerr( "ickP2pRegisterMessageCallback: cannot unlock callback list mutex (%s)",
+              strerror(perr) );
     return ICKERR_SUCCESS;
   }
 
@@ -642,7 +684,10 @@ ickErrcode_t ickP2pRegisterMessageCallback( ickP2pContext_t *ictx, ickP2pMessage
   new = calloc( 1, sizeof(struct _cblist) );
   if( !new ) {
     logerr( "ickP2pRegisterMessageCallback: out of memory" );
-    pthread_mutex_unlock( &ictx->messageCbsMutex );
+    perr = pthread_mutex_unlock( &ictx->messageCbsMutex );
+    if( perr )
+      logerr( "ickP2pRegisterMessageCallback: cannot unlock callback list mutex (%s)",
+              strerror(perr) );
     return ICKERR_NOMEM;
   }
   new->callback = callback;
@@ -658,7 +703,10 @@ ickErrcode_t ickP2pRegisterMessageCallback( ickP2pContext_t *ictx, ickP2pMessage
 /*------------------------------------------------------------------------*\
     Unlock list, that's all
 \*------------------------------------------------------------------------*/
-  pthread_mutex_unlock( &ictx->messageCbsMutex );
+  perr = pthread_mutex_unlock( &ictx->messageCbsMutex );
+  if( perr )
+    logerr( "ickP2pRegisterMessageCallback: cannot unlock callback list mutex (%s)",
+            strerror(perr) );
   return ICKERR_SUCCESS;
 }
 
@@ -668,13 +716,17 @@ ickErrcode_t ickP2pRegisterMessageCallback( ickP2pContext_t *ictx, ickP2pMessage
 \*=========================================================================*/
 ickErrcode_t ickP2pRemoveMessageCallback( ickP2pContext_t *ictx, ickP2pMessageCb_t callback )
 {
+  int             perr;
   struct _cblist *walk;
   debug( "ickP2pRemoveMessageCallback (%p): %p", ictx, callback );
 
 /*------------------------------------------------------------------------*\
     Lock list of callbacks
 \*------------------------------------------------------------------------*/
-  pthread_mutex_lock( &ictx->messageCbsMutex );
+  perr = pthread_mutex_lock( &ictx->messageCbsMutex );
+  if( perr )
+    logerr( "ickP2pRemoveMessageCallback: cannot lock callback list mutex (%s)",
+            strerror(perr) );
 
 /*------------------------------------------------------------------------*\
     Find entry, check if member
@@ -684,7 +736,10 @@ ickErrcode_t ickP2pRemoveMessageCallback( ickP2pContext_t *ictx, ickP2pMessageCb
       break;
   if( !walk ) {
     logerr( "ickP2pRemoveMessageCallback: callback is not registered." );
-    pthread_mutex_unlock( &ictx->messageCbsMutex );
+    perr = pthread_mutex_unlock( &ictx->messageCbsMutex );
+    if( perr )
+      logerr( "ickP2pRemoveMessageCallback: cannot unlock callback list mutex (%s)",
+              strerror(perr) );
     return ICKERR_NOMEMBER;
   }
 
@@ -702,7 +757,10 @@ ickErrcode_t ickP2pRemoveMessageCallback( ickP2pContext_t *ictx, ickP2pMessageCb
 /*------------------------------------------------------------------------*\
     Unlock list, that's all
 \*------------------------------------------------------------------------*/
-  pthread_mutex_unlock( &ictx->messageCbsMutex );
+  perr = pthread_mutex_unlock( &ictx->messageCbsMutex );
+  if( perr )
+    logerr( "ickP2pRemoveMessageCallback: cannot unlock callback list mutex (%s)",
+            strerror(perr) );
   return ICKERR_SUCCESS;
 }
 
@@ -712,6 +770,7 @@ ickErrcode_t ickP2pRemoveMessageCallback( ickP2pContext_t *ictx, ickP2pMessageCb
 \*=========================================================================*/
 void _ickLibExecDiscoveryCallback( ickP2pContext_t *ictx, const ickDevice_t *dev, ickP2pDeviceState_t change, ickP2pServicetype_t type )
 {
+  int             perr;
   struct _cblist *walk;
   debug( "_ickLibExecDiscoveryCallback (%p): \"%s\" change=%d (%s) services=%d",
          ictx, dev->uuid, change, ickLibDeviceState2Str(change), type );
@@ -719,10 +778,16 @@ void _ickLibExecDiscoveryCallback( ickP2pContext_t *ictx, const ickDevice_t *dev
 /*------------------------------------------------------------------------*\
    Lock list mutex and execute all registered callbacks
 \*------------------------------------------------------------------------*/
-  pthread_mutex_lock( &ictx->discoveryCbsMutex );
+  perr = pthread_mutex_lock( &ictx->discoveryCbsMutex );
+  if( perr )
+    logerr( "_ickLibExecDiscoveryCallback: cannot lock callback list mutex (%s)",
+            strerror(perr) );
   for( walk=ictx->discoveryCbs; walk; walk=walk->next )
     ((ickP2pDiscoveryCb_t)walk->callback)( ictx, dev->uuid, change, type );
-  pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+  perr = pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+  if( perr )
+    logerr( "_ickLibExecDiscoveryCallback: cannot unlock callback list mutex (%s)",
+            strerror(perr) );
 }
 
 
@@ -918,8 +983,11 @@ ickErrcode_t ickP2pDeleteInterface( ickP2pContext_t *ictx, const char *ifname, i
 \*=========================================================================*/
 void _ickLibInterfaceListLock( ickP2pContext_t *ictx )
 {
+  int perr;
   debug ( "_ickLibInterfaceListLock (%p): locking...", ictx );
-  pthread_mutex_lock( &ictx->interfaceListMutex );
+  perr = pthread_mutex_lock( &ictx->interfaceListMutex );
+  if( perr )
+    logerr( "_ickLibInterfaceListLock: %s", strerror(perr) );
   debug ( "_ickLibInterfaceListLock (%p): locked", ictx );
 }
 
@@ -929,8 +997,11 @@ void _ickLibInterfaceListLock( ickP2pContext_t *ictx )
 \*=========================================================================*/
 void _ickLibInterfaceListUnlock( ickP2pContext_t *ictx )
 {
+  int perr;
   debug ( "_ickLibInterfaceListUnlock (%p): unlocked", ictx );
-  pthread_mutex_unlock( &ictx->interfaceListMutex );
+  perr = pthread_mutex_unlock( &ictx->interfaceListMutex );
+  if( perr )
+    logerr( "_ickLibInterfaceListUnlock: %s", strerror(perr) );
 }
 
 
@@ -1415,8 +1486,11 @@ double ickP2pGetDeviceTimeConnected( const ickP2pContext_t *ictx, const char *uu
 \*=========================================================================*/
 void _ickLibDeviceListLock( ickP2pContext_t *ictx )
 {
+  int perr;
   debug ( "_ickLibDeviceListLock (%p): locking...", ictx );
-  pthread_mutex_lock( &ictx->deviceListMutex );
+  perr = pthread_mutex_lock( &ictx->deviceListMutex );
+  if( perr )
+    logerr( "_ickLibDeviceListLock: %s", strerror(perr) );
   debug ( "_ickLibDeviceListLock (%p): locked", ictx );
 }
 
@@ -1426,8 +1500,11 @@ void _ickLibDeviceListLock( ickP2pContext_t *ictx )
 \*=========================================================================*/
 void _ickLibDeviceListUnlock( ickP2pContext_t *ictx )
 {
+  int perr;
   debug ( "_ickLibDeviceListUnlock (%p): unlocked", ictx );
-  pthread_mutex_unlock( &ictx->deviceListMutex );
+  perr = pthread_mutex_unlock( &ictx->deviceListMutex );
+  if( perr )
+    logerr( "_ickLibDeviceListUnlock: %s", strerror(perr) );
 }
 
 
@@ -1576,8 +1653,11 @@ ickDevice_t *_ickLibDeviceFindByWsi( const ickP2pContext_t *ictx,struct libwebso
 \*=========================================================================*/
 void _ickLibWGettersLock( ickP2pContext_t *ictx )
 {
+  int perr;
   debug ( "_ickLibWGettersLock (%p): locking...", ictx );
-  pthread_mutex_lock( &ictx->wGettersMutex );
+  perr = pthread_mutex_lock( &ictx->wGettersMutex );
+  if( perr )
+    logerr( "_ickLibWGettersLock: %s", strerror(perr) );
   debug ( "_ickLibWGettersLock (%p): locked", ictx );
 }
 
@@ -1587,8 +1667,11 @@ void _ickLibWGettersLock( ickP2pContext_t *ictx )
 \*=========================================================================*/
 void _ickLibWGettersUnlock( ickP2pContext_t *ictx )
 {
+  int perr;
   debug ( "_ickLibWGettersUnlock (%p): unlocked", ictx );
-  pthread_mutex_unlock( &ictx->wGettersMutex );
+  perr = pthread_mutex_unlock( &ictx->wGettersMutex );
+  if( perr )
+    logerr( "_ickLibWGettersUnlock: %s", strerror(perr) );
 }
 
 

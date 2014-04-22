@@ -169,8 +169,11 @@ void _ickDevicePurgeMessages( ickDevice_t *device )
 \*=========================================================================*/
 void _ickDeviceLock( ickDevice_t *device )
 {
+  int perr;
   debug ( "_ickDeviceLock (%s): locking...", device->uuid );
-  pthread_mutex_lock( &device->mutex );
+  perr = pthread_mutex_lock( &device->mutex );
+  if( perr )
+    logerr( "_ickDeviceLock: %s", strerror(perr) );
   debug ( "_ickDeviceLock (%s): locked", device->uuid );
 }
 
@@ -180,8 +183,11 @@ void _ickDeviceLock( ickDevice_t *device )
 \*=========================================================================*/
 void _ickDeviceUnlock( ickDevice_t *device )
 {
+  int perr;
   debug ( "_ickDeviceUnlock (%s): unlocked", device->uuid );
-  pthread_mutex_unlock( &device->mutex );
+  perr = pthread_mutex_unlock( &device->mutex );
+  if( perr )
+    logerr( "_ickDeviceUnlock: %s", strerror(perr) );
 }
 
 

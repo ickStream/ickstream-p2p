@@ -194,8 +194,11 @@ static void _ickWGetFree( ickWGetContext_t *context )
 \*=========================================================================*/
 static void _ickWGetLock( ickWGetContext_t *context )
 {
+  int perr;
   debug ( "_ickWGetLock (%s): locking...", context->uri );
-  pthread_mutex_lock( &context->mutex );
+  perr = pthread_mutex_lock( &context->mutex );
+  if( perr )
+    logerr( "_ickWGetLock: %s", strerror(perr) );
   debug ( "_ickWGetLock (%s): locked", context->uri );
 }
 
@@ -205,8 +208,11 @@ static void _ickWGetLock( ickWGetContext_t *context )
 \*=========================================================================*/
 static void _ickWGetUnlock( ickWGetContext_t *context )
 {
+  int perr;
   debug ( "_ickWGetUnlock (%s): unlocked", context->uri );
-  pthread_mutex_unlock( &context->mutex );
+  perr = pthread_mutex_unlock( &context->mutex );
+  if( perr )
+    logerr( "_ickWGetLock: %s", strerror(perr) );
 }
 
 

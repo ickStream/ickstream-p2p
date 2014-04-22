@@ -120,7 +120,6 @@ ickErrcode_t ickP2pSendMsg( ickP2pContext_t *ictx, const char *uuid,
     _ickLibDeviceListUnlock( ictx );
     return ICKERR_SUCCESS;
   }
-  _ickLibDeviceListUnlock( ictx );
 
 /*------------------------------------------------------------------------*\
     Loop over all devices
@@ -1064,6 +1063,7 @@ void _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t *devic
   ickP2pMessageFlag_t  mFlags         = ICKP2P_MESSAGEFLAG_NONE;
   const unsigned char *payload = message;
   struct _cblist      *walk;
+  int                  perr;
 
 /*------------------------------------------------------------------------*\
   Ignore empty messages
@@ -1100,10 +1100,16 @@ void _ickP2pExecMessageCallback( ickP2pContext_t *ictx, const ickDevice_t *devic
 /*------------------------------------------------------------------------*\
    Lock list mutex and execute all registered callbacks
 \*------------------------------------------------------------------------*/
-  pthread_mutex_lock( &ictx->messageCbsMutex );
+  perr = pthread_mutex_lock( &ictx->messageCbsMutex );
+  if( perr )
+    logerr( "_ickP2pExecMessageCallback: cannot lock message callback list mutex (%s)",
+            strerror(perr) );
   for( walk=ictx->messageCbs; walk; walk=walk->next )
     ((ickP2pMessageCb_t)walk->callback)( ictx, device->uuid, sourceService, targetServices, (const char*)payload, mSize, mFlags );
-  pthread_mutex_unlock( &ictx->messageCbsMutex );
+  perr = pthread_mutex_unlock( &ictx->messageCbsMutex );
+  if( perr )
+    logerr( "_ickP2pExecMessageCallback: cannot unlock message callback list mutex (%s)",
+            strerror(perr) );
 }
 
 

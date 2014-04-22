@@ -195,6 +195,7 @@ void *_ickMainThread( void *arg )
     ickInterface_t   *interface;
     int               timeout;
     int               retval;
+    int               perr;
     int               i;
 
 /*------------------------------------------------------------------------*\
@@ -343,7 +344,10 @@ void *_ickMainThread( void *arg )
     Detect any newly registered callbacks and send current device states
 \*------------------------------------------------------------------------*/
     struct _cblist *cb;
-    pthread_mutex_lock( &ictx->discoveryCbsMutex );
+    perr = pthread_mutex_lock( &ictx->discoveryCbsMutex );
+    if( perr )
+      logerr( "ickp2p main thread: cannot lock discovery mutex (%s)", strerror(perr) );
+
     for( cb=ictx->discoveryCbs; cb; cb=cb->next ) {
       ickDevice_t *device;
       if( !cb->isNew )
@@ -357,7 +361,9 @@ void *_ickMainThread( void *arg )
       }
       _ickLibDeviceListUnlock( ictx );
     }
-    pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+    perr = pthread_mutex_unlock( &ictx->discoveryCbsMutex );
+    if( perr )
+      logerr( "ickp2p main thread: cannot unlock discovery mutex (%s)", strerror(perr) );
 
 /*------------------------------------------------------------------------*\
     First execute loop back deliveries
@@ -1249,8 +1255,11 @@ static int _ickPolllistGetIndex( const ickPolllist_t *plist, int fd )
 \*=========================================================================*/
 void _ickTimerListLock( ickP2pContext_t *ictx )
 {
+  int perr;
   debug ( "_ickTimerListLock (%p): locking...", ictx );
-  pthread_mutex_lock( &ictx->timersMutex );
+  perr = pthread_mutex_lock( &ictx->timersMutex );
+  if( perr )
+    logerr( "_ickTimerListLock: %s", strerror(perr) );
   debug ( "_ickTimerListLock (%p): locked", ictx );
 }
 
@@ -1260,8 +1269,11 @@ void _ickTimerListLock( ickP2pContext_t *ictx )
 \*=========================================================================*/
 void _ickTimerListUnlock( ickP2pContext_t *ictx )
 {
+  int perr;
   debug ( "_ickTimerListUnlock (%p): unlocked", ictx );
-  pthread_mutex_unlock( &ictx->timersMutex );
+  perr = pthread_mutex_unlock( &ictx->timersMutex );
+  if( perr )
+    logerr( "_ickTimerListUnlock: %s", strerror(perr) );
 }
 
 
